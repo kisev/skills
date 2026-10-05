@@ -1,0 +1,27 @@
+{
+  "name": "semver-evidence-incomplete-component",
+  "kind": "semver_evidence",
+  "input": {
+    "target_branch": "main",
+    "target_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "releases": {
+      "items": [],
+      "complete": true,
+      "errors": [],
+      "pages": 0,
+      "truncated": false
+    },
+    "tags": {
+      "items": [],
+      "complete": false,
+      "errors": [],
+      "pages": 0
+    },
+    "errors": []
+  },
+  "expected": {
+    "digest": "1e8bb089083e2db679ef348441a1c0f962e8c28a1f80660758534f4ab3f2f123",
+    "valid": false,
+    "python_valid": false
+  }
+}

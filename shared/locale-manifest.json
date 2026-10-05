@@ -46,6 +46,10 @@
       "ru": "docs/ru/reference/skill-catalog.md"
     },
     {
+      "en": "docs/reference/humanize-patterns.md",
+      "ru": "docs/ru/reference/humanize-patterns.md"
+    },
+    {
       "en": "docs/architecture.md",
       "ru": "docs/ru/architecture.md"
     },
@@ -56,6 +60,10 @@
     {
       "en": "docs/verification.md",
       "ru": "docs/ru/verification.md"
+    },
+    {
+      "en": "docs/reviewmatic-test-matrix.md",
+      "ru": "docs/ru/reviewmatic-test-matrix.md"
     },
     {
       "en": "packages/agentomatic/README.md",
@@ -70,12 +78,46 @@
       "ru": "apps/memomatic/README.ru.md"
     },
     {
+      "en": "tests/integration/mattermost/README.md",
+      "ru": "tests/integration/mattermost/README.ru.md"
+    },
+    {
+      "en": "tests/integration/gitlab/README.md",
+      "ru": "tests/integration/gitlab/README.ru.md"
+    },
+    {
+      "en": "dev/README.md",
+      "ru": "dev/README.ru.md"
+    },
+    {
+      "en": "apps/reviewmatic/README.md",
+      "ru": "apps/reviewmatic/README.ru.md"
+    },
+    {
+      "en": "apps/shopmatic/README.md",
+      "ru": "apps/shopmatic/README.ru.md"
+    },
+    {
       "en": "packages/safe-fs/README.md",
       "ru": "packages/safe-fs/README.ru.md"
     },
     {
       "en": "apps/taskmatic/README.md",
       "ru": "apps/taskmatic/README.ru.md"
+    },
+    {
+      "en": "apps/docs-site/README.md",
+      "ru": "apps/docs-site/README.ru.md"
+    }
+  ],
+  "application_content": [
+    {
+      "glob": "apps/docs-site/src/content/examples/en/*.md",
+      "reason": "Site example content is authored data of the documentation site; its EN/RU parity is enforced by the Astro content schema and tests/test_site_contract.py, not by document pairing."
+    },
+    {
+      "glob": "apps/docs-site/src/content/examples/ru/*.md",
+      "reason": "Site example content is authored data of the documentation site; its EN/RU parity is enforced by the Astro content schema and tests/test_site_contract.py, not by document pairing."
     }
   ],
   "patterns": [

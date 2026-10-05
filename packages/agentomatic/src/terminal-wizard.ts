@@ -84,9 +84,10 @@ export async function confirmQuestion(
   label: string,
   stdin: Readable = process.stdin,
   stderr: Writable = process.stderr,
+  initialValue = true,
 ): Promise<boolean | null> {
   interactiveStreams(stdin, stderr);
-  const value = await clack.confirm({ message: label, input: stdin, output: stderr });
+  const value = await clack.confirm({ message: label, input: stdin, output: stderr, initialValue });
   if (clack.isCancel(value)) return null;
   return value as boolean;
 }

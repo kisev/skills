@@ -15,11 +15,22 @@ GitHub Pages, а не из исходного репозитория.
 
 ## 1. Установите навыки
 
-Запустите:
+Посмотрите версию установщика, затем установите навыки:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --global
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
+
+Тег npm может сдвинуться между просмотром и установкой. npx не устанавливает
+CLI глобально; `skills list` проверяет локальные навыки, а не версию установщика
+или выпуска Pages.
 
 Установщик открывает список навыков с предвыбранными всеми позициями; снимите
 лишнее. Внутри сессии агента команда выполняется без взаимодействия и ставит

@@ -76,7 +76,8 @@ the parent's observed work item ID is recorded. Closed initial state renders a
 close command only after the observed work item ID is recorded. Cross-project
 blocking links require observed work item IDs on the same instance and use the
 GraphQL linked-items mutation. All publication commands target the GitLab
-GraphQL endpoint through `glab api`; version 2 drafts render through the legacy
+GraphQL endpoint through `glab api graphql`, using the CLI's native GraphQL routing
+rather than a traversal-shaped REST path; version 2 drafts render through the legacy
 issue and epic mutations, version 3 through work item mutations.
 Blocked review suppresses publication commands for that item, while
 `needs_clarification` keeps its plan partial.

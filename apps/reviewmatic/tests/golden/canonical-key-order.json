@@ -1,0 +1,27 @@
+{
+  "name": "canonical-key-order",
+  "kind": "canonical_digest",
+  "input": {
+    "zeta": 1,
+    "alpha": {
+      "b": 2,
+      "a": 1,
+      "Я": 3,
+      "omega": 4
+    },
+    "middle": [
+      {
+        "second": true,
+        "first": false
+      },
+      "",
+      [],
+      {}
+    ]
+  },
+  "expected": {
+    "digest": "eef4e53d527391e1c85994fd284e402a02a00029bc56de3904c9d06dc13f18e1",
+    "valid": true,
+    "python_valid": true
+  }
+}

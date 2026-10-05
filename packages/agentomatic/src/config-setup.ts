@@ -1,11 +1,9 @@
-import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 
-import { archiveMutations, type ArchiveCandidate } from "./installer.js";
+import { archiveMutations, coreSelectionMutation, type ArchiveCandidate } from "./installer.js";
 import { requirePackageVersion } from "./package-metadata.js";
 import { ensureDependency, planDependency, type DependencyRunner } from "./self-install.js";
 import {
@@ -23,12 +21,30 @@ import {
   type Scope,
 } from "./lifecycle.js";
 import { applyJsoncEdits, parseJsonc, type JsoncEdit } from "./jsonc.js";
+import {
+  corePluginEdits,
+  corePluginRemovalEdits,
+  permissionEdits,
+  type PermissionRule,
+} from "./opencode-config.js";
 
-const PACKAGE_NAME = "@kisev/agentomatic";
-const LEGACY_PACKAGE_NAME = "@kisev/skills-opencode";
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const XDG_STATE_GLOB = "~/.local/state/agent-skills/**";
 const OPENCODE_SKILLS_GLOB = "~/.config/opencode/skills/**";
+const AGENTS_SKILLS_GLOB = "~/.agents/skills/**";
+// Structural pattern for reviewmatic-managed review worktrees: one managed
+// catalog per repository as a sibling of the checkout (`<repo>.worktrees/
+// reviewmatic/<hash>`). No per-repository or per-MR path is predetermined, and
+// a typo'd sibling state directory such as `agent-skill` never matches this
+// pattern or the state globs above.
+const WORKTREE_TREE_GLOB = "*.worktrees/reviewmatic/**";
+const WORKTREE_ROOT = "*.worktrees/reviewmatic";
+const WORKTREE_BASE = "*.worktrees";
+// V2 checks external paths against a canonical directory boundary that
+// normally ends in `/*`, so the exact roots above never match an actual
+// worktree access. This boundary pattern covers the managed reviewmatic
+// catalog and every managed worktree inside it, without opening sibling
+// directories of other tools under `<repo>.worktrees`.
+const WORKTREE_BOUNDARY_GLOB = "*.worktrees/reviewmatic/*";
 const SECRET_PATHS = [
   "**/.env",
   "**/.env.*",
@@ -60,6 +76,12 @@ export type TargetFileKind = "main" | "tui";
 
 export const CONFIG_FRAGMENTS = [
   {
+    name: "core-disable",
+    description: "Disconnect only the agentomatic plugin, preserving unrelated configuration",
+    targets: ["opencode"],
+    file: "main",
+  },
+  {
     name: "core-plugin",
     description: "Register @kisev/agentomatic in the plugin array (OpenCode only)",
     targets: ["opencode"],
@@ -67,14 +89,9 @@ export const CONFIG_FRAGMENTS = [
   },
   {
     name: "skills-state-permissions",
-    description: "Allow the standard skills XDG state paths without per-run prompts",
+    description:
+      "Allow the canonical ~/.agents/skills tree, legacy skills state paths, and reviewmatic-managed review worktrees without per-run prompts",
     targets: ["opencode", "kilo", "mimo"],
-    file: "main",
-  },
-  {
-    name: "lsp-preset",
-    description: "Add LSP servers from the shared catalog (OpenCode only)",
-    targets: ["opencode"],
     file: "main",
   },
   {
@@ -91,7 +108,7 @@ export const CONFIG_FRAGMENTS = [
   },
   {
     name: "tui-schema",
-    description: "Unify each agent TUI file: schema, theme, stacked diffs, and leader keybinds",
+    description: "Configure terminal settings: OpenCode V2 cli.json or Kilo/MiMo TUI files",
     targets: ["opencode", "kilo", "mimo"],
     file: "tui",
   },
@@ -152,7 +169,7 @@ async function requireNoRecovery(stateRoot: string): Promise<void> {
   if (await readRegular(join(stateRoot, "transaction-journal.json")))
     throw new ConfigSetupError(
       "recovery_required",
-      "An interrupted transaction requires config recover --dry-run, then confirmed config recover before a fresh preview",
+      "An interrupted transaction requires maintenance recover --dry-run, then confirmed maintenance recover before a fresh preview",
     );
 }
 
@@ -173,16 +190,44 @@ export async function recoverConfigSetup(
 ): Promise<{ paths: string[]; recovered: boolean; digest: string | null }> {
   const root = deploymentRoot(scope, cwd, home);
   const state = lifecycleRoot(scope, cwd, home);
-  const built = await build(
-    { targets: [...CONFIG_TARGETS], fragments: [...FRAGMENT_NAMES] },
-    scope,
-    cwd,
-    home,
-  );
-  const allowed = [...built.allowedRoots, archiveRoot(scope, cwd, home)];
-  const paths = await inspectTransaction(root, state, allowed);
   const journalPath = join(state, "transaction-journal.json");
   const journal = await readRegular(journalPath);
+  const scopeRoot = resolve(scope === "global" ? home : cwd);
+  let recoveryRoot = root;
+  if (journal) {
+    let candidate: { root?: unknown; operations?: Array<{ path: string; root?: string }> };
+    try {
+      candidate = JSON.parse(journal.toString("utf8"));
+    } catch {
+      throw new ConfigSetupError("invalid_journal", "Transaction journal is not valid JSON");
+    }
+    if (candidate.root === scopeRoot && scopeRoot !== root) {
+      const prefix = scope === "global" ? ".config/opencode/" : ".opencode/";
+      if (
+        !Array.isArray(candidate.operations) ||
+        candidate.operations.some(
+          (operation) => !operation.root && !operation.path?.startsWith(prefix),
+        )
+      )
+        throw new ConfigSetupError(
+          "invalid_journal",
+          "Cleanup journal contains paths outside the deployment",
+        );
+      recoveryRoot = scopeRoot;
+    }
+  }
+  const allowed = [
+    root,
+    archiveRoot(scope, cwd, home),
+    ...(scope === "project"
+      ? [resolve(cwd)]
+      : [
+          join(home, ".config", "opencode"),
+          join(home, ".config", "kilo"),
+          join(home, ".config", "mimocode"),
+        ]),
+  ];
+  const paths = await inspectTransaction(recoveryRoot, state, allowed);
   const digest = journal ? sha256(journal) : null;
   if (dryRun || !paths.length) return { paths, recovered: false, digest };
   const recovered = await withLifecycleLock(state, async () => {
@@ -192,7 +237,7 @@ export async function recoverConfigSetup(
         "stale_receipt",
         "Recovery journal changed; preview recovery again",
       );
-    return recoverTransaction(root, state, allowed);
+    return recoverTransaction(recoveryRoot, state, allowed);
   });
   return { paths, recovered, digest };
 }
@@ -220,29 +265,26 @@ const UNIFIED_TUI_KEYBINDS: Record<string, string> = {
   tips_toggle: "<leader>h,<leader>р",
 };
 
-const LSP_SERVER_COMMANDS: Record<string, string[]> = {
-  python: ["basedpyright-langserver", "--stdio"],
-  typescript: ["typescript-language-server", "--stdio"],
-  yaml: ["yaml-language-server", "--stdio"],
-  shell: ["bash-language-server", "start"],
+const OPENCODE_KEYBINDS: Record<string, string> = {
+  "command.palette.show": "alt+p",
+  "app.exit": "ctrl+d,<leader>q,<leader>й",
+  "session.first": "ctrl+g",
+  "session.last": "ctrl+alt+g",
+  "prompt.editor": "<leader>e,<leader>у",
+  "theme.switch": "<leader>t,<leader>е",
+  "session.sidebar.toggle": "<leader>b,<leader>и",
+  "opencode.status": "<leader>s,<leader>ы",
+  "session.export": "<leader>x,<leader>ч",
+  "session.new": "<leader>n,<leader>т",
+  "session.list": "<leader>l,<leader>д",
+  "session.timeline": "<leader>g,<leader>п",
+  "session.compact": "<leader>c,<leader>с",
+  "model.list": "<leader>m,<leader>ь",
+  "agent.list": "<leader>a,<leader>ф",
+  "messages.copy": "<leader>y,<leader>н",
+  "session.undo": "<leader>u,<leader>г",
+  "session.redo": "<leader>r,<leader>к",
 };
-
-function lspCatalog(): Array<{ name: string; extensions: string[] }> {
-  const raw = readFileSync(resolve(packageRoot, "dist", "assets", "lsp-catalog.json"), "utf8");
-  const catalog = JSON.parse(raw) as {
-    servers?: Array<{ name?: unknown; extensions?: unknown }>;
-  };
-  if (!Array.isArray(catalog.servers))
-    throw new ConfigSetupError("invalid_package", "LSP catalog is unavailable");
-  return catalog.servers
-    .filter(
-      (server): server is { name: string; extensions: string[] } =>
-        typeof server.name === "string" &&
-        Array.isArray(server.extensions) &&
-        server.extensions.every((extension) => typeof extension === "string"),
-    )
-    .filter((server) => LSP_SERVER_COMMANDS[server.name]);
-}
 
 function mapAllowsAll(value: unknown): boolean {
   return Boolean(
@@ -271,21 +313,41 @@ function fragmentEdits(
       ? (value.permission as Record<string, unknown>)
       : {};
   if (fragment === "core-plugin") {
-    return [
-      { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/config.json" },
-      { kind: "set-if-absent", path: ["plugin"], value: [] },
-      {
-        kind: "replace-array-value",
-        path: ["plugin"],
-        from: LEGACY_PACKAGE_NAME,
-        to: PACKAGE_NAME,
-      },
-      { kind: "append-unique", path: ["plugin"], value: PACKAGE_NAME },
-    ];
+    return corePluginEdits(value);
   }
+  if (fragment === "core-disable") return corePluginRemovalEdits(value);
   if (fragment === "skills-state-permissions") {
     const statePaths =
-      target === "opencode" ? [XDG_STATE_GLOB, OPENCODE_SKILLS_GLOB] : [XDG_STATE_GLOB];
+      target === "opencode"
+        ? [XDG_STATE_GLOB, OPENCODE_SKILLS_GLOB, AGENTS_SKILLS_GLOB]
+        : [XDG_STATE_GLOB];
+    if (target === "opencode")
+      return permissionEdits(value, [
+        ...statePaths.flatMap((resource): PermissionRule[] => [
+          { action: "read", resource, effect: "allow" },
+          { action: "external_directory", resource, effect: "allow" },
+        ]),
+        { action: "edit", resource: XDG_STATE_GLOB, effect: "allow" },
+        // Directory enumeration (glob/list) targets the roots themselves, which
+        // the tree globs above do not match; allow those exact directories.
+        ...statePaths.map((resource): PermissionRule => ({
+          action: "external_directory",
+          resource: resource.replace(/\/\*\*$/, ""),
+          effect: "allow",
+        })),
+        { action: "external_directory", resource: "~/.agents", effect: "allow" },
+        // Read-only access to reviewmatic-managed review worktrees, including
+        // the directory boundaries external access is checked against. Read is
+        // scoped to the managed reviewmatic catalog, and pre-existing user or
+        // secret denies keep priority: the insertion rule in permissionEdits
+        // places each new allow before any overlapping recorded deny. No shell
+        // or edit permission is added, and sibling catalogs of other tools
+        // under `<repo>.worktrees` stay unapproved.
+        { action: "read", resource: WORKTREE_TREE_GLOB, effect: "allow" },
+        { action: "external_directory", resource: WORKTREE_BOUNDARY_GLOB, effect: "allow" },
+        { action: "external_directory", resource: WORKTREE_ROOT, effect: "allow" },
+        { action: "external_directory", resource: WORKTREE_BASE, effect: "allow" },
+      ]);
     const edits: JsoncEdit[] = [];
     if (!mapAllowsAll(permission.read))
       edits.push(
@@ -303,16 +365,25 @@ function fragmentEdits(
           Object.fromEntries(statePaths.map((glob) => [glob, "allow"])),
         ),
       );
+    edits.push(
+      ...permissionMapEdits(["permission", "read"], { [WORKTREE_TREE_GLOB]: "allow" }),
+      ...permissionMapEdits(["permission", "external_directory"], {
+        [WORKTREE_BOUNDARY_GLOB]: "allow",
+        [WORKTREE_ROOT]: "allow",
+        [WORKTREE_BASE]: "allow",
+      }),
+    );
     return edits;
   }
-  if (fragment === "lsp-preset") {
-    return lspCatalog().map((server) => ({
-      kind: "set-if-absent" as const,
-      path: ["lsp", server.name],
-      value: { command: LSP_SERVER_COMMANDS[server.name], extensions: server.extensions },
-    }));
-  }
   if (fragment === "secrets-guard") {
+    if (target === "opencode")
+      return permissionEdits(value, [
+        ...SECRET_PATHS.flatMap((glob): PermissionRule[] => [
+          { action: "read", resource: glob.replace(/^\*\*\//, "*"), effect: "deny" },
+          { action: "edit", resource: glob.replace(/^\*\*\//, "*"), effect: "deny" },
+        ]),
+        { action: "read", resource: "*.env.example", effect: "allow" },
+      ]);
     const deny = Object.fromEntries(SECRET_PATHS.map((glob) => [glob, "deny"]));
     return [
       ...permissionMapEdits(["permission", "read"], {
@@ -330,8 +401,18 @@ function fragmentEdits(
       { kind: "set-if-absent", path: ["mcp_tool_display"], value: "expanded" },
     ];
   }
+  if (target === "opencode")
+    return [
+      { kind: "set-if-absent", path: ["$schema"], value: "https://opencode.ai/v2/cli.json" },
+      { kind: "set-if-absent", path: ["theme", "name"], value: "ayu" },
+      ...Object.entries(OPENCODE_KEYBINDS).map(([key, value]) => ({
+        kind: "set-if-absent" as const,
+        path: ["keybinds", key],
+        value,
+      })),
+    ];
   const tuiSchemas: Record<ConfigTargetName, string | undefined> = {
-    opencode: "https://opencode.ai/tui.json",
+    opencode: undefined,
     kilo: undefined,
     mimo: "https://mimo.xiaomi.com/mimocode/tui.json",
   };
@@ -379,6 +460,8 @@ export function normalizeConfigSelection(
       "Project scope supports only the opencode target",
     );
   const requestedFragments = value.fragments ?? [];
+  if (requestedFragments.includes("core-plugin") && requestedFragments.includes("core-disable"))
+    throw new ConfigSetupError("invalid_selection", "Choose either core-plugin or core-disable");
   const fragments = FRAGMENT_NAMES.filter((fragment) => requestedFragments.includes(fragment));
   if (fragments.length !== requestedFragments.length)
     throw new ConfigSetupError("invalid_selection", "Unknown config fragment selection");
@@ -401,8 +484,32 @@ export async function defaultConfigSelection(
   }
   return normalizeConfigSelection(scope, {
     targets: [...new Set(targets)],
-    fragments: [...FRAGMENT_NAMES],
+    fragments: FRAGMENT_NAMES.filter((name) => name !== "core-disable"),
   });
+}
+
+export async function inspectIntegration(
+  scope: Scope,
+  cwd = process.cwd(),
+  home = homedir(),
+): Promise<{
+  path: string;
+  connected: boolean;
+  problem?: string;
+}> {
+  const file = await resolveTargetFile("opencode", scope, cwd, home);
+  const raw = await readRegular(file.absolute);
+  if (!raw) return { path: file.absolute, connected: false };
+  try {
+    const current = parseJsonc(raw.toString("utf8")) as Record<string, unknown>;
+    return { path: file.absolute, connected: corePluginRemovalEdits(current).length > 0 };
+  } catch (error) {
+    return {
+      path: file.absolute,
+      connected: false,
+      problem: error instanceof Error ? error.message : "Invalid configuration",
+    };
+  }
 }
 
 async function resolveTargetFile(
@@ -442,9 +549,9 @@ async function resolveTargetFile(
     return {
       target,
       root: globalRoot,
-      path: "tui.json",
-      absolute: join(globalRoot, "tui.json"),
-      exists: await existing(globalRoot, "tui.json"),
+      path: "cli.json",
+      absolute: join(globalRoot, "cli.json"),
+      exists: await existing(globalRoot, "cli.json"),
     };
   }
   if (target === "opencode") {
@@ -504,6 +611,7 @@ async function build(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
+  syncSelection = true,
 ): Promise<BuiltPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const operations: ConfigSetupOperation[] = [];
@@ -550,6 +658,23 @@ async function build(
       let changed = false;
       for (const fragment of selection.fragments) {
         if (!applicable(fragment, target) || fragmentFileKind(fragment) !== kind) continue;
+        if (
+          target === "opencode" &&
+          kind === "tui" &&
+          !file.exists &&
+          ((await readRegular(join(file.root, "tui.json"))) ||
+            (await readRegular(join(file.root, "tui.jsonc"))))
+        ) {
+          operations.push({
+            target,
+            path: file.absolute,
+            fragment,
+            operation: "conflict",
+            reason:
+              "Start OpenCode V2 once to migrate existing TUI preferences into cli.json before applying terminal presets",
+          });
+          continue;
+        }
         let parsed: unknown = undefined;
         try {
           parsed = parseJsonc(text);
@@ -609,6 +734,29 @@ async function build(
           ? "TUI files are global-only"
           : "no selected target supports this fragment",
     }));
+  const core = selection.fragments.find(
+    (fragment) => fragment === "core-plugin" || fragment === "core-disable",
+  );
+  if (
+    syncSelection &&
+    core &&
+    selection.targets.includes("opencode") &&
+    !operations.some(
+      (operation) => operation.fragment === core && operation.operation === "conflict",
+    )
+  ) {
+    const mutation = await coreSelectionMutation(root, core === "core-plugin");
+    if (mutation) {
+      mutations.push(mutation);
+      operations.push({
+        target: "opencode",
+        path: join(root, mutation.path),
+        fragment: core,
+        operation: "update",
+        reason: "Save connection choice for repeat install and repair",
+      });
+    }
+  }
   const sorted = operations.sort(
     (left, right) =>
       CONFIG_TARGETS.indexOf(left.target) - CONFIG_TARGETS.indexOf(right.target) ||
@@ -648,11 +796,12 @@ export async function previewConfigSetup(
   cwd = process.cwd(),
   home = homedir(),
   provisionDependency = true,
+  syncSelection = true,
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
   try {
     await requireNoRecovery(stateRoot);
-    const built = await build(selection, scope, cwd, home);
+    const built = await build(selection, scope, cwd, home, syncSelection);
     if (
       provisionDependency &&
       selection.fragments.includes("core-plugin") &&
@@ -666,6 +815,7 @@ export async function previewConfigSetup(
       resolve(cwd),
       resolve(home),
       provisionDependency,
+      syncSelection,
     ]);
     for (const [id, prior] of configReceipts)
       if (prior.key === key || prior.expires < Date.now()) configReceipts.delete(id);
@@ -691,6 +841,7 @@ export async function applyConfigSetup(
     dependencyRunner?: DependencyRunner;
     provisionDependency?: boolean;
     receipt?: string;
+    syncSelection?: boolean;
   } = {},
 ): Promise<ConfigSetupPlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
@@ -698,7 +849,8 @@ export async function applyConfigSetup(
   try {
     return await withLifecycleLock(stateRoot, async () => {
       await requireNoRecovery(stateRoot);
-      const built = await build(selection, scope, cwd, home);
+      const syncSelection = options.syncSelection !== false;
+      const built = await build(selection, scope, cwd, home, syncSelection);
       const provisionDependency = options.provisionDependency !== false;
       if (
         provisionDependency &&
@@ -712,6 +864,7 @@ export async function applyConfigSetup(
         resolve(cwd),
         resolve(home),
         provisionDependency,
+        syncSelection,
       ]);
       const id = options.receipt ?? [...configReceipts].find(([, entry]) => entry.key === key)?.[0];
       const receipt = id ? configReceipts.get(id) : undefined;
@@ -747,6 +900,8 @@ export async function applyConfigSetup(
           await provision();
           return built.plan;
         }
+        if (!built.plan.operations.some((operation) => operation.operation === "conflict"))
+          return built.plan;
         throw new ConfigSetupError("invalid_state", "Config setup plan has no applicable changes");
       }
       const backups: ArchiveCandidate[] = [];

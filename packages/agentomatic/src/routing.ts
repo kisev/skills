@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { validateAgentReport } from "./contracts.js";
 
 export const CATEGORIES = ["exploration", "architecture", "implementation", "review"] as const;
@@ -107,7 +107,7 @@ const MATRIX = {
     implementation: {
       profiles: ["worker"],
       capabilities: ["read", "write", "verify"],
-      tools: ["read", "edit", "bash"],
+      tools: ["read", "edit", "shell"],
       cost: "medium",
       latency: "standard",
     },
@@ -593,19 +593,35 @@ export class ExecutionCardLifecycle {
 export class RoutingGate {
   #receipts = new Map<
     string,
-    {
+    Array<{
       decision: RoutingDecision;
       taskDigest: string;
       requirementsDigest: string;
       cardDigest?: string;
+      card?: ExecutionCard;
       expiresAt: number;
-    }
+    }>
   >();
   #active = new Map<
     string,
-    { agent: string; card?: ExecutionCard; lifecycle?: ExecutionCardLifecycle; expiresAt: number }
+    { agent: string; card?: ExecutionCard; lifecycle?: ExecutionCardLifecycle }
   >();
   #ttlMs = 10 * 60 * 1000;
+
+  requiresReceipt(sessionID: string, agent: string | undefined): boolean {
+    return (
+      (this.#receipts.get(sessionID)?.length ?? 0) > 0 ||
+      (agent !== undefined &&
+        (Object.values(MATRIX.categories).some((entry) =>
+          (entry.profiles as readonly string[]).includes(agent),
+        ) ||
+          /^critic-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agent)))
+    );
+  }
+
+  hasActive(sessionID: string, agent: string, callID = ""): boolean {
+    return this.#active.get(JSON.stringify([sessionID, callID]))?.agent === agent;
+  }
 
   preview(input: RoutingInput): RoutingDecision {
     return resolveRouting(input);
@@ -622,6 +638,10 @@ export class RoutingGate {
 
   grant(sessionID: string, decision: RoutingDecision, context?: ReceiptContext): RoutingReceipt {
     const now = Date.now();
+    const verifiedCard =
+      context?.card === undefined ? undefined : validateExecutionCard(context.card);
+    if (verifiedCard && !verifiedCard.valid)
+      throw new Error(`Invalid routing execution card: ${verifiedCard.failedField}`);
     const taskDigest = context?.task === undefined ? decision.task_digest : digest(context.task);
     const requirementsDigest =
       context?.requirements === undefined
@@ -639,32 +659,45 @@ export class RoutingGate {
       card_revision: decision.execution_card_revision ?? null,
       host_inventory_revision: decision.host_inventory_revision,
       expires_at: new Date(now + this.#ttlMs).toISOString(),
-      nonce: createHash("sha256")
-        .update(`${sessionID}:${now}:${decision.decision_digest}`)
-        .digest("hex"),
+      nonce: randomBytes(32).toString("hex"),
     };
     const receipt: RoutingReceipt = { ...receiptBase, receipt_digest: digest(receiptBase) };
-    this.#receipts.set(sessionID, {
+    const pending = (this.#receipts.get(sessionID) ?? []).filter((item) => item.expiresAt >= now);
+    pending.push({
       decision,
       taskDigest,
       requirementsDigest,
       cardDigest,
+      card: verifiedCard?.valid ? structuredClone(verifiedCard.card) : undefined,
       expiresAt: Date.parse(receipt.expires_at),
     });
+    this.#receipts.set(sessionID, pending);
     return receipt;
   }
 
-  cancel(sessionID: string): void {
+  cancel(sessionID: string, callID?: string): void {
+    if (callID !== undefined) {
+      this.#active.delete(JSON.stringify([sessionID, callID]));
+      return;
+    }
     this.#receipts.delete(sessionID);
-    this.#active.delete(sessionID);
+    for (const key of this.#active.keys())
+      if (JSON.parse(key)[0] === sessionID) this.#active.delete(key);
   }
 
-  consume(sessionID: string, agent: string, context?: ReceiptContext): void {
-    const receipt = this.#receipts.get(sessionID);
-    if (!receipt)
+  consume(sessionID: string, agent: string, context?: ReceiptContext, callID = ""): void {
+    const pending = this.#receipts.get(sessionID) ?? [];
+    if (pending.length === 0)
       throw new Error("Native Task requires an active routing receipt; use the route tool");
-    if (receipt.decision.agent !== agent)
+    const candidates = pending.filter((receipt) => receipt.decision.agent === agent);
+    if (candidates.length === 0)
       throw new Error("Native Task agent does not match the active routing receipt");
+    const matching = context
+      ? candidates.filter((receipt) => receipt.taskDigest === digest(context.task ?? ""))
+      : candidates;
+    if (matching.length === 0)
+      throw new Error("Routing receipt task does not match the active routing receipt");
+    const receipt = matching.find((item) => Date.now() <= item.expiresAt) ?? matching[0];
     if (Date.now() > receipt.expiresAt)
       throw new Error("Routing receipt has expired; request a new preview");
     if (context) {
@@ -678,25 +711,34 @@ export class RoutingGate {
       if (cardDigest !== receipt.cardDigest)
         throw new Error("Routing receipt execution card does not match the active routing receipt");
     }
-    this.#receipts.delete(sessionID);
-    const validatedCard =
-      context?.card === undefined ? undefined : validateExecutionCard(context.card);
+    const key = JSON.stringify([sessionID, callID]);
+    if (this.#active.has(key))
+      throw new Error("Subagent call already has an active routing receipt");
+    pending.splice(pending.indexOf(receipt), 1);
+    if (pending.length === 0) this.#receipts.delete(sessionID);
+    const cardValue = context?.card ?? receipt.card;
+    const validatedCard = cardValue === undefined ? undefined : validateExecutionCard(cardValue);
     const card = validatedCard?.valid ? validatedCard.card : undefined;
     const lifecycle = card ? new ExecutionCardLifecycle(card) : undefined;
     if (lifecycle)
       lifecycle.transition("RUNNING", { card_id: card!.card_id, revision: card!.revision });
-    this.#active.set(sessionID, { agent, card, lifecycle, expiresAt: receipt.expiresAt });
+    this.#active.set(key, { agent, card, lifecycle });
   }
 
-  complete(sessionID: string, agent: string, output: unknown): void {
-    const active = this.#active.get(sessionID);
+  complete(sessionID: string, agent: string, output: unknown, callID = ""): void {
+    const key = JSON.stringify([sessionID, callID]);
+    const active = this.#active.get(key);
     if (!active || active.agent !== agent)
       throw new Error("Task result has no matching active routing receipt");
-    if (Date.now() > active.expiresAt) throw new Error("Task result routing receipt has expired");
     const report =
       output && typeof output === "object" ? (output as Record<string, unknown>) : undefined;
     const role = /^critic-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(agent) ? "critic" : agent;
+    const portableCritic =
+      !active.card &&
+      (role === "review" || role === "critic") &&
+      report?.schema === "portable-gitlab/critic-receipt/v2";
     const value =
+      (portableCritic ? report : undefined) ??
       report?.[role === "architect" ? "execution_card" : `${role}_report`] ??
       (role === "critic" && !active.card ? report?.review_report : undefined) ??
       report?.report;
@@ -716,7 +758,7 @@ export class RoutingGate {
         : agent === "critic"
           ? ["APPROVED", "CHANGES_REQUIRED"]
           : undefined;
-    if (allowed && (typeof status !== "string" || !allowed.includes(status)))
+    if (!portableCritic && allowed && (typeof status !== "string" || !allowed.includes(status)))
       throw new Error("Task result has an invalid machine transition");
     if (active.lifecycle && status === "COMPLETED")
       active.lifecycle.transition("COMPLETED", {
@@ -741,6 +783,6 @@ export class RoutingGate {
         revision: active.card!.revision,
       });
     }
-    this.#active.delete(sessionID);
+    this.#active.delete(key);
   }
 }

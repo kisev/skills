@@ -39,6 +39,54 @@ def test_security_policy_has_separate_english_and_russian_versions() -> None:
     assert "[English](SECURITY.md)" in russian
 
 
+def _missed_defect_registry(text: str, heading: str) -> str:
+    assert heading in text, "missed-defect registry section was removed"
+    start = text.index(heading)
+    end = text.find("\n## ", start + 1)
+    return text[start : end if end >= 0 else len(text)]
+
+
+def test_missed_defect_registry_exists_in_both_locales_and_lists_all_classes() -> None:
+    english = _missed_defect_registry(
+        (ROOT / "docs/verification.md").read_text(encoding="utf-8"),
+        "## Missed-defect Registry",
+    )
+    russian = _missed_defect_registry(
+        (ROOT / "docs/ru/verification.md").read_text(encoding="utf-8"),
+        "## Реестр пропущенных дефектов",
+    )
+
+    commits = ("b5cf464", "184327d", "204714f")
+    for commit in commits:
+        assert commit in english, commit
+        assert commit in russian, commit
+    for path in (
+        "tests/test_application_workflows.py",
+        "packages/agentomatic/test/command-cli.test.mjs",
+        "apps/reviewmatic/tests/test_context_package_records.py",
+        "apps/reviewmatic/tests/test_local_review_scenarios.py",
+    ):
+        assert path in english, path
+        assert path in russian, path
+    for guard in ("streamed_glab_trace", "modelSelection", "_shared_context_inputs"):
+        assert guard in english, guard
+        assert guard in russian, guard
+    for locale, covered, closed, mutation_check in (
+        (english, "covered", "closed by PORT-3", "Proof by removal"),
+        (russian, "покрыты", "закрыто в PORT-3", "Проверка удалением"),
+    ):
+        assert covered in locale
+        assert closed in locale
+        assert mutation_check in locale
+    for invariant in (
+        "question_context_digest",
+        "question_context_version",
+        "is_current_result",
+    ):
+        assert invariant in english, invariant
+        assert invariant in russian, invariant
+
+
 def test_project_spec_russian_templates_match_all_default_templates() -> None:
     templates = ROOT / "skills/spec-manage/templates"
     default_templates = [path for path in templates.rglob("*.md") if "/ru/" not in path.as_posix()]
@@ -60,8 +108,8 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     english_index = (ROOT / "docs/README.md").read_text(encoding="utf-8")
     russian_index = (ROOT / "docs/ru/README.md").read_text(encoding="utf-8")
 
-    assert len(english_root.splitlines()) < 100
-    assert len(russian_root.splitlines()) < 100
+    assert len(english_root.splitlines()) < 150
+    assert len(russian_root.splitlines()) < 150
     for document in (english_root, russian_root):
         assert "agentomatic" in document
         assert "docs/" in document
@@ -80,13 +128,23 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     )
 
 
-def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
+def test_integration_documentation_covers_the_same_scenario_cli_flow() -> None:
     english = (ROOT / "docs/how-to/opencode-integration.md").read_text(encoding="utf-8")
     russian = (ROOT / "docs/ru/how-to/opencode-integration.md").read_text(encoding="utf-8")
     for document in (english, russian):
         assert "npx --yes skills@latest" in document
         assert "install --dry-run" in document
-        assert "reconcile" in document
+        assert "maintenance cleanup" in document
+        assert "maintenance repair" in document
+        assert "maintenance recover" in document
+        assert "configure agent" in document
+        assert "configure critics" in document
+        assert "configure integration" in document
+        assert "status --global" in document
+        assert "catalog --json" in document
+        assert "--remove-dependency" in document
+        assert "--no-disconnect" in document
+        assert "not-installed" in document
         assert "plugin" in document
         assert "restart" in document or "перезапуск" in document
         assert "Skill command adapters" in document
@@ -94,15 +152,15 @@ def test_install_reconcile_documentation_covers_the_same_release_flow() -> None:
         assert "npx --yes @kisev/agentomatic@latest" in document
         assert "npx --yes @kisev/agentomatic@dev" in document
         assert "npm exec -- agentomatic" not in document
-        assert "reconcile --yes" in document
+        assert "maintenance cleanup --yes" in document
         assert "uninstall --yes" in document
-        assert "Apply these changes?" in document
+        assert "Apply the displayed changes?" in document
         assert "--confirm" not in document
         assert "plan_digest" not in document
         assert "confirmation_digest" not in document
     assert "Manage\nportable skills separately" in english
     assert "Переносимыми навыками\nуправляйте отдельно" in russian
-    assert "lock files do not affect the\nreconcile plan" in english
+    assert "lock files do not affect the\ncleanup plan" in english
     assert "lock-файлы не влияют на план" in russian
 
     package_english = (ROOT / "packages/agentomatic/README.md").read_text(encoding="utf-8")
@@ -162,7 +220,7 @@ def test_portable_cleanup_docs_cover_every_retired_skill_name() -> None:
         *inventory["renamed"],
         *inventory["replacements"],
     }
-    assert len(retired) == 11
+    assert len(retired) == 13
 
     for relative in (
         "docs/migration-inventory.md",

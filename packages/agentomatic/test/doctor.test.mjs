@@ -109,7 +109,7 @@ test("doctor never serializes config secrets and classifies collisions as proble
     writeFileSync(
       join(item.project, "opencode.json"),
       JSON.stringify({
-        plugin: ["@kisev/agentomatic"],
+        plugins: ["@kisev/agentomatic@0.0.0-test.0.g000000000000"],
         token: "doctor-secret",
         apiKey: "another-secret",
         authorization: "Bearer hidden",
@@ -123,6 +123,9 @@ test("doctor never serializes config secrets and classifies collisions as proble
     assert.equal(serialized.includes("Bearer hidden"), false);
     assert.equal(report.mutations, false);
     assert.ok(report.checks.some((check) => check.status === "fail"));
+    const projection = report.checks.find((check) => check.id === "config.plugins");
+    assert.deepEqual(projection.evidence.local_enabled, ["@kisev/agentomatic"]);
+    assert.equal(projection.evidence.local_unknown, 0);
     assert.equal(report.status, "problems");
     const dependency = report.checks.find((check) => check.id === "config.plugin-dependency");
     assert.equal(dependency.status, "warn");
@@ -142,9 +145,8 @@ test("doctor never serializes config secrets and classifies collisions as proble
   }
 });
 
-test("doctor reports disabled LSP and inaccessible symlink inputs without reading through them", async () => {
+test("doctor reports unsupported V2 LSP and inaccessible symlink inputs without reading through them", async () => {
   const item = fixture();
-  const previous = process.env.OPENCODE_DISABLE_LSP_DOWNLOAD;
   try {
     writeFileSync(join(item.project, "sample.py"), "print('ok')\n");
     mkdirSync(join(item.root, "outside"));
@@ -154,18 +156,15 @@ test("doctor reports disabled LSP and inaccessible symlink inputs without readin
     );
     const link = join(item.project, ".opencode");
     symlinkSync(join(item.root, "outside"), link);
-    process.env.OPENCODE_DISABLE_LSP_DOWNLOAD = "true";
     const report = await collectDoctorFacts("project", item.project, item.home);
     assert.ok(report.partial.includes("config.local"));
     assert.equal(
       report.lsp.servers.find((server) => server.name === "python").reason,
-      "download-disabled",
+      "unsupported-in-opencode-v2",
     );
     assert.equal(JSON.stringify(report).includes("outside-secret"), false);
     assert.equal(report.status, "problems");
   } finally {
-    if (previous === undefined) delete process.env.OPENCODE_DISABLE_LSP_DOWNLOAD;
-    else process.env.OPENCODE_DISABLE_LSP_DOWNLOAD = previous;
     rmSync(item.root, { recursive: true, force: true });
   }
 });

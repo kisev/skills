@@ -18,7 +18,7 @@ import { pathToFileURL } from "node:url";
 
 for (const variable of ["GIT_WORK_TREE", "GIT_INDEX_FILE"]) delete process.env[variable];
 
-import plugin from "../dist/index.js";
+import { setupCore } from "./host.mjs";
 import { COMMAND_REGISTRY, renderCommand } from "../dist/registry.js";
 import {
   CATEGORIES,
@@ -36,7 +36,6 @@ import {
   worktreeStatus,
 } from "../dist/runtime/worktree.js";
 import { stateRoot } from "../dist/runtime/state.js";
-import zedBell from "../dist/plugins/zed-bell.js";
 import {
   InstallerError,
   apply,
@@ -72,44 +71,40 @@ function capable(agent, capabilities, tools) {
   return { agent, available: true, capabilities, tools };
 }
 
-function hostClient() {
+function hostAgents() {
   const profiles = {
     mapper: ["read", "glob", "grep"],
     architect: ["read", "glob", "grep"],
-    worker: ["read", "edit", "bash"],
+    worker: ["read", "edit", "shell"],
     review: ["read", "glob", "grep"],
     critic: ["read", "glob", "grep"],
   };
-  return {
-    app: {
-      agents: async () => ({
-        data: Object.entries(profiles).map(([name, tools]) => ({
-          name,
-          mode: name === "worker" ? "subagent" : "primary",
-          builtIn: false,
-          permission: {
-            edit: tools.includes("edit") ? "allow" : "deny",
-            bash: tools.includes("bash") ? { "*": "allow" } : { "*": "deny" },
-          },
-          tools: Object.fromEntries(tools.map((tool) => [tool, true])),
-          options: {},
-        })),
-      }),
-    },
-  };
+  return Object.entries(profiles).map(([id, tools]) => ({
+    id,
+    permissions: [
+      { action: "*", resource: "*", effect: "deny" },
+      ...tools.map((action) => ({ action, resource: "*", effect: "allow" })),
+    ],
+  }));
 }
 
 test("installer wizard uses shared multi-select groups and keeps defaults", () => {
-  const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
-  assert.match(source, /Portable skills are installed separately through npx skills/);
-  assert.match(source, /This installer does not install, update, or remove portable skills/);
+  const source = readFileSync(join(PACKAGE, "src", "command-cli.ts"), "utf8");
+  assert.match(source, /Portable skills are installed separately through the skills CLI/);
+  assert.match(source, /Selecting an adapter does not install its skill/);
   assert.match(source, /Skill command adapters/);
-  assert.match(source, /selectOptions\(\s*label,\s*names,\s*initialSelected,/);
-  assert.match(source, /group\("Skill command adapters", SKILL_COMMANDS, SKILL_COMMANDS\)/);
-  assert.match(source, /group\("Fixed agents", defaults\.agents, defaults\.agents\)/);
-  assert.match(source, /group\("Selectable plugins", SELECTABLE_PLUGINS, defaults\.plugins\)/);
+  assert.match(
+    source,
+    /selectOptions\("Skill command adapters", SKILL_COMMANDS, defaults\.commands\)/,
+  );
+  assert.match(source, /selectOptions\("Fixed agents", FIXED_AGENT_ROLES, defaults\.agents\)/);
+  assert.match(
+    source,
+    /selectOptions\("Optional plugins", SELECTABLE_PLUGINS, defaults\.plugins\)/,
+  );
   assert.doesNotMatch(source, /"Select all", "Select none"/);
-  assert.match(source, /--skill-commands/);
+  assert.match(source, /--commands/);
+  assert.doesNotMatch(source, /--skill-commands/);
   assert.doesNotMatch(source, /--package-commands/);
 });
 
@@ -164,8 +159,8 @@ test("modified managed reconcile preview is blocked without Apply", async () => 
     assert.equal(plan.confirmable, false);
     const output = renderReconcile(plan, { applied: false });
     assert.match(output, /Blocked:/);
-    assert.match(output, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --dry-run`));
-    assert.match(output, /Apply that installer plan, then build a new reconcile preview\./);
+    assert.match(output, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} doctor`));
+    assert.match(output, /Restore recorded bytes before retrying cleanup\./);
     assert.doesNotMatch(output, /\nApply:\n/);
   } finally {
     rmSync(base, { recursive: true, force: true });
@@ -194,7 +189,7 @@ test("blocked reconcile apply exits with code two", async () => {
 
     const reconcilePreview = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--dry-run", "--json"],
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(reconcilePreview.status, 0, reconcilePreview.stderr);
@@ -202,7 +197,7 @@ test("blocked reconcile apply exits with code two", async () => {
     assert.equal(blockedPlan.confirmable, false);
     const blockedApply = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--yes", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--yes", "--json"],
       { cwd: project, env: environment, encoding: "utf8" },
     );
     assert.equal(blockedApply.status, 2, blockedApply.stderr);
@@ -224,7 +219,7 @@ test("clean reconcile preview reports a no-op", async () => {
     assert.equal(plan.diagnostic_state_only.length, 0);
     assert.equal(plan.confirmable, false);
     const output = renderReconcile(plan, { applied: false });
-    assert.match(output, /No reconciliation changes are required\./);
+    assert.match(output, /No cleanup changes are required\./);
     assert.doesNotMatch(output, /Digest:/);
     assert.doesNotMatch(output, /\nApply:\n/);
     assert.doesNotMatch(output, /Blocked:/);
@@ -333,12 +328,12 @@ async function install(scope, cwd, home) {
   };
 }
 
-test("registry generates thirty-eight thin skill command assets and one package command", () => {
-  assert.equal(COMMAND_REGISTRY.length, 39);
-  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 39);
+test("registry generates forty-one thin skill command assets and one package command", () => {
+  assert.equal(COMMAND_REGISTRY.length, 42);
+  assert.equal(new Set(COMMAND_REGISTRY.map(({ name }) => name)).size, 42);
   const skills = new Set(readdirSync(join(REPOSITORY, "skills")));
   const skillCommands = COMMAND_REGISTRY.filter((entry) => "skill" in entry);
-  assert.equal(skillCommands.length, 38);
+  assert.equal(skillCommands.length, 41);
   for (const entry of skillCommands) {
     assert.ok(skills.has(entry.skill), entry.skill);
     const rendered = renderCommand(entry);
@@ -426,7 +421,7 @@ test("non-TTY install accepts an explicit skill command subset", () => {
       [
         join(PACKAGE, "dist", "cli.js"),
         "install",
-        "--skill-commands",
+        "--commands",
         "agents-md",
         "--agents",
         "none",
@@ -442,7 +437,7 @@ test("non-TTY install accepts an explicit skill command subset", () => {
       commands: ["agents-md"],
       agents: [],
       plugins: [],
-      core_activation: false,
+      core_activation: true,
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -482,7 +477,7 @@ test("agent assets contain six contract-bound profiles without model selection",
     const frontmatter = content.slice(0, content.indexOf("---", 4));
     assert.doesNotMatch(frontmatter, /^(model|provider):/m);
     assert.doesNotMatch(content, /~\/\.config\/opencode/i);
-    assert.match(frontmatter, /permission:/);
+    assert.match(frontmatter, /permissions:/);
   }
   assert.match(
     readFileSync(join(PACKAGE, "dist", "assets", "agents", "mapper.md"), "utf8"),
@@ -506,7 +501,7 @@ test("agent assets contain six contract-bound profiles without model selection",
   assert.match(manager, /Own the OpenCode lifecycle for routed work/);
   assert.match(manager, /Do not infer completion/);
   assert.match(critic, /Do not edit files,[\s\S]*direct worker remediation/);
-  assert.match(review, /exact[\s\S]*task allowlist/);
+  assert.match(review, /exact[\s\S]*subagent allowlist/);
   assert.doesNotMatch(`${manager}\n${review}`, /critic-\*/);
 });
 
@@ -519,11 +514,11 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second.operations, first.operations);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 49);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 52);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
     assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 39);
+    assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 42);
     assert.deepEqual(readdirSync(join(home, ".config", "opencode", "plugins")), ["rtk.js"]);
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
       code: "ENOENT",
@@ -615,7 +610,7 @@ test("install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 49);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 52);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -793,17 +788,18 @@ test("uninstall dry-run prints an applicable command without selection options",
 test("runtime plugin has no lifecycle writes and receipt gate is enforced", async () => {
   const directory = temporary();
   try {
-    const hooks = await plugin({ client: hostClient(), directory: "/project" });
-    assert.ok(hooks.tool.route);
+    const { hooks, route, tools } = await setupCore(hostAgents());
+    assert.ok(tools.get("route"));
     assert.equal(hooks.config, undefined);
     await assert.rejects(
-      hooks["tool.execute.before"](
-        { tool: "task", sessionID: "missing" },
-        { args: { agent: "worker" } },
-      ),
+      hooks["execute.before"]({
+        tool: "subagent",
+        sessionID: "missing",
+        input: { agent: "worker" },
+      }),
       /active routing receipt/,
     );
-    const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"]);
+    const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "shell"]);
     const routeInput = {
       category: "implementation",
       task: "Implement one scoped change",
@@ -812,23 +808,18 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
       execution_card: executionCard(),
     };
     const decision = JSON.parse(
-      await hooks.tool.route.execute({ action: "preview", ...routeInput }, { sessionID: "bound" }),
+      await route({ action: "preview", ...routeInput }, { sessionID: "bound" }),
     );
-    await hooks.tool.route.execute(
-      { action: "dispatch", ...routeInput, decision },
-      { sessionID: "bound" },
-    );
+    await route({ action: "dispatch", ...routeInput, decision }, { sessionID: "bound" });
     await assert.rejects(
-      hooks["tool.execute.before"](
-        { tool: "task", sessionID: "bound" },
-        { args: { subagent_type: "critic" } },
-      ),
+      hooks["execute.before"]({ tool: "subagent", sessionID: "bound", input: { agent: "critic" } }),
       /does not match/,
     );
-    await hooks["tool.execute.before"](
-      { tool: "task", sessionID: "bound" },
-      { args: { subagent_type: "worker" } },
-    );
+    await hooks["execute.before"]({
+      tool: "subagent",
+      sessionID: "bound",
+      input: { agent: "worker" },
+    });
     const gate = new RoutingGate();
     const input = { category: "implementation", requirements: [], agents: [worker] };
     const selected = gate.preview(input);
@@ -866,7 +857,7 @@ test("runtime plugin has no lifecycle writes and receipt gate is enforced", asyn
 });
 
 test("routing receipts bind task requirements card agent revision and expiry", () => {
-  const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "bash"]);
+  const worker = capable("worker", ["read", "write", "verify"], ["read", "edit", "shell"]);
   const card = {
     schema_version: 1,
     status: "READY",
@@ -980,7 +971,7 @@ test("routing receipts bind task requirements card agent revision and expiry", (
 });
 
 test("route ignores caller inventory and exposes exactly four host-backed destinations", async () => {
-  const hooks = await plugin({ client: hostClient(), directory: "/project" });
+  const { route } = await setupCore(hostAgents());
   const expected = {
     exploration: "mapper",
     architecture: "architect",
@@ -989,14 +980,14 @@ test("route ignores caller inventory and exposes exactly four host-backed destin
   };
   for (const [category, agent] of Object.entries(expected)) {
     const result = JSON.parse(
-      await hooks.tool.route.execute(
+      await route(
         {
           action: "preview",
           category,
           task: `route ${category}`,
           requirements: [],
           agents: [
-            { agent: "attacker", available: true, capabilities: ["write"], tools: ["bash"] },
+            { agent: "attacker", available: true, capabilities: ["write"], tools: ["shell"] },
           ],
         },
         { sessionID: `inventory-${category}` },
@@ -1034,8 +1025,8 @@ test("unknown profile requires an explicit trusted override", () => {
   );
 });
 
-test("real Task result hook rejects prose and accepts one versioned worker report", async () => {
-  const hooks = await plugin({ client: hostClient(), directory: "/project" });
+test("native subagent result hook rejects prose and accepts one versioned worker report", async () => {
+  const { hooks, route: callRoute } = await setupCore(hostAgents());
   const route = {
     action: "dispatch",
     category: "implementation",
@@ -1044,12 +1035,12 @@ test("real Task result hook rejects prose and accepts one versioned worker repor
     execution_card: executionCard(),
   };
   const routed = JSON.parse(
-    await hooks.tool.route.execute(
+    await callRoute(
       {
         ...route,
         decision: await (async () => {
           const preview = JSON.parse(
-            await hooks.tool.route.execute({ ...route, action: "preview" }, { sessionID: "hook" }),
+            await callRoute({ ...route, action: "preview" }, { sessionID: "hook" }),
           );
           return preview;
         })(),
@@ -1058,21 +1049,37 @@ test("real Task result hook rejects prose and accepts one versioned worker repor
     ),
   );
   assert.equal(routed.receipt.destination, "implementation");
-  await hooks["tool.execute.before"](
-    { tool: "task", sessionID: "hook" },
-    { args: { agent: "worker" } },
-  );
+  await hooks["execute.before"]({
+    tool: "subagent",
+    sessionID: "hook",
+    input: { agent: "worker" },
+  });
   await assert.rejects(
-    hooks["tool.execute.after"](
-      { tool: "task", sessionID: "hook", args: { agent: "worker" } },
-      { output: "finished" },
-    ),
+    hooks["execute.after"]({
+      tool: "subagent",
+      sessionID: "hook",
+      input: { agent: "worker" },
+      status: "completed",
+      result: { content: "finished" },
+    }),
     /JSON structured report/,
   );
-  await hooks["tool.execute.after"](
-    { tool: "task", sessionID: "hook", args: { agent: "worker" } },
-    {
-      output: JSON.stringify({
+  const replacement = JSON.parse(
+    await callRoute({ ...route, action: "preview" }, { sessionID: "hook" }),
+  );
+  await callRoute({ ...route, decision: replacement }, { sessionID: "hook" });
+  await hooks["execute.before"]({
+    tool: "subagent",
+    sessionID: "hook",
+    input: { agent: "worker" },
+  });
+  await hooks["execute.after"]({
+    tool: "subagent",
+    sessionID: "hook",
+    input: { agent: "worker" },
+    status: "completed",
+    result: {
+      content: JSON.stringify({
         worker_report: {
           schema_version: 1,
           status: "COMPLETED",
@@ -1085,7 +1092,53 @@ test("real Task result hook rejects prose and accepts one versioned worker repor
         },
       }),
     },
-  );
+  });
+});
+
+test("native worker calls retain the routed card without repeating custom card input fields", async () => {
+  const { hooks, route } = await setupCore(hostAgents());
+  const input = {
+    category: "implementation",
+    task: "Implement one card-bound change",
+    requirements: [],
+    execution_card: executionCard(),
+  };
+  for (const [name, change, error] of [
+    ["wrong-card", { card_id: "other-card" }, /execution card/],
+    ["outside-scope", { changed_files: ["src/other.ts"] }, /outside execution card/],
+    ["valid", {}, null],
+  ]) {
+    const decision = JSON.parse(await route({ ...input, action: "preview" }, { sessionID: name }));
+    await route({ ...input, action: "dispatch", decision }, { sessionID: name });
+    const event = {
+      tool: "subagent",
+      sessionID: name,
+      id: `call-${name}`,
+      input: { agent: "worker" },
+    };
+    await hooks["execute.before"](event);
+    const completed = {
+      ...event,
+      status: "completed",
+      result: {
+        content: JSON.stringify({
+          worker_report: {
+            schema_version: 1,
+            status: "COMPLETED",
+            card_id: "hook-card",
+            revision: 1,
+            changed_files: ["src/example.ts"],
+            checks: [{ command: "check", status: "passed" }],
+            writes_performed: true,
+            risks: [],
+            ...change,
+          },
+        }),
+      },
+    };
+    if (error) await assert.rejects(hooks["execute.after"](completed), error);
+    else await hooks["execute.after"](completed);
+  }
 });
 
 test("execution card validation and lifecycle reject malformed and replay transitions", () => {
@@ -1234,8 +1287,8 @@ test("runtime state rejects relative XDG_STATE_HOME", () => {
 });
 
 test("plugin exposes only the route package tool", async () => {
-  const hooks = await plugin({});
-  assert.deepEqual(Object.keys(hooks.tool), ["route"]);
+  const { tools } = await setupCore(hostAgents());
+  assert.deepEqual([...tools.keys()], ["route"]);
 });
 
 test("published package metadata and tarball expose only the OpenCode integration", async () => {
@@ -1320,8 +1373,9 @@ test("published package metadata and tarball expose only the OpenCode integratio
     assert.equal(unpackedMetadata.readPackageVersion(), PACKAGE_VERSION);
     assert.equal(unpackedMetadata.skillsInstallerSpec(), SKILLS_INSTALLER_SPEC);
     const imported = await import(pathToFileURL(join(unpacked, "dist", "index.js")).href);
-    assert.equal(typeof imported.default, "function");
-    assert.equal(typeof imported.server, "function");
+    assert.equal(imported.default.server, undefined);
+    assert.equal(typeof imported.default.setup, "function");
+    assert.equal(imported.server, undefined);
     assert.equal(typeof imported.apply, "undefined");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1444,7 +1498,7 @@ test("reconcile CLI returns stable JSON and an explicit no-op", () => {
     };
     const json = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--dry-run", "--json"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(json.status, 0);
@@ -1455,22 +1509,22 @@ test("reconcile CLI returns stable JSON and an explicit no-op", () => {
     assert.equal(parsed.plan.confirmable, false);
     const human = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--dry-run"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--dry-run"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(human.status, 0);
-    assert.match(human.stdout, /No reconciliation changes are required\./);
+    assert.match(human.stdout, /No cleanup changes are required\./);
     assert.doesNotMatch(human.stdout, /\nApply:\n/);
     const invalid = spawnSync(
       process.execPath,
-      [join(PACKAGE, "dist", "cli.js"), "reconcile", "--json"],
+      [join(PACKAGE, "dist", "cli.js"), "maintenance", "cleanup", "--json"],
       { cwd: project, env, encoding: "utf8" },
     );
     assert.equal(invalid.status, 2);
-    assert.equal(JSON.parse(invalid.stdout).error.code, "invalid_input");
+    assert.equal(JSON.parse(invalid.stdout).error.code, "confirmation_required");
     assert.match(
       JSON.parse(invalid.stdout).error.message,
-      /Applying outside a terminal requires --yes; use --dry-run to preview/,
+      /Use --dry-run to inspect or --yes to apply outside a terminal/,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -1578,7 +1632,7 @@ test("install core integration wires config and dependency in one run", async ()
     const opencode = JSON.parse(
       await readFile(join(home, ".config", "opencode", "opencode.jsonc"), "utf8"),
     );
-    assert.deepEqual(opencode.plugin, ["@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, [`@kisev/agentomatic@${PACKAGE_VERSION}`]);
     assert.ok(existsSync(join(home, ".config", "opencode", "commands", "agents-md.md")));
 
     const skipped = invoke([
@@ -1595,7 +1649,7 @@ test("install core integration wires config and dependency in one run", async ()
     ]);
     assert.equal(skipped.status, 0, `${skipped.stdout}\n${skipped.stderr}`);
     assert.doesNotMatch(skipped.stdout, /core-plugin/m);
-    assert.match(skipped.stdout, /Connect the package into user configs:/m);
+    assert.match(skipped.stdout, /opencode\/core-disable: update/m);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

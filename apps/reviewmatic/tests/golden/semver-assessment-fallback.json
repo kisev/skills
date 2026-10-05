@@ -1,0 +1,21 @@
+{
+  "name": "semver-assessment-fallback",
+  "kind": "semver_assessment",
+  "input": {
+    "mode": "target_fallback",
+    "policy": "Stable v1 tags are published by the documented release job.",
+    "sources": ["README.md and CI configuration at the reviewed head; empty release catalog"],
+    "baseline": null,
+    "target_branch": "main",
+    "target_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "target_revision": "mr_snapshot",
+    "fallback_reason": "No confirmed publication baseline is available.",
+    "release_impact": null,
+    "release_rationale": null
+  },
+  "expected": {
+    "digest": "816aafd990e2fb85089ac8e3fe93e50159953a20a02423a4f85506a9ce441e20",
+    "valid": true,
+    "python_valid": true
+  }
+}

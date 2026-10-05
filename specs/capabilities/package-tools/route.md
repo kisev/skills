@@ -6,7 +6,7 @@ Resolve a capability category and dispatch one eligible host agent.
 
 ## Triggers and Near-Misses
 
-Trigger for bounded orchestration; near-miss: direct unbound Task calls.
+Trigger for bounded orchestration; near-miss: direct unbound subagent calls.
 
 ## Inputs/Outputs
 

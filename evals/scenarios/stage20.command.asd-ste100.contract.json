@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "2b8ce82c982216696e517c8ffde9ec9932550d13cdf27869a1e0db4c9f18e92c",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:asd-ste100"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.asd-ste100.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:asd-ste100"]
+    },
+    "prompt": "Verify command asd-ste100 contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.asd-ste100.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

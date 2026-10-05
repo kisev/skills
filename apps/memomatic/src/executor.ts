@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import type { OperationOptions } from "./operations.js";
+import { isolatedProviderConfig } from "./opencode-config.js";
 
 export type ModelExecutor = {
   name: string;
@@ -57,21 +58,31 @@ export class OpenCodeExecutor implements ModelExecutor {
       if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
         throw new Error("invalid OpenCode URL");
       this.url = url.href.replace(/\/$/, "");
-      if (process.env.OPENCODE_SERVER_PASSWORD)
-        this.authorization = `Basic ${Buffer.from(`${process.env.OPENCODE_SERVER_USERNAME ?? "opencode"}:${process.env.OPENCODE_SERVER_PASSWORD}`).toString("base64")}`;
+      const password = process.env.OPENCODE_PASSWORD ?? process.env.OPENCODE_SERVER_PASSWORD;
+      if (password)
+        this.authorization = `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`;
       return;
     }
-    let inherited: Record<string, unknown> = {};
-    if (process.env.OPENCODE_CONFIG_CONTENT) {
-      try {
-        const value: unknown = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
-        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error();
-        inherited = value as Record<string, unknown>;
-      } catch {
-        throw new Error("OpenCode inline configuration must be a JSON object");
-      }
-    }
+    const inherited = await isolatedProviderConfig();
     this.directory = await mkdtemp(join(tmpdir(), "memomatic-opencode-"));
+    const configFile = join(this.directory, "opencode.json");
+    await writeFile(
+      configFile,
+      JSON.stringify({
+        ...inherited,
+        plugins: ["-opencode.skill", "-opencode.config.skill", "-opencode.tool.skill"],
+        permissions: [{ action: "*", resource: "*", effect: "deny" }],
+        agents: {
+          memomatic: {
+            mode: "primary",
+            description: "Bounded memory extraction",
+            system: "Return only the requested JSON. Do not use tools.",
+            permissions: [{ action: "*", resource: "*", effect: "deny" }],
+          },
+        },
+      }),
+      { mode: 0o600 },
+    );
     const password = randomBytes(24).toString("hex");
     this.authorization = `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`;
     this.options.observe?.({
@@ -80,7 +91,7 @@ export class OpenCodeExecutor implements ModelExecutor {
     });
     const child = spawn(
       this.options.binary ?? "opencode",
-      ["serve", "--hostname", "127.0.0.1", "--port", "0", "--pure"],
+      ["serve", "--hostname", "127.0.0.1", "--port", "0"],
       {
         cwd: this.directory,
         detached: process.platform !== "win32",
@@ -89,25 +100,11 @@ export class OpenCodeExecutor implements ModelExecutor {
           ...process.env,
           OPENCODE_SERVER_USERNAME: "opencode",
           OPENCODE_SERVER_PASSWORD: password,
-          OPENCODE_DISABLE_PROJECT_CONFIG: "1",
-          OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
-          OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
-          OPENCODE_DISABLE_DEFAULT_PLUGINS: "1",
-          OPENCODE_CONFIG_CONTENT: JSON.stringify({
-            ...inherited,
-            permission: "deny",
-            tools: { "*": false },
-            agent: {
-              ...(inherited.agent as Record<string, unknown> | undefined),
-              memomatic: {
-                mode: "primary",
-                description: "Bounded memory extraction",
-                prompt: "Return only the requested JSON. Do not use tools.",
-                permission: "deny",
-                tools: { "*": false },
-              },
-            },
-          }),
+          OPENCODE_CONFIG_PROJECT_DISABLE: "1",
+          OPENCODE_CONFIG_DIR: this.directory,
+          OPENCODE_CONFIG: configFile,
+          OPENCODE_CONFIG_CONTENT: "{}",
+          OPENCODE_PASSWORD: password,
         },
       },
     );
@@ -154,9 +151,10 @@ export class OpenCodeExecutor implements ModelExecutor {
     path: string,
     body: unknown,
     signal: AbortSignal,
+    method = "POST",
   ): Promise<Record<string, unknown>> {
     const response = await fetch(`${this.url}${path}`, {
-      method: "POST",
+      method,
       headers: {
         "content-type": "application/json",
         ...(this.authorization ? { authorization: this.authorization } : {}),
@@ -166,9 +164,9 @@ export class OpenCodeExecutor implements ModelExecutor {
     });
     if (!response.ok)
       throw new Error(
-        `OpenCode ${path.includes("message") ? "model request" : "session request"} failed: HTTP ${response.status}`,
+        `OpenCode ${path.includes("generate") ? "model request" : "session request"} failed: HTTP ${response.status}`,
       );
-    return (await response.json()) as Record<string, unknown>;
+    return response.status === 204 ? {} : ((await response.json()) as Record<string, unknown>);
   }
   async complete(request: { system: string; prompt: string }): Promise<string> {
     this.options.signal?.throwIfAborted();
@@ -193,20 +191,37 @@ export class OpenCodeExecutor implements ModelExecutor {
       );
       heartbeat.unref();
       try {
-        const session = await this.request(
-          "/session",
-          {
-            title: "[memomatic-internal] memory extraction",
-            permission: [{ permission: "*", pattern: "*", action: "deny" }],
-          },
-          signal,
-        );
-        if (typeof session.id !== "string")
-          throw new Error("OpenCode session response is malformed");
-        id = session.id;
         const slash = this.options.model?.indexOf("/") ?? -1;
         if (this.options.model && slash < 1)
           throw new Error("model must use provider/model format");
+        const session = await this.request(
+          "/api/session",
+          {
+            title: "[memomatic-internal] memory extraction",
+            agent: this.options.url ? "build" : "memomatic",
+            ...(this.directory ? { location: { directory: this.directory } } : {}),
+            permissions: [{ action: "*", resource: "*", effect: "deny" }],
+            ...(this.options.model
+              ? {
+                  model: {
+                    providerID: this.options.model.slice(0, slash),
+                    id: this.options.model.slice(slash + 1),
+                    ...(this.options.variant ? { variant: this.options.variant } : {}),
+                  },
+                }
+              : {}),
+          },
+          signal,
+        );
+        const data = session.data as { id?: unknown } | undefined;
+        if (typeof data?.id !== "string") throw new Error("OpenCode session response is malformed");
+        id = data.id;
+        await this.request(
+          `/api/experimental/session/${encodeURIComponent(id)}/instructions/entries/memomatic`,
+          { value: request.system },
+          signal,
+          "PUT",
+        );
         this.usage.calls++;
         this.usage.charactersSent += request.system.length + request.prompt.length;
         this.options.observe?.({
@@ -216,51 +231,15 @@ export class OpenCodeExecutor implements ModelExecutor {
           attempt: attempt + 1,
         });
         const response = await this.request(
-          `/session/${encodeURIComponent(id)}/message`,
-          {
-            agent: this.options.url ? "build" : "memomatic",
-            system: request.system,
-            tools: { "*": false },
-            ...(this.options.model
-              ? {
-                  model: {
-                    providerID: this.options.model.slice(0, slash),
-                    modelID: this.options.model.slice(slash + 1),
-                  },
-                }
-              : {}),
-            ...(this.options.variant ? { variant: this.options.variant } : {}),
-            parts: [{ type: "text", text: `[memomatic-internal] ${request.prompt}` }],
-          },
+          `/api/session/${encodeURIComponent(id)}/generate`,
+          { prompt: `[memomatic-internal] ${request.prompt}` },
           signal,
         );
-        const info = response.info as
-          | {
-              error?: unknown;
-              tokens?: {
-                input?: number;
-                output?: number;
-                cache?: { read?: number; write?: number };
-              };
-            }
-          | undefined;
-        if (info?.error)
-          throw new Error("OpenCode model returned an error; inspect the configured provider");
-        if (info?.tokens) {
-          this.usage.usageAvailable = true;
-          this.usage.inputTokens += info.tokens.input ?? 0;
-          this.usage.outputTokens += info.tokens.output ?? 0;
-          this.usage.cacheReadTokens += info.tokens.cache?.read ?? 0;
-          this.usage.cacheWriteTokens += info.tokens.cache?.write ?? 0;
-        }
-        const parts = response.parts as Array<{ type?: string; text?: string }> | undefined;
-        if (!Array.isArray(parts)) throw new Error("OpenCode model response is malformed");
-        const parsed = extractJson(
-          parts
-            .filter((part) => part.type === "text")
-            .map((part) => part.text ?? "")
-            .join("\n"),
-        );
+        const generated = response.data as { text?: unknown } | undefined;
+        if (typeof generated?.text !== "string")
+          throw new Error("OpenCode model response is malformed");
+        // V2 transient generation returns text only, not exact token usage.
+        const parsed = extractJson(generated.text);
         this.options.observe?.({
           phase: "model.done",
           message: "Model response received",
@@ -271,7 +250,7 @@ export class OpenCodeExecutor implements ModelExecutor {
       } catch (error) {
         if (id)
           await this.request(
-            `/session/${encodeURIComponent(id)}/abort`,
+            `/api/session/${encodeURIComponent(id)}/interrupt?resume=false`,
             {},
             AbortSignal.timeout(3000),
           ).catch(() => undefined);

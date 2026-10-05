@@ -75,10 +75,11 @@ major. Treat `none` and `not_applicable` as patch planning impact. Dates do not
 affect compatibility. Use documented project milestone naming conventions.
 
 If no compatible milestone exists, use `create` with the exact proposed title
-and version; the runner emits a manual creation command and keeps the package
-analysis complete while marking follow-up pending until recollection observes its
-ID. Use `remove` when a non-accepted task currently has a milestone. Never assign
-a milestone to non-accepted work.
+and version; the runner emits one guarded block that finds or creates the
+milestone, extracts its ID with `jq`, and attaches the triaged task, keeping
+the package analysis complete while marking follow-up pending until
+recollection observes the assignment. Use `remove` when a non-accepted task
+currently has a milestone. Never assign a milestone to non-accepted work.
 
 ## Collection analysis
 
@@ -125,10 +126,9 @@ gap between runs. Rough waiting guidance is 5 days before the first ping, 14 day
 before the second, and 30 days before closure, but context and run cadence take
 precedence over exact timing. Any substantive reply must be assessed before the
 next action. A sufficient answer ends the cycle; an insufficient answer starts a
-new question and a fresh two-ping cycle. Closure consists of a final-message
-command and a dependent issue-close command. The close command requires the
-local receipt created only after the message was published successfully. Never
-close an MR through this workflow.
+new question and a fresh two-ping cycle. Closure is one guarded block that
+publishes the final message and then closes the issue in the same `&&` chain.
+Never close an MR through this workflow.
 
 ## Stable artifacts
 
@@ -148,26 +148,39 @@ Markdown ends with only paths to earlier versions. Generated prose, headings, st
 questions, and empty-state text use the selected locale; exact code, enum values,
 commands, paths, IDs, quotations, and source titles remain unchanged.
 
-Prepare one directly runnable command per action: title, description, complete
-label set, milestone, issue link, message, and stale closure. Keep every command
-beside its preview. Metadata improvements apply independently to accepted,
-deferred, blocked, rejected, duplicate, and obsolete work; only milestone
+Prepare one guarded command block per action: title, description, complete
+label set, milestone, issue link, message, and stale closure. Keep every block
+beside its preview. Each block chains `#` explanations and commands with `&&`
+and stops before any write when a guard fails. Every writing block first
+verifies the authenticated user against the collected snapshot; the first
+writing block of a task also compares the target `updated_at` with the
+snapshot, and every later block re-reads its target and checks its own semantic
+preconditions: unchanged title, description, or labels, expected status and
+milestone, a conversation whose non-system note digests still match the
+snapshot without the prepared body, and absent links for a new relation. A
+stage whose precondition cannot be precomputed is emitted as a regeneration
+instruction, never as a ready command. The commands depend only on `glab`,
+`jq`, and `sha256sum`, and the runner never executes them. Metadata
+improvements apply independently to accepted, deferred, blocked, rejected,
+duplicate, and obsolete work; only milestone
 assignment remains restricted by the release plan. Use the issue-link API for
 issue relationships. When GitLab has no direct safe MR-link API, prepare a
 contextual issue or MR message instead, and propose a closing relationship only
-when intent is confirmed. Each mutation records an advisory XDG marker after exit
-zero; refresh GitLab before suppressing or retrying it. Never execute generated
-commands.
-Regenerated commands expose `not_run` or `run_unverified`; keep the latter visible
-until refreshed issue, MR, milestone, or discussion evidence confirms the target
-state.
+when intent is confirmed. Obsolete and duplicate issues receive one
+explanation-and-close block with `state_event=close`. A conflicting relation
+type is replaced by one delete-then-create block that re-verifies the observed
+link before deleting. Refresh GitLab evidence before suppressing or retrying
+anything; a repeated block stops on its own preconditions.
 
 Each `agent_recommendation` contains exactly `proposal`, `rationale`, `assumptions`,
 `confidence`, `alternatives`, and `reconsider_if`; confidence is `low`, `medium`,
 or `high`, and assumptions and alternatives are lists. Each `issue_relations[]`
 contains exactly `target_hostname`, `target_project_id`, `target_issue_iid`,
 `relation_type`, `rationale`, nullable `existing_link`, and nullable `comment`. An
-existing link contains exactly its numeric `id` and `relation_type`. Relation type
+existing link contains exactly its numeric `id` and `relation_type`. In a REST
+issue-link listing, use `issue_link_id` for that relationship ID, not `id`, which
+identifies the linked issue. An invalid explicit `issue_link_id` blocks preparation;
+do not fall back to the issue ID. Relation type
 is `relates_to`, `blocks`, or `is_blocked_by`. Its target must be an observed
 different issue on the assessed issue's GitLab host. Missing relations and type
 replacements correspond exactly to `proposed_changes.links[]`; extra, duplicate,
@@ -200,12 +213,13 @@ context; all other actions have `standalone_reason=null`.
 It may follow the latest non-system reply from another participant in an existing
 discussion and cannot reset an unanswered current-user question. Answer an
 already-addressed question before introducing a new one. All follow-ups target
-the observed discussion. `close` is valid only for an issue and generates
-the final message before the receipt-dependent close command. Generated helpers
-enforce freshness, identity, dependency, and replay checks. Treat an `unknown`
-mutation outcome as unresolved and never retry automatically. Read
-`references/publication-protocol.md` only when explaining or diagnosing helper
-behavior; do not reproduce its low-level checks in model output.
+the observed discussion. `close` is valid only for an issue; its block publishes the final message and
+closes the issue in one guarded `&&` chain. Guards enforce freshness, identity,
+and replay checks at manual execution time: a repeated block stops on its own
+preconditions. Treat any guard stop as unresolved and never retry
+automatically. Read
+`references/publication-protocol.md` only when explaining or diagnosing the
+command contract; do not reproduce its checks in model output.
 Keep `questions` only for user decisions that remain unanswered after the
 interaction round. Each question contains exactly `evidence_digest`, `kind`,
 `tldr`, `evidence`, `decision`, `why_now`, `planning_effect`,

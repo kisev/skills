@@ -36,7 +36,7 @@
         "offline_runner": {
           "type": "object",
           "properties": {
-            "protocol": { "enum": ["assertions-v1", "portable-gitlab-v2"] },
+            "protocol": { "enum": ["assertions-v1"] },
             "skill": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
             "script": {
               "type": "string",

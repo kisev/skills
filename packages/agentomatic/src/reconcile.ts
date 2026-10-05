@@ -6,12 +6,11 @@ import { fileURLToPath } from "node:url";
 
 import {
   applyTransaction,
-  archiveRoot,
   assertSafePath,
   destination,
   LifecycleError,
   lifecycleRoot,
-  recoverTransaction,
+  readRegular,
   sha256,
   stable,
   withLifecycleLock,
@@ -106,6 +105,7 @@ export type ReconcilePlan = {
     sha256?: string;
   }>;
   confirmable: boolean;
+  digest: string;
 };
 
 export type ReconcileResult = {
@@ -114,7 +114,7 @@ export type ReconcileResult = {
   plan: ReconcilePlan;
 };
 
-export type ReconcileOptions = TransactionOptions;
+export type ReconcileOptions = TransactionOptions & { expectedDigest?: string };
 
 export class ReconcileError extends LifecycleError {}
 
@@ -132,10 +132,6 @@ function loadInventory(): Inventory {
 
 function scopeRoot(scope: Scope, cwd: string, home: string): string {
   return scope === "global" ? resolve(home) : resolve(cwd);
-}
-
-function reconcileAllowedRoots(scope: Scope, cwd: string, home: string): string[] {
-  return [archiveRoot(scope, cwd, home)];
 }
 
 function relativePath(root: string, target: string): string {
@@ -724,7 +720,7 @@ async function build(scope: Scope, cwd = process.cwd(), home = homedir()): Promi
     groups["modified-managed"].length === 0 &&
     groups.conflict.length === 0;
   return {
-    plan: { ...base, confirmable },
+    plan: { ...base, confirmable, digest: sha256(stable({ base, mutations })) },
     mutations,
   };
 }
@@ -735,19 +731,16 @@ export async function previewReconcile(
   home = homedir(),
 ): Promise<ReconcilePlan> {
   const stateRoot = lifecycleRoot(scope, cwd, home);
-  const root = scopeRoot(scope, cwd, home);
   try {
-    return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot, reconcileAllowedRoots(scope, cwd, home)))
-        throw new ReconcileError(
-          "recovered_transaction",
-          "Recovered an interrupted transaction; request a fresh plan",
-        );
-      const built = await build(scope, cwd, home);
-      const blocked = built.plan.modified_managed.length > 0 || built.plan.conflicts.length > 0;
-      const actionable = built.plan.operations.length > 0;
-      return { ...built.plan, confirmable: !blocked && actionable };
-    });
+    if (await readRegular(join(stateRoot, "transaction-journal.json")))
+      throw new ReconcileError(
+        "recovery_required",
+        "Run maintenance recover before a fresh preview",
+      );
+    const built = await build(scope, cwd, home);
+    const blocked = built.plan.modified_managed.length > 0 || built.plan.conflicts.length > 0;
+    const actionable = built.plan.operations.length > 0;
+    return { ...built.plan, confirmable: !blocked && actionable };
   } catch (error) {
     if (error instanceof ReconcileError) throw error;
     if (error instanceof LifecycleError) throw new ReconcileError(error.code, error.message);
@@ -774,12 +767,14 @@ export async function applyReconcile(
   const root = scopeRoot(scope, cwd, home);
   try {
     return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot, reconcileAllowedRoots(scope, cwd, home)))
+      if (await readRegular(join(stateRoot, "transaction-journal.json")))
         throw new ReconcileError(
-          "recovered_transaction",
-          "Recovered an interrupted transaction; request a fresh plan",
+          "recovery_required",
+          "Run maintenance recover before a fresh preview",
         );
       const built = await build(scope, cwd, home);
+      if (options.expectedDigest && options.expectedDigest !== built.plan.digest)
+        throw new ReconcileError("stale_plan", "Cleanup sources changed; request a fresh preview");
       if (built.plan.conflicts.length || built.plan.modified_managed.length)
         throw new ReconcileError("conflict", "Reconcile contains unsafe ownership conflicts");
       await applyTransaction(root, stateRoot, built.mutations, {

@@ -22,8 +22,10 @@ def version_root(root: Path) -> Path:
         {
             "version": "2.2.3",
             "skillsInstallerVersion": "1.5.23",
-            "peerDependencies": {"@opencode-ai/plugin": ">=1.18.29 <1.19.0"},
-            "devDependencies": {"@opencode-ai/plugin": "1.18.29"},
+            "peerDependencies": {
+                "@opencode/plugin": ">=2.0.0 <2.1.0",
+            },
+            "devDependencies": {"@opencode/plugin": "2.0.19"},
         },
     )
     write_json(
@@ -43,10 +45,16 @@ def version_root(root: Path) -> Path:
     )
     write_json(
         root / "evals/contracts/opencode-compatibility.json",
-        {"range": ">=1.18.29 <1.19.0", "versions": ["1.18.29", "1.18.31"]},
+        {
+            "range": ">=2.0.0 <2.1.0",
+            "peers": {
+                "@opencode/plugin": ">=2.0.0 <2.1.0",
+            },
+            "versions": ["2.0.19"],
+        },
     )
     (root / "mise.toml").write_text(
-        '[tools]\n"npm:skills" = "1.5.23"\n"aqua:anomalyco/opencode" = "1.18.29"\n',
+        '[tools]\n"npm:skills" = "1.5.23"\n"npm:@opencode/cli" = "2.0.19"\n',
         encoding="utf-8",
     )
     (root / "CHANGELOG.md").write_text("## [2.2.3] - 2026-09-15\n", encoding="utf-8")
@@ -66,7 +74,7 @@ def version_root(root: Path) -> Path:
 def test_repository_version_contract_is_centralized() -> None:
     result = check_versions.validate(ROOT)
     assert result["status"] == "passed"
-    assert result["portable_skills"] == 38
+    assert result["portable_skills"] == 44
     assert result["skills_installer"] == "1.7.0"
 
 
@@ -105,4 +113,13 @@ def test_version_contract_rejects_installer_pin_drift(tmp_path: Path) -> None:
     package["skillsInstallerVersion"] = "1.5.22"
     write_json(root / "packages/agentomatic/package.json", package)
     with pytest.raises(check_versions.VersionError, match="installer versions differ"):
+        check_versions.validate(root)
+
+
+def test_version_contract_rejects_reintroduced_v1_host(tmp_path: Path) -> None:
+    root = version_root(tmp_path)
+    package = check_versions.read_json(root / "packages/agentomatic/package.json")
+    package["devDependencies"]["@opencode-ai/plugin"] = "1.18.32"
+    write_json(root / "packages/agentomatic/package.json", package)
+    with pytest.raises(check_versions.VersionError, match="V1 dependencies"):
         check_versions.validate(root)

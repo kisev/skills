@@ -1,0 +1,51 @@
+---
+import { render } from "astro:content";
+import type { CollectionEntry } from "astro:content";
+import { useUi, type Locale } from "../i18n/ui";
+import { exampleAnchor } from "../i18n/utils";
+
+interface Props {
+  entry: CollectionEntry<"examples">;
+  locale: Locale;
+}
+
+const { entry, locale } = Astro.props;
+const t = useUi(locale);
+const { Content } = await render(entry);
+const anchor = exampleAnchor(entry.data.skill, entry.data.order);
+---
+
+<article class="example" id={anchor}>
+  <h3>{entry.data.title}</h3>
+  <Content />
+  <h4>{t.example.prompt}</h4>
+  <blockquote class="note"><p>{entry.data.prompt.trim()}</p></blockquote>
+  <h4>{t.example.steps}</h4>
+  <ol>
+    {
+      entry.data.steps.map((step) => (
+        <li>
+          <strong>{step.title}</strong>
+          {step.detail && <p>{step.detail.trim()}</p>}
+        </li>
+      ))
+    }
+  </ol>
+  {
+    entry.data.artifacts.map((artifact) => (
+      <>
+        <h4>{t.example.artifacts}</h4>
+        <p class="artifact-label">{artifact.label}</p>
+        <pre><code class={`language-${artifact.language}`}>{artifact.content.trim()}</code></pre>
+      </>
+    ))
+  }
+  {
+    entry.data.limitations && (
+      <>
+        <h4>{t.example.limitations}</h4>
+        <p class="note">{entry.data.limitations.trim()}</p>
+      </>
+    )
+  }
+</article>

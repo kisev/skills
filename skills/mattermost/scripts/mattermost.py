@@ -65,6 +65,23 @@ class MattermostError(ValueError):
     """Expected safe failure."""
 
 
+_cards_spec = importlib.util.spec_from_file_location(
+    "mattermost_cards", Path(__file__).with_name("mattermost_cards.py")
+)
+if _cards_spec is None or _cards_spec.loader is None:
+    raise ImportError("Mattermost cards runtime is unavailable")
+cards = importlib.util.module_from_spec(_cards_spec)
+_cards_spec.loader.exec_module(cards)
+
+
+def publication_card(value: object) -> dict[str, Any]:
+    try:
+        result: dict[str, Any] = cards.render(value)
+    except cards.CardError as exc:
+        raise MattermostError(str(exc)) from exc
+    return result
+
+
 class AuthorizationRequired(MattermostError):
     """No valid origin-bound credential is available."""
 
@@ -1324,6 +1341,8 @@ def read_reactions(
             value = client.get(
                 f"/posts/{urllib.parse.quote(identifier(post['id'], 'post ID'), safe='')}/reactions"
             )
+            if value is None:
+                value = []
             if not isinstance(value, list):
                 raise MattermostError("Mattermost reaction response is malformed")
             clean["reactions"] = [
@@ -2411,16 +2430,28 @@ def prepare_publication(value: object) -> dict[str, object]:
     created_at = now()
     script = Path(__file__).with_name("mattermost_publication.py").resolve()
     for item in messages:
-        if not isinstance(item, dict) or set(item) != {"target", "message", "files"}:
+        if not isinstance(item, dict) or set(item) not in (
+            {"target", "message", "files"},
+            {"target", "message", "files", "card"},
+        ):
             raise MattermostError(
                 "each publication message must contain target, message, and files"
             )
         target_value, message, files = item["target"], item["message"], item["files"]
+        if "card" in item:
+            publication_card(item["card"])
+            if message != "" or files != []:
+                locale = item["card"]["locale"]
+                raise MattermostError(
+                    "card: используйте пустые message и files; карточка публикуется отдельно"
+                    if locale == "ru"
+                    else "card: use empty message and files; publish the card on its own"
+                )
         if not isinstance(target_value, str) or not isinstance(message, str):
             raise MattermostError("publication target and message must be strings")
         if not isinstance(files, list) or len(files) > 5:
             raise MattermostError("publication files must be an array of at most five paths")
-        if not message and not files:
+        if not message and not files and "card" not in item:
             raise MattermostError("an empty publication message requires a file")
         target = classify_url(target_value)
         item_origin = str(target["origin"])
@@ -2432,6 +2463,12 @@ def prepare_publication(value: object) -> dict[str, object]:
         if current_user is not None and user_id != current_user:
             raise MattermostError("publication identity changed during preparation")
         frozen = publication_channel(client, target, user_id)
+        if "card" in item and frozen["root_id"]:
+            raise MattermostError(
+                "card: требуется ссылка на канал или чат вместо существующего треда"
+                if item["card"]["locale"] == "ru"
+                else "card: select a channel or chat, not an existing thread"
+            )
         metadata = [publication_file_metadata(path) for path in files]
         body = message.encode("utf-8")
         body_digest = hashlib.sha256(body).hexdigest()
@@ -2448,6 +2485,10 @@ def prepare_publication(value: object) -> dict[str, object]:
             "created_at": created_at,
             "expires_at": created_at + PUBLICATION_TTL_SECONDS,
         }
+        if "card" in item:
+            action["schema_version"] = 2
+            action["card"] = item["card"]
+            action["attachment"] = publication_card(item["card"])
         prepared.append((action, body))
         origin, current_user = item_origin, user_id
     assert origin is not None
@@ -2541,12 +2582,23 @@ def prepare_publication(value: object) -> dict[str, object]:
                     "",
                     *markdown_block(body.decode(), "markdown"),
                     "",
-                    "Files:",
-                    "",
                 ]
             )
             files = action["files"]
+            if "card" in action:
+                markdown.extend(
+                    [
+                        "Card / Карточка (props.attachments):",
+                        "",
+                        *markdown_block(
+                            json.dumps([action["attachment"]], ensure_ascii=False, indent=2),
+                            "json",
+                        ),
+                        "",
+                    ]
+                )
             assert isinstance(files, list)
+            markdown.extend(["Files:", ""])
             markdown.extend(
                 markdown_block(
                     json.dumps(
@@ -2948,11 +3000,14 @@ def main(argv: list[str] | None = None) -> int:
                 }
             )
             return 0
-        if args.command in {"read", "read-many", "members"}:
-            if not 1 <= args.timeout <= MAX_HTTP_TIMEOUT_SECONDS:
-                raise MattermostError(
-                    f"--timeout must be between 1 and {MAX_HTTP_TIMEOUT_SECONDS} seconds"
-                )
+        if (
+            args.command in {"read", "read-many", "members"}
+            and not 1 <= args.timeout <= MAX_HTTP_TIMEOUT_SECONDS
+        ):
+            raise MattermostError(
+                f"--timeout must be between 1 and {MAX_HTTP_TIMEOUT_SECONDS} seconds"
+            )
+        if args.command in {"read", "read-many"}:
             if args.refresh and args.no_cache:
                 raise MattermostError("--refresh and --no-cache cannot be combined")
             read_cache, write_cache = (not args.no_cache and not args.refresh), not args.no_cache

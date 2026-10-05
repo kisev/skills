@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "3008115d0bc6d59ba17f6ed808f01688dcb21d26d732aba1f2c6a0d7d8e0ec49",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:handoff"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.handoff.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:handoff"]
+    },
+    "prompt": "Select the handoff skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.handoff.trigger.source",
+      "path": ".build/skills/handoff/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.handoff.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

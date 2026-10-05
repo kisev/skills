@@ -2,7 +2,7 @@
 
 - Status: withdrawn
 - Status changed: 2026-09-16
-- Reason: Package inventory remains available through `agentomatic capabilities`.
+- Reason: Administration is CLI-only; current package inventory is `agentomatic catalog`.
 
 ## Purpose
 

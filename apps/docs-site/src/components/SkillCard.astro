@@ -1,0 +1,25 @@
+---
+import { useUi, type Locale } from "../i18n/ui";
+import { localizedPath } from "../i18n/utils";
+import type { SkillEntry } from "../generated/skills";
+
+interface Props {
+  skill: SkillEntry;
+  locale: Locale;
+  hasExample?: boolean;
+}
+
+const { skill, locale, hasExample = false } = Astro.props;
+const t = useUi(locale);
+const description = locale === "ru" ? skill.descriptionRu : skill.description;
+---
+
+<a class="card" href={localizedPath(`/skills/${skill.name}/`, locale)}>
+  <h3>
+    {skill.name}
+    {
+      hasExample && <span class="badge">{t.nav.examples}</span>
+    }
+  </h3>
+  <p>{description}</p>
+</a>

@@ -3,38 +3,35 @@ description: Implements scoped changes and runs the relevant verification. Russi
 mode: subagent
 hidden: true
 steps: 12
-permission:
-  edit: allow
-  task: deny
-  bash:
-    "*": ask
-    mypy: allow
-    "mypy *": allow
-    "ruff check*": allow
-    "ruff format --check*": allow
-    "task --list*": allow
-    "task -l*": allow
-    rg: deny
-    "rg *": deny
-    grep: deny
-    "grep *": deny
-    find: deny
-    "find *": deny
-    fd: deny
-    "fd *": deny
-    "git grep": deny
-    "git grep *": deny
-    "git -C * grep": deny
-    "git -C * grep *": deny
-    "git * grep": deny
-    "git * grep *": deny
-  glob: deny
-  grep: deny
-  list: deny
-  webfetch: deny
-  websearch: deny
-  skill: deny
-  lsp: deny
+permissions:
+  - { action: edit, resource: "*", effect: allow }
+  - { action: subagent, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: ask }
+  - { action: shell, resource: "mypy", effect: allow }
+  - { action: shell, resource: "mypy *", effect: allow }
+  - { action: shell, resource: "ruff check*", effect: allow }
+  - { action: shell, resource: "ruff format --check*", effect: allow }
+  - { action: shell, resource: "task --list*", effect: allow }
+  - { action: shell, resource: "task -l*", effect: allow }
+  - { action: shell, resource: "rg", effect: deny }
+  - { action: shell, resource: "rg *", effect: deny }
+  - { action: shell, resource: "grep", effect: deny }
+  - { action: shell, resource: "grep *", effect: deny }
+  - { action: shell, resource: "find", effect: deny }
+  - { action: shell, resource: "find *", effect: deny }
+  - { action: shell, resource: "fd", effect: deny }
+  - { action: shell, resource: "fd *", effect: deny }
+  - { action: shell, resource: "git grep", effect: deny }
+  - { action: shell, resource: "git grep *", effect: deny }
+  - { action: shell, resource: "git -C * grep", effect: deny }
+  - { action: shell, resource: "git -C * grep *", effect: deny }
+  - { action: shell, resource: "git * grep", effect: deny }
+  - { action: shell, resource: "git * grep *", effect: deny }
+  - { action: glob, resource: "*", effect: deny }
+  - { action: grep, resource: "*", effect: deny }
+  - { action: webfetch, resource: "*", effect: deny }
+  - { action: websearch, resource: "*", effect: deny }
+  - { action: skill, resource: "*", effect: deny }
 ---
 
 # Worker

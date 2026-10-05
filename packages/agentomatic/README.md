@@ -12,8 +12,8 @@ update, and removal lifecycle.
 - Six fixed agents: `manager`, `architect`, `mapper`, `worker`, `review`, and
   `critic`.
 - Capability routing plus direct CLI diagnostics, reconciliation, and profiles.
-- A confirmed `config` command that connects the package and recommended
-  fragments into `opencode.json(c)`, `tui.json`, `kilo.json(c)`, and
+- A confirmed `configure integration` command that connects the package and recommended
+  fragments into OpenCode `opencode.json(c)`/`cli.json`, `kilo.json(c)`, and
   `mimocode.json(c)` while preserving existing entries and comments.
 - Optional plugin wrappers: `rules-injector` and `zed-bell`;
   the `rtk` compression wrapper is deployed by
@@ -61,7 +61,8 @@ migration guide](../../docs/how-to/memomatic.md).
 ## Requirements
 
 - Node.js 22 or later.
-- OpenCode `>=1.18.29 <1.19.0`.
+- OpenCode `>=2.0.0 <2.1.0`. V1 users retain the last `11.0.x`
+  [release](https://github.com/kisev/skills/releases), not `dev`.
 - A persistent npm project that owns the dependency.
 
 ## Project Install
@@ -70,38 +71,53 @@ Run the installer from the repository root (add `--global` for the global
 scope); the confirmed install also provisions the persistent npm dependency:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
-Use `@kisev/agentomatic@dev` to run the development snapshot instead.
+Use `@kisev/agentomatic@dev` in both view and npx commands for the development
+snapshot. Tags can move between preview and installation. npx does not install
+a global CLI, and a dry run does not provision the dependency. For a confirmed
+global install, check `npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0`.
 
 The confirmed install pins the executing version into the nearest npm project;
 global installs own `~/.config/opencode` and create its `package.json` when
 needed. Offline setups can provision the dependency by hand first:
 `npm install --save-exact @kisev/agentomatic`, then run
 `npx agentomatic install --dry-run` from that project so the executing version
-matches the installed package. Apply by rerunning the install command without
-`--dry-run` and confirming the printed plan summary, or by adding `--yes`
-outside a terminal. When core integration is selected, the same confirmed install
-merges the `plugin` entry into user-owned OpenCode configuration while preserving
-existing entries. The separate `config` command can apply additional fragments
+matches the installed package. Confirm the printed plan summary in the install
+step, or pass explicit selections with `--yes` outside a terminal.
+When core integration is selected, the same confirmed install
+merges the `plugins` entry into user-owned OpenCode configuration while preserving
+existing entries. The separate `configure integration` command can apply additional fragments
 or retry a failed configuration step:
 
 ```shell
-npx agentomatic config --global --dry-run
+npx agentomatic configure integration --global --dry-run
 ```
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/agentomatic"]
+  "plugins": ["@kisev/agentomatic"]
 }
 ```
 
-Restart OpenCode after activation or asset changes. The `install` and
-`uninstall` commands never edit `opencode.json`; `config` is the only confirmed
-path for configuration fragments, and command adapter selections do not install
-portable skills.
+Restart OpenCode after activation or asset changes. A confirmed `install` can
+apply its core config step and stage optional models and additional critics.
+`configure` provides one settings menu; `status` shows the installed set and models.
+`uninstall` proposes plugin disconnection, retains models, and removes the npm
+dependency only with an explicit selection (`--remove-dependency`). Other
+fragments use `configure integration`, and command adapter selections do not install portable
+skills. OpenCode config output uses native V2 `plugins` and `permissions`;
+only touched legacy sections migrate, with ambiguous cases reported as conflicts.
 
 ## Documentation
 
@@ -112,5 +128,5 @@ The canonical documentation lives in `docs/`, not in the package source:
 - [Documentation index](https://github.com/kisev/skills/blob/main/docs/README.md)
 
 The complete guide covers global installation, asset selection, confirmation,
-activation, `config` fragments, `doctor`, update, `reconcile`, agent profiles,
+activation, `configure integration` fragments, `status`, `doctor`, update, maintenance, agent profiles,
 ownership, and uninstall.

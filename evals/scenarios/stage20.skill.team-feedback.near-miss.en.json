@@ -1,27 +1,23 @@
 {
-  "id": "stage20.skill.team-feedback.near-miss.en",
-  "pair_id": "stage20.skill.team-feedback.near-miss",
-  "kind": "near-miss",
-  "surface": "skill",
-  "locale": "en",
-  "revision": 1,
-  "host": "any",
   "budgets": {
     "max_cost": 1,
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
+  "digest": "59edc0f266ee405566e5253d4e07f0b777ff7aa94c88500025ddffad36009050",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:team-feedback"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.team-feedback.near-miss.en",
   "input": {
     "fixture": {
       "selected": []
     },
     "prompt": "English: this intentionally does not belong to the team-feedback skill; do not route this request into it."
-  },
-  "expected": {
-    "selected": [],
-    "not_selected": ["skill:team-feedback"],
-    "mutation_boundary": "no-writes",
-    "structured_outcome": "safe-escalation"
   },
   "invariants": [
     {
@@ -29,11 +25,15 @@
       "path": ".build/skills/team-feedback/SKILL.md"
     }
   ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.team-feedback.near-miss",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
   "schema": "eval-scenario/v1",
-  "digest": "59edc0f266ee405566e5253d4e07f0b777ff7aa94c88500025ddffad36009050"
+  "surface": "skill"
 }

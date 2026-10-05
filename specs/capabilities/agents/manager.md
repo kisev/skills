@@ -39,7 +39,7 @@ Cannot invent completion from missing subordinate evidence.
 The manager shall delegate all substantive work and synthesize only validated
 reports bound to the routed task. It may clarify, route, reconcile evidence, and
 present results, but shall not perform primary analysis or implementation itself.
-Its Task allowlist and routing shall permit the `review` agent.
+Its native subagent allowlist and routing shall permit the `review` agent.
 
 #### Verification
 

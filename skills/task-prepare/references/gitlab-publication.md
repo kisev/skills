@@ -9,7 +9,7 @@ calls GitLab. Authentication is needed for live evidence and later manual
 publication, not for neutral preparation or local rendering.
 
 Every publication command targets the GitLab GraphQL endpoint through
-`glab api --hostname <host> --method POST ../graphql`. Before preparing a plan,
+`glab api --hostname <host> --method POST graphql`. Before preparing a plan,
 verify on the target instance that the required mutations are available:
 `workItemCreate`, `workItemUpdate`, and `workItemAddLinkedItems` for version 3
 items, `createIssue`, `createEpic`, and `updateIssue` for version 2 items.
@@ -179,7 +179,7 @@ descriptions; `.json` files hold the exact GraphQL request with its query and
 variables, including metadata. Old internal content directories are retained and
 must not be edited or removed while commands from their plans may still be used.
 Commands use explicit
-`glab api --hostname ... --method POST ../graphql --header 'Content-Type: application/json' --input ...`
+`glab api --hostname ... --method POST graphql --header 'Content-Type: application/json' --input ...`
 so the payload file carries the request verbatim. This preserves Markdown,
 backticks, dollar signs, quotes, and newlines without shell interpolation. Do
 not hand-edit generated commands or payload files: edit the draft and

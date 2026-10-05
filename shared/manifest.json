@@ -8,7 +8,64 @@
       "packages/agentomatic/src/generated/cli.ts"
     ]
   },
+  "pythonRuntime": {
+    "destination": "apps/reviewmatic/src/reviewmatic/portable",
+    "entries": [
+      {
+        "source": "references/portable_gitlab/__init__.py",
+        "target": "portable_gitlab/__init__.py"
+      },
+      {
+        "source": "references/portable_gitlab/contract.py",
+        "target": "portable_gitlab/contract.py"
+      },
+      {
+        "source": "references/portable_gitlab/label_assessment.py",
+        "target": "portable_gitlab/label_assessment.py"
+      },
+      {
+        "source": "references/portable_gitlab/mr_publication.py",
+        "target": "portable_gitlab/mr_publication.py"
+      },
+      {
+        "source": "references/portable_gitlab/review_semver.py",
+        "target": "portable_gitlab/review_semver.py"
+      },
+      {
+        "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
+        "target": "portable_gitlab/artifact-contracts-v2.schema.json"
+      },
+      {
+        "source": "references/mutation_process.py",
+        "target": "mutation_process.py"
+      },
+      {
+        "source": "references/state_artifacts.py",
+        "target": "state_artifacts.py"
+      }
+    ]
+  },
   "files": [
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "asd-ste100/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "askme/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "eli5/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "goal/references/clarity-rules.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "task-prepare/references/clarity-rules.md"
+    },
     {
       "source": "references/documentation-review.md",
       "destination": "docs-review/references/documentation-review.md"
@@ -36,6 +93,14 @@
     {
       "source": "references/documentation_review.py",
       "destination": "spec-manage/scripts/documentation_review.py"
+    },
+    {
+      "source": "references/simplification-criteria.md",
+      "destination": "code-review/references/simplification-criteria.md"
+    },
+    {
+      "source": "references/simplification-criteria.md",
+      "destination": "code-simplify/references/simplification-criteria.md"
     },
     {
       "source": "references/state_artifacts.py",
@@ -167,6 +232,10 @@
     },
     {
       "source": "references/language-policy.md",
+      "destination": "asd-ste100/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
       "destination": "askme/references/language-policy.md"
     },
     {
@@ -191,11 +260,19 @@
     },
     {
       "source": "references/language-policy.md",
+      "destination": "code-simplify/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
       "destination": "docs-prepare/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
       "destination": "docs-review/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "eli5/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -231,7 +308,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "skill-improve/references/language-policy.md"
+      "destination": "skill-doctor/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -243,7 +320,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "stopit/references/language-policy.md"
+      "destination": "handoff/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -310,6 +387,18 @@
       "destination": "team-sprint-start/references/language-policy.md"
     },
     {
+      "source": "references/language-policy.md",
+      "destination": "tdd/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "debugging/references/language-policy.md"
+    },
+    {
+      "source": "references/language-policy.md",
+      "destination": "verification/references/language-policy.md"
+    },
+    {
       "source": "references/memomatic_inbox.py",
       "destination": "docs-prepare/scripts/memomatic_inbox.py"
     },
@@ -327,7 +416,7 @@
     },
     {
       "source": "references/memomatic_inbox.py",
-      "destination": "stopit/scripts/memomatic_inbox.py"
+      "destination": "handoff/scripts/memomatic_inbox.py"
     },
     {
       "source": "references/memomatic_inbox.py",
@@ -388,14 +477,6 @@
     {
       "source": "references/memomatic_inbox.py",
       "destination": "team-sprint-start/scripts/memomatic_inbox.py"
-    },
-    {
-      "source": "references/mutation_process.py",
-      "destination": "code-review/scripts/portable_runtime/mutation_process.py"
-    },
-    {
-      "source": "references/mutation_process.py",
-      "destination": "task-triage/scripts/portable_runtime/mutation_process.py"
     },
     {
       "source": "references/necessity-doctrine.md",
@@ -551,10 +632,6 @@
     },
     {
       "source": "references/portable_gitlab/__init__.py",
-      "destination": "code-review/scripts/portable_runtime/__init__.py"
-    },
-    {
-      "source": "references/portable_gitlab/__init__.py",
       "destination": "mr-prepare/scripts/portable_runtime/__init__.py"
     },
     {
@@ -580,10 +657,6 @@
     {
       "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
       "destination": "release-review/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/contract.py",
-      "destination": "code-review/scripts/portable_runtime/contract.py"
     },
     {
       "source": "references/portable_gitlab/contract.py",
@@ -615,23 +688,11 @@
     },
     {
       "source": "references/portable_gitlab/label_assessment.py",
-      "destination": "code-review/scripts/portable_runtime/label_assessment.py"
-    },
-    {
-      "source": "references/portable_gitlab/label_assessment.py",
       "destination": "mr-prepare/scripts/portable_runtime/label_assessment.py"
-    },
-    {
-      "source": "references/portable_gitlab/local_review.py",
-      "destination": "code-review/scripts/portable_runtime/local_review.py"
     },
     {
       "source": "references/portable_gitlab/mr_publication.py",
       "destination": "mr-prepare/scripts/portable_runtime/mr_publication.py"
-    },
-    {
-      "source": "references/portable_gitlab/review_semver.py",
-      "destination": "code-review/scripts/portable_runtime/review_semver.py"
     },
     {
       "source": "references/portable_gitlab/review_semver.py",
@@ -659,7 +720,7 @@
     },
     {
       "source": "references/python_runtime/__init__.py",
-      "destination": "skill-improve/scripts/portable_runtime/__init__.py"
+      "destination": "skill-doctor/scripts/portable_runtime/__init__.py"
     },
     {
       "source": "references/python_runtime/capabilities.py",
@@ -675,7 +736,7 @@
     },
     {
       "source": "references/python_runtime/capabilities.py",
-      "destination": "skill-improve/scripts/portable_runtime/capabilities.py"
+      "destination": "skill-doctor/scripts/portable_runtime/capabilities.py"
     },
     {
       "source": "references/python_runtime/contract.py",
@@ -691,7 +752,7 @@
     },
     {
       "source": "references/python_runtime/contract.py",
-      "destination": "skill-improve/scripts/portable_runtime/contract.py"
+      "destination": "skill-doctor/scripts/portable_runtime/contract.py"
     },
     {
       "source": "references/question-guidelines.md",
@@ -700,6 +761,10 @@
     {
       "source": "references/question-guidelines.md",
       "destination": "agents-md/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "asd-ste100/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -723,11 +788,19 @@
     },
     {
       "source": "references/question-guidelines.md",
+      "destination": "code-simplify/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
       "destination": "docs-prepare/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
       "destination": "docs-review/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "eli5/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -763,7 +836,7 @@
     },
     {
       "source": "references/question-guidelines.md",
-      "destination": "skill-improve/references/question-guidelines.md"
+      "destination": "skill-doctor/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -775,7 +848,7 @@
     },
     {
       "source": "references/question-guidelines.md",
-      "destination": "stopit/references/question-guidelines.md"
+      "destination": "handoff/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -846,8 +919,16 @@
       "destination": "team-sprint-start/references/question-guidelines.md"
     },
     {
-      "source": "references/state_artifacts.py",
-      "destination": "code-review/scripts/portable_runtime/state_artifacts.py"
+      "source": "references/question-guidelines.md",
+      "destination": "tdd/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "debugging/references/question-guidelines.md"
+    },
+    {
+      "source": "references/question-guidelines.md",
+      "destination": "verification/references/question-guidelines.md"
     },
     {
       "source": "references/state_artifacts.py",
@@ -871,11 +952,15 @@
     },
     {
       "source": "references/state_artifacts.py",
+      "destination": "skill-doctor/scripts/state_artifacts.py"
+    },
+    {
+      "source": "references/state_artifacts.py",
       "destination": "slides-prompts-prepare/scripts/state_artifacts.py"
     },
     {
       "source": "references/state_artifacts.py",
-      "destination": "stopit/scripts/state_artifacts.py"
+      "destination": "handoff/scripts/state_artifacts.py"
     },
     {
       "source": "references/state_artifacts.py",

@@ -19,6 +19,9 @@ make that boundary explicit.
 
 - [Use Taskmatic](how-to/taskmatic.md) - create the first card, view the board, and connect an agent.
 
+- [Run local Mattermost](../tests/integration/mattermost/README.md) - initialize the persistent
+  test environment and run automated reader, publication, triage and browser checks.
+
 - [Manage portable skills](how-to/portable-skills.md) - install by scope or host,
   update, rebind an older source, clean up retired names, and troubleshoot.
 
@@ -39,6 +42,9 @@ make that boundary explicit.
 
 - [Skill catalog](reference/skill-catalog.md) - active skills, requirements, team
   profiles, and external tool boundaries.
+
+- [humanize editing patterns](reference/humanize-patterns.md) - bilingual
+  before/after examples for all 26 editing categories of the `humanize` skill.
 
 - [Migration inventory](migration-inventory.md) - active and retired names,
   replacements, package surfaces, and ownership records.

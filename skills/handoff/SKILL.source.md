@@ -1,0 +1,15 @@
+---
+name: handoff
+description: >-
+  Create a redacted handoff in workspace- and session-scoped XDG state. Russian discovery terms: передача контекста.
+license: MIT
+metadata:
+  author: "Kirill Sevriugin"
+  source: "https://kisev.github.io/skills"
+---
+
+# handoff
+
+Before asking the user, apply `references/question-guidelines.md`.
+
+Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

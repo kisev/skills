@@ -1,0 +1,21 @@
+{
+  "name": "@kisev/docs-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Astro documentation site for the kisev/skills portable Agent Skills collection.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-content.mjs",
+    "build": "npm run sync && astro build && pagefind --site dist",
+    "test": "node --test test/"
+  },
+  "dependencies": {
+    "astro": "7.3.5",
+    "pagefind": "1.5.2",
+    "yaml": "2.9.1"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

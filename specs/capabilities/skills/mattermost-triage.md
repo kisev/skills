@@ -52,6 +52,9 @@ Authentication, conversation listing, pagination, exact-URL, post, or thread
 failures make the affected scope explicitly partial. Useful bounded findings are
 retained with missing evidence and consequences; incomplete runs do not advance
 the last-complete checkpoint or present uncertain classifications as complete.
+Channel collection uses creation-order cursors, applies time bounds locally, and
+rejects repeated cursors; it does not combine `since` with page pagination.
+A successful JSON `null` reaction response is an empty reaction list.
 
 ## Unique Constraints
 

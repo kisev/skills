@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
-import selectors
+import re
 import shutil
 import subprocess
 import sys
-import time
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +15,49 @@ import pytest
 from shared.references.work_item_runtime import triage
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_observed_ce_link_uses_relationship_id_not_target_issue_id() -> None:
+    snapshot = {
+        "links": [
+            {"id": 104, "project_id": 19, "iid": 7, "issue_link_id": 293, "link_type": "relates_to"}
+        ]
+    }
+    assert triage.observed_issue_links(snapshot, 19, 7) == [
+        {"id": 293, "relation_type": "relates_to"}
+    ]
+
+
+def test_observed_link_retains_explicit_relation_envelope_compatibility() -> None:
+    snapshot = {
+        "links": [
+            {
+                "id": 293,
+                "target_issue": {"id": 104, "project_id": 19, "iid": 7},
+                "link_type": "relates_to",
+            }
+        ]
+    }
+    assert triage.observed_issue_links(snapshot, 19, 7) == [
+        {"id": 293, "relation_type": "relates_to"}
+    ]
+
+
+@pytest.mark.parametrize("value", [None, 0, -1, True, "293"])
+def test_invalid_relationship_id_cannot_fall_back_to_issue_id(value: Any) -> None:
+    snapshot = {
+        "links": [
+            {
+                "id": 104,
+                "project_id": 19,
+                "iid": 7,
+                "issue_link_id": value,
+                "link_type": "relates_to",
+            }
+        ]
+    }
+    with pytest.raises(triage.WorkflowError, match="invalid relationship ID"):
+        triage.observed_issue_links(snapshot, 19, 7)
 
 
 def arguments(source: str) -> argparse.Namespace:
@@ -39,7 +80,9 @@ def test_workflow_requires_user_questions_and_strict_stale_sequence() -> None:
         "question -> first ping -> second ping -> closure proposal",
         "Never skip a stage after a long gap between runs.",
         "current GitLab discussions and notes by the authenticated user",
-        "one directly runnable command per action",
+        "Prepare one guarded command block per action",
+        "stops before any write when a guard fails",
+        "emitted as a regeneration instruction, never as a ready command",
         "names and links the issue",
         "two or three concrete, understood, reversible alternatives",
         "never offer to ask the author later",
@@ -49,6 +92,11 @@ def test_workflow_requires_user_questions_and_strict_stale_sequence() -> None:
         "only when the complete analyzed value is plain text",
         "Issue identities returned by the assessed issue's GitLab link evidence",
         "use an explicit empty list when none are found",
+        "one guarded block that finds or creates the milestone",
+        "publishes the final message and then closes the issue in the same `&&` chain",
+        "one explanation-and-close block with `state_event=close`",
+        "delete-then-create block that re-verifies the observed link before deleting",
+        "`glab`, `jq`, and `sha256sum`",
     ):
         assert requirement in normalized
 
@@ -90,6 +138,7 @@ def gitlab_response(endpoint: str) -> Any:
             "description": "Retry behavior is ambiguous.",
             "state": "opened",
             "labels": [],
+            "milestone": {"id": 9, "title": "v1.1.0", "state": "active"},
             "updated_at": "2026-09-23T00:00:00Z",
             "web_url": "https://gitlab.example/group/project/-/issues/7",
         }
@@ -469,36 +518,17 @@ def test_collect_publish_and_reuse_bound_analysis(
     assert "## Issue relations" in report
     assert "--method PUT" in report
     assert "--method POST" in report
-    assert report.count("--silent") == 4
     assert "$(touch unsafe)" in report
-    command_blocks = [line for line in report.splitlines() if " marker-run " in line]
-    assert len(command_blocks) == 4
-    assert report.count("# execution-status=not_run") == 4
-    assert all("$(touch unsafe)" not in line for line in command_blocks)
-    command_payloads = list(
-        (Path(first["artifact_root"]) / "artifacts" / "commands").glob("*.json")
-    )
-    assert any("$(touch unsafe)" in path.read_text(encoding="utf-8") for path in command_payloads)
-    payloads = [json.loads(path.read_text(encoding="utf-8")) for path in command_payloads]
-    assert {"title": "Clarify retry behavior; $(touch unsafe)"} in payloads
-    assert {"labels": "priority::high,type::bug"} in payloads
-    assert {"milestone_id": 9} in payloads
-    assert not any("title" in payload and "labels" in payload for payload in payloads)
-
-    fake_glab = tmp_path / "glab"
-    fake_glab.write_text("#!/bin/sh\nexit 0\n")
-    fake_glab.chmod(0o700)
-    executed = subprocess.run(
-        ["sh", "-c", command_blocks[0]],
-        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"},
-        check=False,
-    )
-    assert executed.returncode == 0
-    republished = triage.publish(
-        argparse.Namespace(collection=str(collection_path), analysis=str(analysis_path))
-    )
-    refreshed = Path(republished["reports"][0]["report"]).read_text(encoding="utf-8")
-    assert "# execution-status=run_unverified" in refreshed
+    blocks = shell_blocks(report)
+    assert len(blocks) == 4
+    assert all("marker-run" not in block for block in blocks)
+    assert all("execution-status" not in block for block in blocks)
+    title_block, labels_block, milestone_block, link_block = blocks
+    assert '{"title":"Clarify retry behavior; $(touch unsafe)"}' in title_block
+    assert '{"labels":"priority::high,type::bug"}' in labels_block
+    assert '{"milestone_id":9}' in milestone_block
+    assert '{"target_project_id":19,"target_issue_iid":3,"link_type":"relates_to"}' in link_block
+    assert not (Path(first["artifact_root"]) / "artifacts" / "commands").exists()
 
     second = triage.collect(arguments(source))
     assert second["items"][0]["analysis_required"] is False
@@ -729,166 +759,6 @@ def test_observed_partial_relation_does_not_require_duplicate_link_proposal(
     )
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert "Create issue link" not in report
-
-
-def test_relation_type_replacement_uses_delete_receipt_before_create(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint.startswith("projects/19/issues/7/links?"):
-            return [{"id": 300, "project_id": 19, "iid": 3, "link_type": "relates_to"}]
-        return gitlab_response(endpoint)
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
-    value = analysis_for(result)
-    relation = value["items"][0]["issue_relations"][0]
-    relation["relation_type"] = "blocks"
-    relation["existing_link"] = {"id": 300, "relation_type": "relates_to"}
-    value["items"][0]["proposed_changes"]["links"][0]["link_type"] = "blocks"
-    analysis_path = tmp_path / "replace-relation.json"
-    analysis_path.write_text(json.dumps(value), encoding="utf-8")
-    published = triage.publish(
-        argparse.Namespace(
-            collection=str(Path(result["artifact_root"]) / "current.json"),
-            analysis=str(analysis_path),
-        )
-    )
-    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
-    assert report.count("apply-link") == 2
-    assert "--stage delete" in report
-    assert "--stage create" in report
-
-    guards = list(Path(result["artifact_root"], "artifacts/link-guards").glob("*.json"))
-    assert len(guards) == 1
-    link_pages = [
-        [{"id": 300, "project_id": 19, "iid": 3, "link_type": "relates_to"}],
-        [],
-        [],
-        [{"id": 301, "project_id": 19, "iid": 3, "link_type": "blocks"}],
-    ]
-    monkeypatch.setattr(triage, "paginated", lambda *_args, **_kwargs: link_pages.pop(0))
-    monkeypatch.setattr(
-        triage,
-        "glab_json",
-        lambda _host, endpoint: (
-            {"id": 5, "username": "reviewer"}
-            if endpoint == "user"
-            else pytest.fail(f"unexpected endpoint {endpoint}")
-        ),
-    )
-    mutations: list[tuple[str, str, dict[str, Any]]] = []
-
-    def mutate(_host: str, method: str, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-        mutations.append((method, endpoint, payload))
-        return {}
-
-    monkeypatch.setattr(triage, "glab_mutation", mutate)
-    with pytest.raises(triage.WorkflowError, match="requires a delete receipt"):
-        triage.apply_link(guards[0], "create")
-    triage.apply_link(guards[0], "delete")
-    triage.apply_link(guards[0], "create")
-    assert mutations == [
-        ("DELETE", "projects/19/issues/7/links/300", {}),
-        (
-            "POST",
-            "projects/19/issues/7/links",
-            {"target_project_id": 19, "target_issue_iid": 3, "link_type": "blocks"},
-        ),
-    ]
-    receipts = list(Path(result["artifact_root"], "receipts/links").glob("*.json"))
-    assert json.loads(receipts[0].read_text(encoding="utf-8"))["status"] == "created"
-
-
-def test_relation_delete_unknown_reconciles_when_original_link_remains(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    root = tmp_path / "agent-skills/task-triage" / ("a" * 32)
-    guard, _ = triage.write_artifact(
-        root,
-        "link-guards",
-        {
-            "schema": "task-triage/link-guard/v1",
-            "host": "gitlab.example",
-            "current_user": {"id": 5, "username": "reviewer"},
-            "source": {"project_id": 19, "iid": 7},
-            "target": {"project_id": 19, "iid": 3},
-            "existing_link": {"id": 300, "relation_type": "relates_to"},
-            "desired_type": "blocks",
-        },
-    )
-    monkeypatch.setattr(
-        triage,
-        "glab_json",
-        lambda _host, endpoint: (
-            {"id": 5, "username": "reviewer"}
-            if endpoint == "user"
-            else pytest.fail(f"unexpected endpoint {endpoint}")
-        ),
-    )
-    existing = [{"id": 300, "project_id": 19, "iid": 3, "link_type": "relates_to"}]
-    link_pages = [existing, existing, []]
-    monkeypatch.setattr(triage, "paginated", lambda *_args, **_kwargs: link_pages.pop(0))
-    attempts = 0
-
-    def mutate(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise triage.MutationOutcomeUnknown("ambiguous delete")
-        return {}
-
-    monkeypatch.setattr(triage, "glab_mutation", mutate)
-    with pytest.raises(triage.MutationOutcomeUnknown):
-        triage.apply_link(guard, "delete")
-    triage.apply_link(guard, "delete")
-    receipts = list((root / "receipts/links").glob("*.json"))
-    assert json.loads(receipts[0].read_text(encoding="utf-8"))["status"] == "deleted"
-
-
-def test_relation_delete_reconciliation_reports_no_new_mutation(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    root = tmp_path / "agent-skills/task-triage" / ("a" * 32)
-    guard, guard_digest = triage.write_artifact(
-        root,
-        "link-guards",
-        {
-            "schema": "task-triage/link-guard/v1",
-            "host": "gitlab.example",
-            "current_user": {"id": 5, "username": "reviewer"},
-            "source": {"project_id": 19, "iid": 7},
-            "target": {"project_id": 19, "iid": 3},
-            "existing_link": {"id": 300, "relation_type": "relates_to"},
-            "desired_type": "blocks",
-        },
-    )
-    receipt = triage.link_receipt_path(guard, guard_digest)
-    triage.write_json(receipt, {"status": "deleting", "guard_digest": guard_digest})
-    monkeypatch.setattr(
-        triage,
-        "glab_json",
-        lambda _host, endpoint: (
-            {"id": 5, "username": "reviewer"}
-            if endpoint == "user"
-            else pytest.fail(f"unexpected endpoint {endpoint}")
-        ),
-    )
-    monkeypatch.setattr(triage, "paginated", lambda *_args, **_kwargs: [])
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: pytest.fail("reconciliation must not mutate GitLab"),
-    )
-    assert triage.run(["apply-link", "--guard", str(guard), "--stage", "delete"]) == 0
-    output = json.loads(capsys.readouterr().out)
-    assert output["status"] == "reconciled"
-    assert output["external_mutations"] is False
-    assert output["mutation_outcome"] == "none"
 
 
 def test_observed_issue_link_requires_explicit_type() -> None:
@@ -1281,8 +1151,18 @@ def test_missing_milestone_keeps_analysis_complete_and_marks_follow_up_pending(
     assert "No compatible active major milestone exists." in summary
     assert "#### Awaiting planning action\n\n- [#7 Clarify retries]" in summary
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
-    assert "--method POST projects/19/milestones" in report
-    assert "--method POST projects/19/milestones --silent" in report
+    assert "--method POST" in report
+    assert "projects/19/milestones" in report
+    assert "'map(select(.title == $title) | .id) | first // empty'" in report
+    assert '{"title":"v2.0.0"}' in report
+    assert '{"milestone_id": $milestone_id}' in report
+    create_block = next(block for block in shell_blocks(report) if "--method POST" in block)
+    assert (
+        create_block.index("first // empty")
+        < create_block.index("--method POST")
+        < create_block.index('{"milestone_id": $milestone_id}')
+    )
+    assert ".milestone.id == 9" in create_block
 
 
 def test_rejected_issue_removes_existing_milestone(
@@ -1321,11 +1201,9 @@ def test_rejected_issue_removes_existing_milestone(
     )
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert "--method PUT" in report
-    assert report.count("--silent") == 4
-    command_payloads = list(
-        (Path(result["artifact_root"]) / "artifacts" / "commands").glob("*.json")
-    )
-    assert any(json.loads(path.read_text()) == {"milestone_id": 0} for path in command_payloads)
+    assert '{"milestone_id":0}' in report
+    assert "jq -e '.milestone.id == 9' >/dev/null" in report
+    assert not (Path(result["artifact_root"]) / "artifacts" / "commands").exists()
 
 
 def test_milestone_catalog_change_invalidates_cached_analysis(
@@ -1464,8 +1342,8 @@ def test_information_request_sequence_and_reply_reassessment(
         )
     )
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
-    assert "apply-information" in report
-    assert "--stage message" in report
+    assert "projects/19/issues/7/discussions/discussion-1/notes" in report
+    assert '{"body":"Повторно прошу уточнить ожидаемое поведение."}' in report
     assert published["status"] == "ok"
     assert published["follow_up_status"] == "pending"
     summary = Path(published["summary"]).read_text(encoding="utf-8")
@@ -1561,6 +1439,10 @@ def test_related_mr_message_gets_its_own_publication_command(
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert "projects/19/merge_requests/11/notes" in report
     assert report.count("### Publish message") == 1
+    message_block = next(block for block in shell_blocks(report) if "/merge_requests/11" in block)
+    assert '.state == "opened"' in message_block
+    assert "projects/19/merge_requests/11/discussions" in message_block
+    assert "sha256sum" in message_block
 
 
 def test_summary_counts_information_requests_and_affected_issues_separately(
@@ -1856,61 +1738,21 @@ def test_stale_closure_has_separate_message_and_close_commands(
     )
     report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
     assert "### Publish stale closure message" in report
-    assert "### Close issue" in report
-    assert report.count("apply-information") == 2
-    assert "--stage message" in report
-    assert "--stage close" in report
-
-
-def information_guard(
-    root: Path,
-    request: dict[str, Any],
-    *,
-    discussions: list[dict[str, Any]] | None = None,
-    schema: str = "task-triage/information-guard/v4",
-) -> Path:
-    if "standalone_reason" not in request:
-        target = request.get("target") if isinstance(request, dict) else None
-        request = {
-            **request,
-            "standalone_reason": (
-                "No observed discussion carries this missing context."
-                if request.get("action") == "new"
-                and isinstance(target, dict)
-                and target.get("discussion_id") is None
-                else None
-            ),
-        }
-    root = root / "agent-skills" / "task-triage" / ("a" * 32)
-    value: dict[str, Any] = {
-        "schema": schema,
-        "host": "gitlab.example",
-        "current_user": {"id": 5, "username": "reviewer"},
-        "request": request,
-    }
-    if schema in {
-        "task-triage/information-guard/v2",
-        "task-triage/information-guard/v3",
-        "task-triage/information-guard/v4",
-    }:
-        target = request.get("target") if isinstance(request, dict) else None
-        value["conversation_state"] = None
-        if (
-            request.get("action") == "new"
-            and isinstance(target, dict)
-            and (
-                schema == "task-triage/information-guard/v4" or target.get("discussion_id") is None
-            )
-        ):
-            value["conversation_state"] = triage.conversation_state(
-                discussions or [], target.get("discussion_id")
-            )
-    guard, _ = triage.write_artifact(
-        root,
-        "information-guards",
-        value,
+    assert "### Close issue" not in report
+    assert "apply-information" not in report
+    closure_blocks = [block for block in shell_blocks(report) if '"state_event":"close"' in block]
+    assert len(closure_blocks) == 1
+    block = closure_blocks[0]
+    assert block.count("glab api --hostname") == 5
+    assert "--method POST" in block
+    assert "projects/19/issues/7/discussions/discussion-1/notes" in block
+    assert (
+        '{"body":"Закрываю задачу: после вопроса и двух пингов информации не поступило."}' in block
     )
-    return guard
+    assert block.index("--method POST") < block.index('"state_event":"close"')
+    assert "<<'TRIAGE_JSON_" in block
+    assert '.state == "opened"' in block
+    assert '| sha256sum)" && [ "${note_digest%% *}"' in block
 
 
 def test_discussion_notes_break_equal_timestamp_ties_numerically() -> None:
@@ -1941,566 +1783,6 @@ def test_discussion_notes_break_equal_timestamp_ties_numerically() -> None:
     ]
 
 
-def test_information_actions_emit_v4_with_prepared_non_system_conversation(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request: dict[str, Any] = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": None,
-        },
-        "body": "Please provide the missing context.",
-        "prior_note_ids": [],
-        "rationale": "The issue is incomplete.",
-        "standalone_reason": "No observed discussion carries the missing context.",
-    }
-    discussions = [
-        {
-            "id": "discussion-1",
-            "notes": [
-                {"id": 10, "created_at": "2026-08-01T00:00:00Z", "body": "second"},
-                {"id": 9, "created_at": "2026-08-01T00:00:00Z", "body": "first"},
-                {"id": 11, "system": True, "body": "system event"},
-            ],
-        }
-    ]
-    snapshot = {
-        "target": {"project_id": 19, "iid": 7},
-        "issue": {"state": "opened"},
-        "discussions": discussions,
-        "merge_request_conversations": [],
-    }
-
-    triage.information_actions(
-        tmp_path,
-        "gitlab.example",
-        request,
-        {"id": 5, "username": "reviewer"},
-        snapshot,
-    )
-
-    guards = list((tmp_path / "artifacts/information-guards").glob("*.json"))
-    assert len(guards) == 1
-    guard = json.loads(guards[0].read_text(encoding="utf-8"))
-    assert guard["schema"] == "task-triage/information-guard/v4"
-    assert guard["conversation_state"] == {
-        "note_ids": [9, 10],
-        "digest": triage.digest(
-            [
-                {"id": 9, "created_at": "2026-08-01T00:00:00Z", "body": "first"},
-                {"id": 10, "created_at": "2026-08-01T00:00:00Z", "body": "second"},
-            ]
-        ),
-    }
-
-
-@pytest.mark.parametrize("change", ["addition", "removal", "content"])
-def test_new_standalone_information_rejects_any_conversation_change(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, change: str
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": None,
-        },
-        "body": "Please provide the missing context.",
-        "prior_note_ids": [],
-        "rationale": "The issue is incomplete.",
-    }
-    prepared_notes = [
-        {
-            "id": 9,
-            "created_at": "2026-08-01T00:00:00Z",
-            "body": "Observed context.",
-            "author": {"id": 8},
-        }
-    ]
-    guard = information_guard(
-        tmp_path,
-        request,
-        discussions=[{"id": "discussion-1", "notes": prepared_notes}],
-    )
-    fresh_notes = [dict(note) for note in prepared_notes]
-    if change == "addition":
-        fresh_notes.append(
-            {
-                "id": 10,
-                "created_at": "2026-08-02T00:00:00Z",
-                "body": "New context.",
-                "author": {"id": 8},
-            }
-        )
-    elif change == "removal":
-        fresh_notes.clear()
-    else:
-        fresh_notes[0]["body"] = "Changed context."
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [{"id": "discussion-1", "notes": fresh_notes}]
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: pytest.fail("changed conversation must not mutate GitLab"),
-    )
-
-    with pytest.raises(triage.WorkflowError, match="conversation changed"):
-        triage.apply_information(guard, "message")
-
-
-@pytest.mark.parametrize("change", ["addition", "removal", "content"])
-def test_new_existing_discussion_rejects_any_selected_thread_change(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, change: str
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request: dict[str, Any] = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "Answer the observed question.",
-        "prior_note_ids": [],
-        "rationale": "The participant asked for current behavior.",
-        "standalone_reason": None,
-    }
-    prepared_notes = [
-        {
-            "id": 9,
-            "created_at": "2026-08-01T00:00:00Z",
-            "body": "What behavior is supported?",
-            "author": {"id": 8, "username": "participant"},
-        }
-    ]
-    guard = information_guard(
-        tmp_path,
-        request,
-        discussions=[
-            {"id": "discussion-1", "notes": prepared_notes},
-            {"id": "unrelated", "notes": [{"id": 20, "body": "Ignored"}]},
-        ],
-    )
-    guard_value = json.loads(guard.read_text(encoding="utf-8"))
-    assert guard_value["conversation_state"]["note_ids"] == [9]
-    fresh_notes = [dict(note) for note in prepared_notes]
-    if change == "addition":
-        fresh_notes.append(
-            {
-                "id": 10,
-                "created_at": "2026-08-02T00:00:00Z",
-                "body": "Additional context.",
-                "author": {"id": 8, "username": "participant"},
-            }
-        )
-    elif change == "removal":
-        fresh_notes.clear()
-    else:
-        fresh_notes[0]["body"] = "Materially changed question."
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [{"id": "discussion-1", "notes": fresh_notes}]
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: pytest.fail("changed discussion must not mutate GitLab"),
-    )
-    with pytest.raises(triage.WorkflowError, match="conversation changed"):
-        triage.apply_information(guard, "message")
-
-
-@pytest.mark.parametrize(
-    "schema",
-    [
-        "task-triage/information-guard/v1",
-        "task-triage/information-guard/v2",
-        "task-triage/information-guard/v3",
-    ],
-)
-def test_legacy_information_guard_fails_closed_and_requires_regeneration(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, schema: str
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    guard = information_guard(tmp_path, {}, schema=schema)
-    monkeypatch.setattr(
-        triage,
-        "glab_json",
-        lambda *_args, **_kwargs: pytest.fail("legacy guard must fail before GitLab access"),
-    )
-
-    with pytest.raises(triage.WorkflowError, match=r"legacy information guard.*regenerated"):
-        triage.apply_information(guard, "message")
-
-
-def test_information_command_revalidates_and_rejects_later_reply(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "ping_1",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "First follow-up.",
-        "prior_note_ids": [101],
-        "rationale": "No answer was observed.",
-    }
-    guard = information_guard(tmp_path, request)
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [
-            {
-                "id": "discussion-1",
-                "notes": [
-                    {"id": 101, "created_at": "2026-08-01T00:00:00Z", "author": {"id": 5}},
-                    {"id": 102, "created_at": "2026-08-02T00:00:00Z", "author": {"id": 8}},
-                ],
-            }
-        ]
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: pytest.fail("stale command must not mutate GitLab"),
-    )
-
-    with pytest.raises(triage.WorkflowError, match="later note"):
-        triage.apply_information(guard, "message")
-
-
-def test_information_command_records_receipt_and_rejects_replay(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": None,
-        },
-        "body": "Please provide the missing context.",
-        "prior_note_ids": [],
-        "rationale": "The issue is incomplete.",
-    }
-    guard = information_guard(tmp_path, request)
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return []
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    mutations: list[str] = []
-
-    def mutate(*_args: Any, **_kwargs: Any) -> dict[str, int]:
-        mutations.append("POST")
-        return {"id": 104}
-
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        mutate,
-    )
-
-    triage.apply_information(guard, "message")
-    with pytest.raises(triage.WorkflowError, match="already published"):
-        triage.apply_information(guard, "message")
-    assert mutations == ["POST"]
-
-
-def test_standalone_information_timeout_leaves_durable_blocker(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": None,
-        },
-        "body": "Please provide the missing context.",
-        "prior_note_ids": [],
-        "rationale": "The issue is incomplete.",
-    }
-    guard = information_guard(tmp_path, request)
-    synced: list[Path] = []
-    original_fsync_directory = triage.fsync_directory
-
-    def observe_fsync(path: Path) -> None:
-        original_fsync_directory(path)
-        synced.append(path)
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return []
-
-    attempts: list[str] = []
-
-    def timeout(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        receipt = triage.information_receipt_path(guard, guard.stem)
-        assert receipt.is_file()
-        assert receipt.parent in synced
-        attempts.append("POST")
-        raise triage.WorkflowError("ambiguous timeout")
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(triage, "glab_mutation", timeout)
-    monkeypatch.setattr(triage, "fsync_directory", observe_fsync)
-
-    with pytest.raises(triage.WorkflowError, match="ambiguous timeout"):
-        triage.apply_information(guard, "message")
-    receipt = triage.information_receipt_path(guard, guard.stem)
-    assert json.loads(receipt.read_text(encoding="utf-8")) == {
-        "status": "in_progress",
-        "guard_digest": guard.stem,
-        "body": request["body"],
-    }
-    with pytest.raises(triage.WorkflowError, match="outcome is unknown"):
-        triage.apply_information(guard, "message")
-    assert attempts == ["POST"]
-
-
-def test_standalone_information_retries_only_when_process_did_not_start(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": None,
-        },
-        "body": "Please provide the missing context.",
-        "prior_note_ids": [],
-        "rationale": "The issue is incomplete.",
-    }
-    guard = information_guard(tmp_path, request)
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return []
-
-    attempts = 0
-
-    def mutate(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        nonlocal attempts
-        attempts += 1
-        if attempts == 1:
-            raise triage.MutationNotAttempted("not started")
-        return {"id": 104}
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(triage, "glab_mutation", mutate)
-
-    with pytest.raises(triage.MutationNotAttempted, match="not started"):
-        triage.apply_information(guard, "message")
-    assert not triage.information_receipt_path(guard, guard.stem).exists()
-    triage.apply_information(guard, "message")
-
-
-def test_follow_up_reserves_before_post_and_only_clears_pre_start_failure(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "ping_1",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "First follow-up.",
-        "prior_note_ids": [101],
-        "rationale": "No answer was observed.",
-    }
-    guard = information_guard(tmp_path, request)
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [
-            {
-                "id": "discussion-1",
-                "notes": [
-                    {
-                        "id": 101,
-                        "created_at": "2026-08-01T00:00:00Z",
-                        "author": {"id": 5, "username": "reviewer"},
-                    }
-                ],
-            }
-        ]
-
-    attempts = 0
-
-    def mutate(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
-        nonlocal attempts
-        receipt = triage.information_receipt_path(guard, guard.stem)
-        assert json.loads(receipt.read_text(encoding="utf-8"))["status"] == "in_progress"
-        attempts += 1
-        if attempts == 1:
-            raise triage.MutationNotAttempted("not started")
-        raise triage.MutationOutcomeUnknown("unknown")
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(triage, "glab_mutation", mutate)
-
-    with pytest.raises(triage.MutationNotAttempted):
-        triage.apply_information(guard, "message")
-    receipt = triage.information_receipt_path(guard, guard.stem)
-    assert not receipt.exists()
-    with pytest.raises(triage.MutationOutcomeUnknown):
-        triage.apply_information(guard, "message")
-    assert json.loads(receipt.read_text(encoding="utf-8"))["status"] == "in_progress"
-
-
-def test_information_command_rejects_changed_authenticated_user(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "new",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": None,
-        },
-        "body": "Please provide the missing context.",
-        "prior_note_ids": [],
-        "rationale": "The issue is incomplete.",
-    }
-    guard = information_guard(tmp_path, request)
-    monkeypatch.setattr(
-        triage,
-        "glab_json",
-        lambda _host, _endpoint: {"id": 8, "username": "different-user"},
-    )
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: pytest.fail("changed identity must not mutate GitLab"),
-    )
-
-    with pytest.raises(triage.WorkflowError, match="authenticated GitLab user changed"):
-        triage.apply_information(guard, "message")
-
-
-def test_information_command_rejects_guard_outside_artifact_collection(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    payload = {
-        "schema": "task-triage/information-guard/v1",
-        "host": "gitlab.example",
-        "current_user": {"id": 5},
-        "request": {},
-    }
-    content = triage.canonical(payload) + b"\n"
-    guard = (
-        tmp_path
-        / "arbitrary"
-        / ("a" * 32)
-        / "artifacts"
-        / "information-guards"
-        / f"{hashlib.sha256(content).hexdigest()}.json"
-    )
-    guard.parent.mkdir(parents=True)
-    guard.write_bytes(content)
-
-    with pytest.raises(triage.WorkflowError, match=r"scope|outside"):
-        triage.apply_information(guard, "message")
-
-
-def test_information_guard_parses_the_digest_verified_bytes_once(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    guard = information_guard(tmp_path, {})
-    monkeypatch.setattr(
-        triage,
-        "read_object",
-        lambda *_args, **_kwargs: pytest.fail(
-            "guard must not be reopened after digest verification"
-        ),
-    )
-
-    value, guard_digest = triage.read_information_guard(guard)
-
-    assert value["schema"] == "task-triage/information-guard/v4"
-    assert guard_digest == guard.stem
-
-
-def test_shallow_information_guard_path_is_a_controlled_error() -> None:
-    with pytest.raises(triage.WorkflowError, match="path is invalid"):
-        triage.read_information_guard(Path("guard.json"))
-
-
-def test_triage_runner_resolves_built_and_source_layouts(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    built_runtime = tmp_path / "archive/scripts/portable_runtime/triage.py"
-    built_runner = tmp_path / "archive/scripts/triage_task.py"
-    built_runner.parent.mkdir(parents=True)
-    built_runner.touch()
-    monkeypatch.setattr(triage, "__file__", str(built_runtime))
-    assert triage.triage_runner() == built_runner
-
-    built_runner.unlink()
-    source_runtime = tmp_path / "repo/shared/references/work_item_runtime/triage.py"
-    source_runner = tmp_path / "repo/skills/task-triage/scripts/triage_task.py"
-    source_runner.parent.mkdir(parents=True)
-    source_runner.touch()
-    monkeypatch.setattr(triage, "__file__", str(source_runtime))
-    assert triage.triage_runner() == source_runner
-
-
 def test_source_layout_runner_executes_without_generated_runtime(tmp_path: Path) -> None:
     runner = tmp_path / "repo/skills/task-triage/scripts/triage_task.py"
     runner.parent.mkdir(parents=True)
@@ -2512,7 +1794,6 @@ def test_source_layout_runner_executes_without_generated_runtime(tmp_path: Path)
         shared / "work_item_runtime",
     )
     shutil.copy2(ROOT / "shared/references/state_artifacts.py", shared / "state_artifacts.py")
-    shutil.copy2(ROOT / "shared/references/mutation_process.py", shared / "mutation_process.py")
     assert not (runner.parent / "portable_runtime").exists()
 
     result = subprocess.run(
@@ -2524,37 +1805,6 @@ def test_source_layout_runner_executes_without_generated_runtime(tmp_path: Path)
 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["payload_version"] == "2.0.0"
-
-
-def test_information_lifecycle_lock_is_bounded_and_requires_posix(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    locking = triage.fcntl
-    if locking is None:
-        pytest.skip("fcntl is unavailable")
-    lock_path = tmp_path / "information.lock"
-    held = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
-    locking.flock(held, locking.LOCK_EX | locking.LOCK_NB)
-    monkeypatch.setattr(triage, "LOCK_TIMEOUT_SECONDS", 0.02)
-    monkeypatch.setattr(triage, "LOCK_RETRY_SECONDS", 0.005)
-    try:
-        with pytest.raises(triage.WorkflowError, match="timed out"):
-            triage.lock_information_lifecycle(lock_path)
-    finally:
-        os.close(held)
-
-    monkeypatch.setattr(triage, "fcntl", None)
-    with pytest.raises(triage.WorkflowError, match="requires POSIX fcntl"):
-        triage.lock_information_lifecycle(lock_path)
-
-
-def test_information_lifecycle_lock_rejects_hardlink(tmp_path: Path) -> None:
-    lock_path = tmp_path / "information.lock"
-    lock_path.touch(mode=0o600)
-    os.link(lock_path, tmp_path / "information-alias.lock")
-
-    with pytest.raises(triage.WorkflowError, match="private owned regular file"):
-        triage.lock_information_lifecycle(lock_path)
 
 
 def test_read_only_cli_imports_without_fcntl() -> None:
@@ -2576,350 +1826,6 @@ def test_read_only_cli_imports_without_fcntl() -> None:
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["external_mutations"] is False
-
-
-def test_closure_command_requires_message_and_rechecks_for_later_reply(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "close",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "Closing after no response.",
-        "prior_note_ids": [101, 102, 103],
-        "rationale": "The request remained unanswered.",
-    }
-    guard = information_guard(tmp_path, request)
-    notes = [
-        {
-            "id": note_id,
-            "created_at": f"2026-08-{day:02d}T00:00:00Z",
-            "body": "prior",
-            "author": {"id": 5},
-        }
-        for note_id, day in ((101, 1), (102, 2), (103, 3))
-    ]
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [{"id": "discussion-1", "notes": notes}]
-
-    mutations: list[str] = []
-
-    def mutate(_host: str, method: str, _endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-        mutations.append(method)
-        if method == "POST":
-            notes.append(
-                {
-                    "id": 104,
-                    "created_at": "2026-08-04T00:00:00Z",
-                    "body": payload["body"],
-                    "author": {"id": 5},
-                }
-            )
-            return {"id": 104}
-        return {}
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(triage, "glab_mutation", mutate)
-
-    with pytest.raises(triage.WorkflowError, match="receipt"):
-        triage.apply_information(guard, "close")
-    triage.apply_information(guard, "message")
-    notes.append(
-        {
-            "id": 105,
-            "created_at": "2026-08-05T00:00:00Z",
-            "body": "Here is the missing context.",
-            "author": {"id": 8},
-        }
-    )
-    with pytest.raises(triage.WorkflowError, match="later note"):
-        triage.apply_information(guard, "close")
-    assert mutations == ["POST"]
-
-
-def test_closure_receipt_blocks_replay_after_issue_is_reopened(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "close",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "Closing after no response.",
-        "prior_note_ids": [101, 102, 103],
-        "rationale": "The request remained unanswered.",
-    }
-    guard = information_guard(tmp_path, request)
-    issue_state = "opened"
-    notes = [
-        {
-            "id": note_id,
-            "created_at": f"2026-08-{note_id - 100:02d}T00:00:00Z",
-            "body": request["body"] if note_id == 104 else "prior",
-            "author": {"id": 5, "username": "reviewer"},
-        }
-        for note_id in (101, 102, 103, 104)
-    ]
-    receipt = triage.information_receipt_path(guard, guard.stem)
-    message_receipt = {
-        "guard_digest": guard.stem,
-        "note_id": 104,
-        "body": request["body"],
-    }
-    triage.write_json(receipt, message_receipt)
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"project_id": 19, "iid": 7, "state": issue_state}
-        return [{"id": "discussion-1", "notes": notes}]
-
-    mutations: list[str] = []
-
-    def mutate(_host: str, method: str, _endpoint: str, _payload: dict[str, Any]) -> dict[str, Any]:
-        nonlocal issue_state
-        assert json.loads(receipt.read_text(encoding="utf-8")) == {
-            "status": "in_progress",
-            "stage": "close",
-            **message_receipt,
-        }
-        mutations.append(method)
-        issue_state = "closed"
-        return {"project_id": 19, "iid": 7, "state": "opened"}
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(triage, "glab_mutation", mutate)
-
-    triage.apply_information(guard, "close")
-    assert json.loads(receipt.read_text(encoding="utf-8")) == {
-        "status": "closed",
-        **message_receipt,
-    }
-
-    issue_state = "opened"
-    with pytest.raises(triage.WorkflowError, match="closure was already applied"):
-        triage.apply_information(guard, "close")
-    assert mutations == ["PUT"]
-
-
-@pytest.mark.parametrize("fresh_result", ["opened", "get_failure", "wrong_project", "wrong_iid"])
-def test_closure_keeps_reservation_until_fresh_exact_issue_is_closed(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    fresh_result: str,
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "close",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "Closing after no response.",
-        "prior_note_ids": [101, 102, 103],
-        "rationale": "The request remained unanswered.",
-    }
-    guard = information_guard(tmp_path, request)
-    receipt = triage.information_receipt_path(guard, guard.stem)
-    message_receipt = {
-        "guard_digest": guard.stem,
-        "note_id": 104,
-        "body": request["body"],
-    }
-    triage.write_json(receipt, message_receipt)
-    notes = [
-        {
-            "id": note_id,
-            "created_at": f"2026-08-{note_id - 100:02d}T00:00:00Z",
-            "body": request["body"] if note_id == 104 else "prior",
-            "author": {"id": 5, "username": "reviewer"},
-        }
-        for note_id in (101, 102, 103, 104)
-    ]
-    issue_gets = 0
-
-    def response(_host: str, endpoint: str) -> Any:
-        nonlocal issue_gets
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            issue_gets += 1
-            if issue_gets == 1:
-                return {"project_id": 19, "iid": 7, "state": "opened"}
-            if fresh_result == "get_failure":
-                raise triage.WorkflowError("GitLab GET failed")
-            project_id = 20 if fresh_result == "wrong_project" else 19
-            iid = 8 if fresh_result == "wrong_iid" else 7
-            state = "opened" if fresh_result == "opened" else "closed"
-            return {"project_id": project_id, "iid": iid, "state": state}
-        return [{"id": "discussion-1", "notes": notes}]
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: {"project_id": 19, "iid": 7, "state": "closed"},
-    )
-
-    with pytest.raises(triage.MutationOutcomeUnknown, match=r"verified|fresh exact"):
-        triage.apply_information(guard, "close")
-    assert json.loads(receipt.read_text(encoding="utf-8")) == {
-        "status": "in_progress",
-        "stage": "close",
-        **message_receipt,
-    }
-
-
-@pytest.mark.parametrize(
-    ("failure", "expected_receipt"),
-    [
-        (triage.MutationNotAttempted("not started"), "message"),
-        (triage.MutationOutcomeUnknown("unknown"), "reservation"),
-    ],
-)
-def test_closure_transition_restores_only_before_process_start(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    failure: triage.WorkflowError,
-    expected_receipt: str,
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "close",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "Closing after no response.",
-        "prior_note_ids": [101, 102, 103],
-        "rationale": "The request remained unanswered.",
-    }
-    guard = information_guard(tmp_path, request)
-    receipt = triage.information_receipt_path(guard, guard.stem)
-    message_receipt = {
-        "guard_digest": guard.stem,
-        "note_id": 104,
-        "body": request["body"],
-    }
-    triage.write_json(receipt, message_receipt)
-    notes = [
-        {
-            "id": note_id,
-            "created_at": f"2026-08-{note_id - 100:02d}T00:00:00Z",
-            "body": request["body"] if note_id == 104 else "prior",
-            "author": {"id": 5, "username": "reviewer"},
-        }
-        for note_id in (101, 102, 103, 104)
-    ]
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [{"id": "discussion-1", "notes": notes}]
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(failure),
-    )
-
-    with pytest.raises(type(failure), match=str(failure)):
-        triage.apply_information(guard, "close")
-    stored = json.loads(receipt.read_text(encoding="utf-8"))
-    if expected_receipt == "message":
-        assert stored == message_receipt
-    else:
-        assert stored == {"status": "in_progress", "stage": "close", **message_receipt}
-        with pytest.raises(triage.WorkflowError, match="closure outcome is unknown"):
-            triage.apply_information(guard, "close")
-
-
-@pytest.mark.parametrize(
-    ("receipt_update", "message"),
-    [
-        ({"body": "tampered"}, "receipt is invalid"),
-        ({"note_id": 0}, "receipt is invalid"),
-        ({"guard_digest": "b" * 64}, "receipt is invalid"),
-    ],
-)
-def test_closure_rejects_receipt_not_exactly_bound_to_guard(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-    receipt_update: dict[str, Any],
-    message: str,
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    request = {
-        "action": "close",
-        "target": {
-            "kind": "issue",
-            "project_id": 19,
-            "iid": 7,
-            "discussion_id": "discussion-1",
-        },
-        "body": "Closing after no response.",
-        "prior_note_ids": [101, 102, 103],
-        "rationale": "The request remained unanswered.",
-    }
-    guard = information_guard(tmp_path, request)
-    receipt = triage.information_receipt_path(guard, guard.stem)
-    triage.write_json(
-        receipt,
-        {
-            "guard_digest": guard.stem,
-            "note_id": 104,
-            "body": request["body"],
-            **receipt_update,
-        },
-    )
-    notes = [
-        {
-            "id": note_id,
-            "created_at": f"2026-08-{note_id - 100:02d}T00:00:00Z",
-            "body": request["body"] if note_id == 104 else "prior",
-            "author": {"id": 5},
-        }
-        for note_id in (101, 102, 103, 104)
-    ]
-
-    def response(_host: str, endpoint: str) -> Any:
-        if endpoint == "user":
-            return {"id": 5, "username": "reviewer"}
-        if endpoint == "projects/19/issues/7":
-            return {"iid": 7, "state": "opened"}
-        return [{"id": "discussion-1", "notes": notes}]
-
-    monkeypatch.setattr(triage, "glab_json", response)
-    monkeypatch.setattr(
-        triage,
-        "glab_mutation",
-        lambda *_args, **_kwargs: pytest.fail("invalid receipt must not close the issue"),
-    )
-
-    with pytest.raises(triage.WorkflowError, match=message):
-        triage.apply_information(guard, "close")
 
 
 def test_incomplete_related_mr_identity_makes_collection_partial(
@@ -2959,132 +1865,382 @@ def test_glab_boundary_uses_get_without_shell(monkeypatch: pytest.MonkeyPatch) -
     assert "--silent" not in observed[0]
 
 
-@pytest.mark.parametrize(
-    ("result", "message"),
-    [
-        (subprocess.CompletedProcess([], 1, b"", b"failed"), "failed"),
-        (subprocess.CompletedProcess([], 0, b"not-json", b""), "invalid JSON"),
-        (subprocess.CompletedProcess([], 0, b"[]", b""), "incomplete"),
-    ],
-)
-def test_glab_mutation_started_failures_are_ambiguous(
-    monkeypatch: pytest.MonkeyPatch,
-    result: subprocess.CompletedProcess[bytes],
-    message: str,
-) -> None:
-    monkeypatch.setattr(triage, "run_mutation_process", lambda *_args: result)
-    with pytest.raises(triage.MutationOutcomeUnknown, match=message):
-        triage.glab_mutation("gitlab.example", "POST", "projects/19/issues/7/notes", {})
+def shell_blocks(markdown: str) -> list[str]:
+    return [
+        block for block in re.findall(r"```sh\n(.*?)\n```", markdown, re.DOTALL) if block.strip()
+    ]
 
 
-def test_glab_mutation_start_failure_is_proven_not_attempted(
-    monkeypatch: pytest.MonkeyPatch,
+def test_generated_blocks_use_direct_glab_api_with_guards(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(
-        subprocess,
-        "Popen",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("unavailable")),
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(triage, "glab_json", lambda _host, endpoint: gitlab_response(endpoint))
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    analysis_path = tmp_path / "analysis.json"
+    analysis_path.write_text(json.dumps(analysis_for(result)), encoding="utf-8")
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
     )
-    with pytest.raises(triage.MutationNotAttempted, match="not attempted"):
-        triage.glab_mutation("gitlab.example", "POST", "projects/19/issues/7/notes", {})
+    summary = Path(published["summary"]).read_text(encoding="utf-8")
+    assert "- Actions without commands: 0" in summary
+    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
+    for helper in ("marker-run", "apply-information", "apply-link", "--silent"):
+        assert helper not in report
+    blocks = shell_blocks(report)
+    assert len(blocks) == 4
+    for block in blocks:
+        assert block.startswith(f"# {triage.TEXT['en']['guard_user']}")
+        assert block.count("glab api --hostname gitlab.example user") == 1
+        assert "<<'TRIAGE_JSON_" in block
+    title_block, labels_block, milestone_block, link_block = blocks
+    assert "jq -r '.updated_at'" in title_block
+    assert "= 2026-09-23T00:00:00Z ]" in title_block
+    for block in blocks:
+        for tool in ("| cut ", "|awk", "awk ", "| sed ", "| grep ", "base64", "xargs"):
+            assert tool not in block, (tool, block)
+    for block in blocks[1:]:
+        assert ".updated_at" not in block
+    assert "jq -c '[(.labels // [])[] | if type == \"object\" then .name else . end] | sort'" in (
+        labels_block
+    )
+    assert "= '[]' ]" in labels_block
+    assert ".milestone.id == 9" in milestone_block
+    assert ".iid == $i" in link_block
 
 
-def test_mutation_runner_bounds_output_and_reaps_timeout(
-    monkeypatch: pytest.MonkeyPatch,
+def test_replace_link_block_deletes_then_creates_in_one_chain(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    monkeypatch.setattr(triage, "MUTATION_OUTPUT_LIMIT", 16)
-    with pytest.raises(triage.MutationOutcomeUnknown, match="size limit"):
-        triage.run_mutation_process(
-            [sys.executable, "-c", "import sys; sys.stdout.write('x' * 100)"], b"{}"
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+    def response(_host: str, endpoint: str) -> Any:
+        if endpoint.startswith("projects/19/issues/7/links?"):
+            return [{"id": 300, "project_id": 19, "iid": 3, "link_type": "relates_to"}]
+        return gitlab_response(endpoint)
+
+    monkeypatch.setattr(triage, "glab_json", response)
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    value = analysis_for(result)
+    relation = value["items"][0]["issue_relations"][0]
+    relation["relation_type"] = "blocks"
+    relation["existing_link"] = {"id": 300, "relation_type": "relates_to"}
+    value["items"][0]["proposed_changes"]["links"][0]["link_type"] = "blocks"
+    analysis_path = tmp_path / "replace-relation.json"
+    analysis_path.write_text(json.dumps(value), encoding="utf-8")
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
+    )
+    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
+    assert "### Replace conflicting issue link" in report
+    assert "### Delete conflicting issue link" not in report
+    assert "apply-link" not in report
+    assert not list(Path(result["artifact_root"]).glob("**/link-guards/*.json"))
+    replace_blocks = [block for block in shell_blocks(report) if "--method DELETE" in block]
+    assert len(replace_blocks) == 1
+    block = replace_blocks[0]
+    assert block.count(".link_type == $t") == 2
+    assert "issue_link_id // .id" in block
+    assert '[ "$link_id" = 300 ]' in block
+    assert "projects/19/issues/7/links/300" in block
+    assert '{"target_project_id":19,"target_issue_iid":3,"link_type":"blocks"}' in block
+    assert block.index("--method DELETE") < block.index("--method POST")
+
+
+@pytest.mark.parametrize("status", ["obsolete", "duplicate"])
+def test_obsolete_and_duplicate_issues_get_explanation_and_close_blocks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, status: str
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(triage, "glab_json", lambda _host, endpoint: gitlab_response(endpoint))
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    value = analysis_for(result)
+    item = value["items"][0]
+    item["actuality"] = {
+        "status": status,
+        "rationale": "Superseded by the older retry issue.",
+        "confidence": "high",
+    }
+    item["release_plan"]["decision"] = {
+        "status": status,
+        "rationale": "The issue must leave the open backlog.",
+        "confidence": "high",
+    }
+    item["release_plan"]["milestone"] = {
+        "status": "remove",
+        "candidate": None,
+        "rationale": "Unaccepted work leaves the active milestone.",
+        "confidence": "high",
+    }
+    value["top_five"] = []
+    value["parallel_groups"] = []
+    analysis_path = tmp_path / "close.json"
+    analysis_path.write_text(json.dumps(value), encoding="utf-8")
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
+    )
+    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
+    close_blocks = [block for block in shell_blocks(report) if '"state_event":"close"' in block]
+    assert len(close_blocks) == 1
+    block = close_blocks[0]
+    assert "# Close issue: Superseded by the older retry issue." in block
+    assert '.state == "opened"' in block
+    assert '{"state_event":"close"}' in block
+
+
+def test_summary_lists_uncovered_actions_with_reasons(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+
+    def response(_host: str, endpoint: str) -> Any:
+        value = gitlab_response(endpoint)
+        if endpoint == "projects/19/issues/7":
+            value.pop("updated_at")
+        return value
+
+    monkeypatch.setattr(triage, "glab_json", response)
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    analysis_path = tmp_path / "analysis.json"
+    analysis_path.write_text(json.dumps(analysis_for(result)), encoding="utf-8")
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
+    )
+    report = Path(published["reports"][0]["report"]).read_text(encoding="utf-8")
+    assert shell_blocks(report) == []
+    assert report.count("- Regeneration required: ") == 4
+    summary = Path(published["summary"]).read_text(encoding="utf-8")
+    assert (
+        "- Actions without commands: 4 - "
+        "https://gitlab.example/group/project/-/issues/7: Update title" in summary
+    )
+    assert "Create issue link" in summary
+
+
+def test_conversation_digest_matches_the_jq_guard_pipeline() -> None:
+    jq = shutil.which("jq")
+    if jq is None:
+        pytest.skip("jq is unavailable")
+    notes: list[dict[str, Any]] = [
+        {"id": 1, "system": True, "body": "changed the issue"},
+        {"id": 2, "body": "alpha"},
+        {"id": 3, "body": "beta\nline"},
+    ]
+    expected = triage.bodies_digest(["alpha", "beta\nline"])
+
+    def live(items: list[dict[str, Any]]) -> str:
+        result = subprocess.run(
+            [
+                jq,
+                "-sr",
+                "[.[][] | .notes[]? | select(.system != true) | .body] | sort | .[]",
+            ],
+            input=json.dumps([{"id": "d1", "notes": items}]),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return triage.stream_digest(result.stdout)
+
+    assert live(notes) == expected
+    changed = [*notes, {"id": 4, "body": "prepared message"}]
+    assert live(changed) != expected
+
+
+def test_removed_helper_commands_are_rejected(capsys: pytest.CaptureFixture[str]) -> None:
+    assert triage.run(["apply-information", "--guard", "g", "--stage", "message"]) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "error"
+    assert triage.run(["apply-link", "--guard", "g", "--stage", "delete"]) == 2
+    output = json.loads(capsys.readouterr().out)
+    assert output["status"] == "error"
+
+
+def test_heredoc_delimiter_never_collides_with_the_body() -> None:
+    for body in (
+        '{"body":"line1\\nline2"}',
+        '{"title":"TRIAGE_JSON_AAAAAAAAAAAAAAAA"}',
+        '{"body":"Закрываю задачу."}',
+    ):
+        rendered = triage.inline_write("gitlab.example", "POST", "projects/1/issues/2/notes", body)
+        first, *rest = rendered.splitlines()
+        delimiter = first.split("<<", 1)[1].removesuffix(" &&").strip("'")
+        assert delimiter.startswith("TRIAGE_JSON_")
+        assert rest[-1] == delimiter
+        assert all(line != delimiter for line in rest[:-1])
+
+
+def test_blocks_execute_in_order_against_a_stateful_server(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Each later block re-reads live state; executing in order succeeds and replaying stops."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(triage, "glab_json", lambda _host, endpoint: gitlab_response(endpoint))
+    result = triage.collect(arguments("https://gitlab.example/group/project/-/issues/7"))
+    analysis_path = tmp_path / "analysis.json"
+    analysis_path.write_text(json.dumps(analysis_for(result)), encoding="utf-8")
+    published = triage.publish(
+        argparse.Namespace(
+            collection=str(Path(result["artifact_root"]) / "current.json"),
+            analysis=str(analysis_path),
+        )
+    )
+    blocks = shell_blocks(Path(published["reports"][0]["report"]).read_text(encoding="utf-8"))
+    assert len(blocks) == 4
+
+    state = tmp_path / "server"
+    state.mkdir()
+    (state / "issue.json").write_text(
+        json.dumps(
+            {
+                "iid": 7,
+                "title": "Clarify retries",
+                "description": "Retry behavior is ambiguous.",
+                "state": "opened",
+                "labels": [],
+                "milestone": {"id": 9, "title": "v1.1.0", "state": "active"},
+                "updated_at": "2026-09-23T00:00:00Z",
+            }
+        )
+    )
+    for name in ("milestones.json", "links.json"):
+        (state / name).write_text("[]")
+    stub = tmp_path / "glab"
+    stub.write_text(
+        f"""#!/bin/bash
+set -u
+state="{state}"
+args="$*"
+body="$(cat)"
+case "$args" in
+  *" user")
+    printf '%s' '{{"id":5,"username":"reviewer"}}' ;;
+  *"--method PUT projects/19/issues/7"*)
+    jq -c --argjson b "$body" '
+      if ($b | has("title")) then .title = $b.title else . end
+      | if ($b | has("labels")) then .labels = ($b.labels | split(",")) else . end
+      | if ($b | has("milestone_id")) then .milestone = {{"id": $b.milestone_id}} else . end
+      | .updated_at = "2026-09-24T00:00:00Z"
+    ' "$state/issue.json" > "$state/issue.next"
+    mv "$state/issue.next" "$state/issue.json"
+    jq -c . "$state/issue.json" ;;
+  *"--method POST projects/19/milestones"*)
+    id="$(jq -r '[.[] | .id] | max // 0 | . + 1' "$state/milestones.json")"
+    jq -c --arg title "$(printf '%s' "$body" | jq -r .title)" --argjson id "$id" '
+      . + [{{"id": $id, "title": $title, "state": "active"}}]' "$state/milestones.json" \
+      > "$state/milestones.next"
+    mv "$state/milestones.next" "$state/milestones.json"
+    printf '%s' "{{\\"id\\": $id}}" ;;
+  *"--method POST projects/19/issues/7/links"*)
+    id="$(jq -r '[.[] | .issue_link_id] | max // 100 | . + 1' "$state/links.json")"
+    jq -c --argjson b "$body" --argjson id "$id" '
+      . + [{{"issue_link_id": $id, "project_id": $b.target_project_id,
+            "iid": $b.target_issue_iid, "link_type": $b.link_type}}]' \
+      "$state/links.json" > "$state/links.next"
+    mv "$state/links.next" "$state/links.json"
+    printf '%s' '{{"ok": true}}' ;;
+  *milestones\\?*)
+    jq -c '[.[] | select(.state == "active")]' "$state/milestones.json" ;;
+  *issues/7/links\\?*)
+    jq -c '[.[] | select(.link_type)]' "$state/links.json" ;;
+  *"projects/19/issues/7"*)
+    jq -c . "$state/issue.json" ;;
+  *)
+    printf '%s' '{{}}' ;;
+esac
+"""
+    )
+    stub.chmod(0o700)
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+
+    for index, block in enumerate(blocks):
+        executed = subprocess.run(
+            ["bash", "-ec", block + "\n"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert executed.returncode == 0, f"block {index} failed: {executed.stderr}"
+
+    issue = json.loads((state / "issue.json").read_text())
+    assert issue["title"] == "Clarify retry behavior; $(touch unsafe)"
+    assert issue["labels"] == ["priority::high", "type::bug"]
+    assert issue["milestone"] == {"id": 9}
+    links = json.loads((state / "links.json").read_text())
+    assert links == [
+        {
+            "issue_link_id": 101,
+            "project_id": 19,
+            "iid": 3,
+            "link_type": "relates_to",
+        }
+    ]
+
+    # Replays stop on their own preconditions; the milestone attach is an
+    # idempotent no-op when the candidate is already attached, so its replay
+    # may succeed but must leave the state unchanged.
+    for index, block in enumerate(blocks):
+        replayed = subprocess.run(
+            ["bash", "-ec", block + "\n"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if index == 2:
+            assert replayed.returncode == 0, replayed.stderr
+            assert json.loads((state / "issue.json").read_text())["milestone"]["id"] == 9
+            continue
+        assert replayed.returncode != 0, f"replayed block {index} did not stop"
+        assert "regenerate" in replayed.stderr
+
+
+def test_labels_guard_accepts_string_and_object_label_shapes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The live issue API returns label strings; the guard must also accept objects."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    guard = triage.labels_guard(
+        "gitlab.example",
+        "projects/19/issues/7",
+        ["priority::high", "type::bug"],
+        "en",
+    )
+    stub = tmp_path / "glab"
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+
+    def run(labels: Any) -> subprocess.CompletedProcess[str]:
+        script = tmp_path / "labels-guard.sh"
+        script.write_text(guard + "\ntrue\n")
+        assert subprocess.run(["bash", "-n", str(script)], check=False).returncode == 0
+        stub.write_text(
+            "#!/bin/sh\ncat > /dev/null\nprintf '%s' '" + json.dumps({"labels": labels}) + "'\n"
+        )
+        stub.chmod(0o700)
+        return subprocess.run(
+            ["bash", "-ec", guard + "\ntrue"],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
-    processes: list[subprocess.Popen[bytes]] = []
-    original_popen = subprocess.Popen
-
-    def observe_popen(*args: Any, **kwargs: Any) -> subprocess.Popen[bytes]:
-        process = original_popen(*args, **kwargs)
-        processes.append(process)
-        return process
-
-    monkeypatch.setattr(subprocess, "Popen", observe_popen)
-    monkeypatch.setattr(triage, "MUTATION_OUTPUT_LIMIT", 1024)
-    monkeypatch.setattr(triage, "MUTATION_TIMEOUT_SECONDS", 0.05)
-    monkeypatch.setattr(triage, "MUTATION_TERMINATION_GRACE_SECONDS", 0.02)
-    started = time.monotonic()
-    with pytest.raises(triage.MutationOutcomeUnknown, match="timed out"):
-        triage.run_mutation_process([sys.executable, "-c", "import time; time.sleep(10)"], b"{}")
-    assert time.monotonic() - started < 1
-    assert processes[0].poll() is not None
-
-
-def test_mutation_cleanup_failure_cli_reports_unknown_outcome(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    selector_factory = selectors.DefaultSelector
-
-    class FailingCloseSelector:
-        def __init__(self) -> None:
-            self.delegate = selector_factory()
-
-        def __getattr__(self, name: str) -> Any:
-            return getattr(self.delegate, name)
-
-        def close(self) -> None:
-            self.delegate.close()
-            raise OSError("selector cleanup failed")
-
-    monkeypatch.setattr(selectors, "DefaultSelector", FailingCloseSelector)
-
-    def apply(*_args: Any) -> None:
-        triage.run_mutation_process([sys.executable, "-c", "pass"], b"{}")
-
-    monkeypatch.setattr(triage, "apply_information", apply)
-
-    assert triage.run(["apply-information", "--guard", "guard", "--stage", "message"]) == 2
-    output = json.loads(capsys.readouterr().out)
-    assert output["external_mutations"] is True
-    assert output["mutation_outcome"] == "unknown"
-    assert output["error"]["code"] == "mutation_outcome_unknown"
-
-
-@pytest.mark.parametrize(
-    ("failure", "external_mutations", "mutation_outcome", "code"),
-    [
-        (triage.MutationNotAttempted("not started"), False, "none", "triage_failed"),
-        (
-            triage.MutationOutcomeUnknown("unknown"),
-            True,
-            "unknown",
-            "mutation_outcome_unknown",
-        ),
-        (triage.WorkflowError("stale"), False, "none", "triage_failed"),
-    ],
-)
-def test_apply_information_cli_reports_mutation_outcome(
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-    failure: triage.WorkflowError,
-    external_mutations: bool,
-    mutation_outcome: str,
-    code: str,
-) -> None:
-    monkeypatch.setattr(
-        triage,
-        "apply_information",
-        lambda *_args: (_ for _ in ()).throw(failure),
-    )
-    assert triage.run(["apply-information", "--guard", "guard", "--stage", "message"]) == 2
-    output = json.loads(capsys.readouterr().out)
-    assert output["external_mutations"] is external_mutations
-    assert output["mutation_outcome"] == mutation_outcome
-    assert output["error"]["code"] == code
-
-
-def test_apply_information_cli_reports_applied_mutation(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    monkeypatch.setattr(triage, "apply_information", lambda *_args: None)
-    assert triage.run(["apply-information", "--guard", "guard", "--stage", "message"]) == 0
-    output = json.loads(capsys.readouterr().out)
-    assert output["external_mutations"] is True
-    assert output["mutation_outcome"] == "applied"
+    assert run(["type::bug", "priority::high"]).returncode == 0
+    assert run([{"name": "priority::high"}, {"name": "type::bug"}]).returncode == 0
+    stopped = run(["priority::high"])
+    assert stopped.returncode != 0
+    assert "labels changed after triage" in stopped.stderr
+    assert run(None).returncode != 0

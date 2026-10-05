@@ -1,0 +1,137 @@
+{
+  "name": "retirement-prior-decision-change",
+  "kind": "superseded_results",
+  "input": {
+    "previous": {
+      "payload": {
+        "schema": "portable-gitlab/context-package/v2",
+        "mode": "mr",
+        "binding": {
+          "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "artifact_root": "/tmp/reviewmatic-artifacts",
+          "repo_root": "/tmp/reviewmatic-checkout",
+          "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "goal": {
+          "status": "known",
+          "text": "Review the merge request delta."
+        },
+        "acceptance_criteria": {
+          "status": "known",
+          "items": ["No blocking findings remain."]
+        },
+        "background": "The MR fixes the recorded regression.",
+        "claims": [],
+        "constraints": [],
+        "prior_decisions": [
+          {
+            "id": "deferral",
+            "decision": "Revocation is deferred.",
+            "source": "User"
+          }
+        ],
+        "questions": [
+          {
+            "id": "q-stable",
+            "subject": "Is the boundary kept?",
+            "source": "Discussion 42 of the collected evidence",
+            "critic": true,
+            "context_digest": "59be8d11c08250c482f5f9a5959db367b0cd4fd54e6323b4721690a0de68e688"
+          }
+        ],
+        "thread_registry": [],
+        "supersedes": null,
+        "external_mutations": false
+      },
+      "digest": "25403d7cc56e746385c6e16912402dc0c7a21ae840548437d0c8c7fb67c7f869"
+    },
+    "next": {
+      "schema": "portable-gitlab/context-package/v2",
+      "mode": "mr",
+      "binding": {
+        "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "/tmp/reviewmatic-artifacts",
+        "repo_root": "/tmp/reviewmatic-checkout",
+        "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "goal": {
+        "status": "known",
+        "text": "Review the merge request delta."
+      },
+      "acceptance_criteria": {
+        "status": "known",
+        "items": ["No blocking findings remain."]
+      },
+      "background": "The MR fixes the recorded regression.",
+      "claims": [],
+      "constraints": [],
+      "prior_decisions": [
+        {
+          "id": "deferral",
+          "decision": "Revocation is deferred.",
+          "source": "User"
+        },
+        {
+          "id": "correction",
+          "decision": "The deferral is withdrawn.",
+          "source": "User"
+        }
+      ],
+      "questions": [
+        {
+          "id": "q-stable",
+          "subject": "Is the boundary kept?",
+          "source": "Discussion 42 of the collected evidence",
+          "critic": true,
+          "context_digest": "7eff5b6e24c6c1d079797a864c04a493a87be08f1f9ecabbf2f8301754986288"
+        }
+      ],
+      "thread_registry": [],
+      "supersedes": null,
+      "external_mutations": false
+    },
+    "answers": [
+      {
+        "question_id": "q-stable",
+        "verdict": "confirmed",
+        "evidence": "Inspected the exact head.",
+        "context_digest": "59be8d11c08250c482f5f9a5959db367b0cd4fd54e6323b4721690a0de68e688"
+      }
+    ],
+    "verifications": []
+  },
+  "expected": {
+    "digest": "5468d1596e452edabb5e1b0a475ce16c2fd975a32e4e78fc159f819e726f7193",
+    "valid": true,
+    "python_valid": true,
+    "output": {
+      "entry": {
+        "context_digest": "c11195c7b5f40595eeb05bd6fb5ed3728d4b1a651de23769310148e62d561568",
+        "package_digest": "25403d7cc56e746385c6e16912402dc0c7a21ae840548437d0c8c7fb67c7f869",
+        "answers": [
+          {
+            "question_id": "q-stable",
+            "verdict": "confirmed",
+            "evidence": "Inspected the exact head.",
+            "context_digest": "59be8d11c08250c482f5f9a5959db367b0cd4fd54e6323b4721690a0de68e688"
+          }
+        ],
+        "verifications": []
+      },
+      "question_ids": ["q-stable"],
+      "answers": [
+        {
+          "question_id": "q-stable",
+          "verdict": "confirmed",
+          "evidence": "Inspected the exact head.",
+          "context_digest": "59be8d11c08250c482f5f9a5959db367b0cd4fd54e6323b4721690a0de68e688"
+        }
+      ],
+      "verifications": []
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "artifact-local-review-report-invalid-timestamp",
+  "kind": "artifact_validation_v2",
+  "input": {
+    "kind": "local_review_report",
+    "artifact": {
+      "schema": "portable-gitlab/local_review_report/v2",
+      "schema_version": 2,
+      "kind": "local_review_report",
+      "created_at": "2026-13-45T99:00:00Z",
+      "payload": {
+        "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "previous_review_digest": null,
+        "mode": "full",
+        "task": {
+          "goal": "Review the local WIP changes.",
+          "acceptance_criteria": ["No blocking findings remain."],
+          "constraints": [],
+          "accepted_risks": [],
+          "deferred": [],
+          "decision_evidence": "Recorded decision receipt."
+        },
+        "task_change_reason": null,
+        "findings": [],
+        "checks": [
+          {
+            "name": "Freshness",
+            "status": "passed",
+            "required": true,
+            "evidence": "HEAD digest matches the recorded bundle."
+          }
+        ],
+        "assessment": "Ready for review finalization.",
+        "verdict": "ready",
+        "external_mutations": false
+      }
+    }
+  },
+  "expected": {
+    "digest": "408480d2361629aed834740912150c9617dc9feefabc9068af996ee6f89ee270",
+    "valid": false,
+    "python_valid": false
+  }
+}

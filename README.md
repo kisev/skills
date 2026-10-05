@@ -2,86 +2,98 @@
 
 [Русский](README.ru.md)
 
-Portable Agent Skills for Codex and OpenCode, plus `agentomatic`, a
-first-class OpenCode integration. The two components are independent: use either
-one on its own or install both for the complete OpenCode experience.
+Portable Agent Skills for Codex and OpenCode, plus the independent `agentomatic` OpenCode integration. Use either component on its own or both together.
 
 ## Project Components
 
 | Component | What it provides | Lifecycle |
 | - | - | - |
-| Portable Agent Skills | 38 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
+| Portable Agent Skills | 44 self-contained workflows for engineering, documentation, delivery, and team operations | Installed with the stable `skills@latest` CLI into `~/.agents/skills` or `.agents/skills` |
 | `@kisev/agentomatic` | OpenCode commands, fixed agents, routing tools, diagnostics, and optional plugin wrappers | Installed as an npm dependency; managed assets live under `~/.config/opencode` or `.opencode` |
 
-Portable skills do not require the npm package. The package does not contain,
-install, update, inspect, or remove them. Their lifecycle is owned by the
-`skills` CLI.
+The `skills` CLI owns portable skills; the npm integration does not contain, install, update, inspect, or remove them.
 
 ## Install Everything
 
-The complete setup: portable skills, `agentomatic`, and the user-run
-applications [memomatic](docs/how-to/memomatic.md) (agent memory) and
-[taskmatic](docs/how-to/taskmatic.md) (local task board). Rerun the same
-commands to update. `install` and `config` print a plan and ask for
-confirmation in a terminal, or take the explicit selection flags with `--yes`
-outside one. Until a package's first stable release, its `latest` tag still
-points to a prerelease. Restart OpenCode and other running hosts, including
-MCP hosts and the taskmatic web service, afterwards.
+Install portable skills, `agentomatic`, [memomatic](docs/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.md), and [taskmatic](docs/how-to/taskmatic.md); rerun the commands to update. Reviewmatic runs from the repository through `uvx`, not npm or PyPI. The `update` pass after `add` also offers to remove retired skill names.
+`install` and `configure` require terminal confirmation or explicit selections with `--yes`. Before a package's first stable release, `latest` can be a prerelease.
+Restart OpenCode, other running MCP hosts, and the taskmatic web service after updates.
 
 Everything on `latest`:
 
 ```shell
+# Registry versions
+npm view --prefer-online skills@latest version
+npm view --prefer-online @kisev/agentomatic@latest version
+npm view --prefer-online @kisev/memomatic@latest version
+npm view --prefer-online @kisev/taskmatic@latest version
+
+# Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills --global
+npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@latest install --global
-npx --yes @kisev/agentomatic@latest config --global
+npx --yes @kisev/agentomatic@latest configure integration --global
 npm install --global @kisev/memomatic
 npm install --global @kisev/taskmatic
+REVIEWMATIC_REF='<ref>' # use the exact release tag for the stable skills channel
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
+
+# Local installation and active CLIs
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
+npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
+memomatic --version
+taskmatic --version
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
+npx --yes skills@latest list --global
 ```
 
 Everything on `dev` (moves after every successful push to `dev`):
 
 ```shell
+# Registry versions
+npm view --prefer-online skills@latest version
+npm view --prefer-online @kisev/agentomatic@dev version
+npm view --prefer-online @kisev/memomatic@dev version
+npm view --prefer-online @kisev/taskmatic@dev version
+
+# Install and configure
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+npx --yes skills@latest update --global
 npx --yes @kisev/agentomatic@dev install --global
-npx --yes @kisev/agentomatic@dev config --global
+npx --yes @kisev/agentomatic@dev configure integration --global
 npm install --global @kisev/memomatic@dev
 npm install --global @kisev/taskmatic@dev
+REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
+
+# Local installation and active CLIs
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
+npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
+memomatic --version
+taskmatic --version
+uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
+npx --yes skills@latest list --global
 ```
 
-## Portable Skills
+Tags can move between preview and installation. `npm list` checks installed
+npm packages; `--version` checks their CLIs on PATH. `uvx` runs reviewmatic
+ephemerally from the selected Git ref and does not install a global tool.
+`skills list` inspects installed skills, not the npm installer version. The
+former `@kisev/reviewmatic` npm package is not deprecated by this change; any
+registry deprecation requires separate confirmation.
 
-The default selection covers every host that reads `.agents/skills`,
-including Codex and OpenCode, and the installer opens a picker with every
-skill preselected; pass `--skill <name>` to choose explicitly. Start with the
-[guided installation](docs/tutorials/getting-started.md), use the
-[portable skills how-to](docs/how-to/portable-skills.md) for project installs,
-updates, cleanup, and troubleshooting, or browse the
-[skill catalog](docs/reference/skill-catalog.md).
+## Guides
 
-## agentomatic
-
-`@kisev/agentomatic` extends OpenCode with:
-
-- slash-command adapters for installed skills;
-- six fixed agent roles and profile management;
-- capability routing plus direct CLI installation, diagnostics, profiles, and reconciliation;
-- optional plugin wrappers: `rules-injector` and `zed-bell`, plus the `rtk`
-  compression wrapper deployed by default and observable through `/rtk-stats`.
-
-Global installs own the npm project at `~/.config/opencode` and create its
-`package.json` when needed; for project scope, run the installer from the
-project root without `--global`. The confirmed install also provisions the
-persistent npm dependency that keeps the plugin resolvable. Restart OpenCode
-after activation or asset changes, and follow the complete
-[OpenCode integration guide](docs/how-to/opencode-integration.md).
-
-## Documentation
-
-The [documentation index](docs/README.md) organizes tutorials, how-to guides,
-reference material, and explanations using Diataxis. Architecture, verification,
-migration, compatibility, and both installation lifecycles are linked there.
+- [Portable skills](docs/how-to/portable-skills.md): project installs, updates, cleanup, and troubleshooting. All `.agents/skills` hosts are selected by default; the picker preselects all skills. Use `--skill <name>` to limit selection. Upgrade a global installation interactively with `npx --yes skills@latest update --global` so retired names are offered for removal. See the [tutorial](docs/tutorials/getting-started.md) and [catalog](docs/reference/skill-catalog.md).
+- [OpenCode integration](docs/how-to/opencode-integration.md): command adapters, six agent roles, routing, diagnostics, profiles, reconciliation, optional `rules-injector`/`zed-bell`, and default `rtk` with `/rtk-stats`.
+  Confirmed global installs provision the dependency in `~/.config/opencode`, creating `package.json` if needed; for project scope, run from the project root without `--global`. Restart OpenCode after activation or asset changes.
+- [Documentation index](docs/README.md): Diataxis tutorials, how-to, reference, and explanation. The [site](https://kisev.github.io/skills) adds skill interaction examples and install instructions (`apps/docs-site`).
 
 ## Development
+
+The shared [development environment](dev/README.md) runs GitLab and Mattermost.
+Optional real-server checks: [GitLab](tests/integration/gitlab/README.md) and
+[Mattermost](tests/integration/mattermost/README.md). Neither is required by `task check`.
 
 ```shell
 mise install
@@ -89,9 +101,4 @@ task install
 task check
 ```
 
-Further information:
-
-- [CONTRIBUTING.md](CONTRIBUTING.md) - source boundaries and focused checks.
-- [SECURITY.md](SECURITY.md) - vulnerability reporting.
-- [CHANGELOG.md](CHANGELOG.md) - release history.
-- [LICENSE](LICENSE) - license terms.
+[Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Changelog](CHANGELOG.md) · [License](LICENSE).

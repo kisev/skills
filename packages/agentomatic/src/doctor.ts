@@ -19,6 +19,7 @@ import {
 import { inspectReconcile, type ReconcilePlan } from "./reconcile.js";
 import { readPackageVersion } from "./package-metadata.js";
 import { planDependency } from "./self-install.js";
+import { parseJsonc } from "./jsonc.js";
 import {
   readRtkStats,
   rtkCharsSaved,
@@ -53,7 +54,6 @@ export type DoctorCheck = {
 };
 export type DoctorHost = {
   config?: () => Promise<unknown>;
-  lsp?: () => Promise<unknown>;
 };
 export type DoctorReport = {
   schema_version: 1;
@@ -200,15 +200,19 @@ function redactedConfig(value: unknown): {
 } {
   const object =
     value && typeof value === "object" && !Array.isArray(value) ? (value as JsonObject) : {};
-  const rawPlugins = Array.isArray(object.plugin)
-    ? object.plugin.flatMap((item) => {
+  const configuredPlugins = object.plugins;
+  const rawPlugins = Array.isArray(configuredPlugins)
+    ? configuredPlugins.flatMap((item) => {
         if (typeof item === "string") return [item];
-        if (Array.isArray(item) && typeof item[0] === "string") return [item[0]];
+        if (item && typeof item === "object" && typeof item.package === "string")
+          return [item.package];
         return [];
       })
     : [];
   const knownPlugins = new Set<string>([packageName, ...CATALOG.plugins]);
-  const plugins = rawPlugins.filter((plugin) => knownPlugins.has(plugin));
+  const normalizePlugin = (plugin: string) =>
+    plugin === packageName || plugin.startsWith(`${packageName}@`) ? packageName : plugin;
+  const plugins = rawPlugins.map(normalizePlugin).filter((plugin) => knownPlugins.has(plugin));
   const enabled = plugins.filter(
     (plugin) =>
       plugin === packageName ||
@@ -223,17 +227,14 @@ function redactedConfig(value: unknown): {
       .filter((key) =>
         [
           "$schema",
-          "theme",
-          "keybinds",
-          "logLevel",
-          "command",
+          "commands",
           "watcher",
-          "plugin",
+          "plugins",
           "lsp",
           "formatter",
-          "provider",
-          "agent",
-          "permission",
+          "providers",
+          "agents",
+          "permissions",
           "compaction",
           "model",
         ].includes(key),
@@ -254,12 +255,25 @@ async function localConfig(
 }> {
   const paths =
     scope === "project"
-      ? [join(cwd, "opencode.json"), join(cwd, ".opencode", "opencode.json")]
-      : [join(home, ".config", "opencode", "opencode.json")];
+      ? [
+          join(cwd, "opencode.json"),
+          join(cwd, "opencode.jsonc"),
+          join(cwd, ".opencode", "opencode.json"),
+          join(cwd, ".opencode", "opencode.jsonc"),
+        ]
+      : [
+          join(home, ".config", "opencode", "opencode.json"),
+          join(home, ".config", "opencode", "opencode.jsonc"),
+        ];
   for (const path of paths) {
     const value = await regular(path);
     if (value.status === "present") {
-      const parsed = json(value.raw!);
+      let parsed: unknown;
+      try {
+        parsed = parseJsonc(value.raw!.toString("utf8"));
+      } catch {
+        parsed = undefined;
+      }
       return parsed
         ? { projection: redactedConfig(parsed), source: path }
         : { incomplete: true, source: path };
@@ -362,11 +376,7 @@ async function executableAvailable(name: string): Promise<boolean> {
   return false;
 }
 
-async function lspFacts(
-  project: string,
-  host: DoctorHost | undefined,
-  partial: string[],
-): Promise<Record<string, unknown>> {
+async function lspFacts(project: string, partial: string[]): Promise<Record<string, unknown>> {
   const suffixes = new Set<string>();
   let scanIncomplete = false;
   const visit = async (root: string): Promise<void> => {
@@ -388,7 +398,6 @@ async function lspFacts(
   };
   await visit(project);
   if (scanIncomplete) partial.push("lsp.project-files");
-  const disabled = process.env.OPENCODE_DISABLE_LSP_DOWNLOAD === "true";
   const servers = await Promise.all(
     lspCatalog.servers.map(async (server) => {
       let available = false;
@@ -397,47 +406,21 @@ async function lspFacts(
       return {
         name: server.name,
         applicable,
-        configured: applicable,
+        configured: false,
         binary_available: available,
-        active: applicable && available && !disabled,
-        runtime_status: "unavailable",
+        active: false,
+        runtime_status: "unsupported",
         requirement_class: server.requirement_class,
-        reason: !applicable
-          ? "not-selected"
-          : disabled
-            ? "download-disabled"
-            : !available
-              ? "missing-dependency"
-              : "available",
+        reason: "unsupported-in-opencode-v2",
         missing: available ? [] : [server.executable],
         install: `Install ${server.executable} with your project toolchain.`,
       };
     }),
   );
-  let runtimeStatus: unknown = "unavailable";
-  if (host?.lsp) {
-    try {
-      const value = await host.lsp();
-      runtimeStatus = Array.isArray(value)
-        ? value.map((item) => {
-            const entry = item && typeof item === "object" ? (item as JsonObject) : {};
-            return {
-              id: typeof entry.id === "string" ? entry.id : "unknown",
-              name: typeof entry.name === "string" ? entry.name : "unknown",
-              status:
-                entry.status === "connected" || entry.status === "error" ? entry.status : "unknown",
-            };
-          })
-        : { status: "unavailable" };
-    } catch {
-      partial.push("lsp.runtime-status");
-    }
-  } else partial.push("lsp.runtime-status");
   return {
     schema_version: 1,
     catalog_version: lspCatalog.catalog_version,
-    download_disabled: disabled,
-    runtime_status: runtimeStatus,
+    runtime_status: "unsupported",
     servers,
   };
 }
@@ -633,7 +616,9 @@ export async function collectDoctorFacts(
         drift: inventory?.drift.length ?? 0,
         user_owned: inventory?.user_owned.length ?? 0,
       },
-      ["Review collisions and run agent reconcile only after explicit confirmation."],
+      [
+        "Resolve ownership conflicts and restore modified bytes; preview maintenance repair for missing selected files.",
+      ],
     ),
   );
   const config = await localConfig(scope, project, homeRoot);
@@ -667,7 +652,7 @@ export async function collectDoctorFacts(
       },
       [
         "Inspect OpenCode configuration without exposing secrets.",
-        "Local plugin wrappers in the deployment plugins directory load automatically without a plugin array entry.",
+        "Local plugin wrappers in the deployment plugins directory load automatically without a plugins array entry.",
       ],
     ),
   );
@@ -876,7 +861,7 @@ export async function collectDoctorFacts(
     ),
   );
   const tools = await Promise.all(
-    ["opencode", ...lspCatalog.servers.map((server) => server.executable)].map(async (name) => {
+    ["opencode"].map(async (name) => {
       try {
         const result = await run(name, ["--version"], { timeout: 1000 });
         return {
@@ -902,7 +887,7 @@ export async function collectDoctorFacts(
       ["Install OpenCode or missing external tools when needed."],
     ),
   );
-  const lsp = await lspFacts(project, host, partial);
+  const lsp = await lspFacts(project, partial);
   const counts = { pass: 0, warn: 0, fail: 0, incomplete: 0 };
   for (const item of checks) counts[item.status] += 1;
   const status = counts.fail

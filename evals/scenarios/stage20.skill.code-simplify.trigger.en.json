@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "7be89b5367907d0de1133b66f0e8d7259159e9829905915b2d0a3da85e938f01",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:code-simplify"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.code-simplify.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:code-simplify"]
+    },
+    "prompt": "Before I add a caching helper to src/feed.py, walk the prevention ladder and tell me whether an existing simpler option already covers this need."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.code-simplify.trigger.source",
+      "path": ".build/skills/code-simplify/SKILL.md"
+    },
+    {
+      "contains": "passive prevention ladder",
+      "id": "code-simplify-passive-ladder",
+      "path": "skills/code-simplify/SKILL.source.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.code-simplify.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

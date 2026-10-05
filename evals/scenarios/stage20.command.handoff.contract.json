@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "ccfd3f9bb032e1c334ebd5ea8c3710019265ec8a008148357fbb7f07952edfef",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:handoff"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.handoff.contract",
+  "input": {
+    "fixture": {
+      "selected": ["command:handoff"]
+    },
+    "prompt": "Verify command handoff contract."
+  },
+  "invariants": [
+    {
+      "id": "stage20.command.handoff.contract.source",
+      "path": "packages/agentomatic/src/registry.ts"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

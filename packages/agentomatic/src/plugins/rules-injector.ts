@@ -1,3 +1,11 @@
+import type { Plugin } from "@opencode/plugin";
+import {
+  resultText,
+  replaceResultText,
+  subscribeEvents,
+  toolInput,
+  type ToolAfter,
+} from "./events.js";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
@@ -12,18 +20,6 @@ function sessionID(value: unknown): string | undefined {
   for (const key of ["sessionID", "sessionId", "session_id"])
     if (typeof item?.[key] === "string" && item[key]) return item[key] as string;
   return undefined;
-}
-function pathOf(input: unknown, output: unknown): string | undefined {
-  for (const value of [input, output]) {
-    const args = (value as { args?: Record<string, unknown> } | undefined)?.args;
-    for (const key of ["filePath", "file_path", "path"])
-      if (typeof args?.[key] === "string") return args[key] as string;
-  }
-  return undefined;
-}
-function output(value: unknown, text: string): void {
-  const item = value as { output?: unknown } | undefined;
-  if (typeof item?.output === "string") item.output = `${item.output}\n${text}`;
 }
 function marker(rule: Rule): string {
   return `[rules-injector source=${rule.path} revision=${rule.revision}]`;
@@ -46,14 +42,17 @@ export async function rulesInjector(options: RulesInjectorOptions = {}) {
     }
     return item;
   };
-  const inject = async (input: unknown, result: unknown) => {
-    const call = input as Record<string, unknown> | undefined;
-    if (call?.tool !== "read" && call?.tool !== "edit") return;
-    const identifier = sessionID(input);
-    const target = pathOf(input, result);
-    if (!identifier || !target) return;
+  const inject = async (input: ToolAfter & { directory?: string }) => {
+    if (input.status !== "completed" || (input.tool !== "read" && input.tool !== "edit")) return;
+    const identifier = input.sessionID;
+    const target = toolInput(input.input).path;
+    const original = resultText(input.result);
+    if (!identifier || typeof target !== "string" || original === undefined) return;
+    const output = (text: string) => {
+      input.result = replaceResultText(input.result, `${original}\n${text}`);
+    };
     try {
-      const native = typeof call?.directory === "string" ? call.directory : cwd;
+      const native = input.directory ?? cwd;
       const paths: string[] = [];
       let current = dirname(resolve(native, target));
       while (true) {
@@ -98,33 +97,50 @@ export async function rulesInjector(options: RulesInjectorOptions = {}) {
           additions.push(`[rules-injector warning] cannot read ${path}: ${String(error)}`);
         }
       }
-      if (additions.length) output(result, additions.join("\n\n"));
+      if (additions.length) output(additions.join("\n\n"));
     } catch (error) {
-      output(result, `[rules-injector warning] cannot read AGENTS.md: ${String(error)}`);
+      output(`[rules-injector warning] cannot read AGENTS.md: ${String(error)}`);
     }
   };
   return {
-    "tool.execute.after": inject,
-    event: async ({
-      event,
-    }: {
-      event?: { type?: string; properties?: Record<string, unknown> };
-    }) => {
-      if (event?.type?.includes("compaction")) {
-        const identifier = sessionID(event.properties);
+    "execute.after": inject,
+    event: async (event: { type: string; data?: unknown }) => {
+      if (event.type === "session.compacted" || event.type.includes("compaction")) {
+        const identifier = sessionID(event.data);
         if (identifier) state(identifier).replay = true;
       }
     },
-    "experimental.chat.system.transform": async (
-      input: unknown,
-      result: { system?: unknown[] },
-    ) => {
+    context: async (input: {
+      sessionID: string;
+      system: Array<{ type: "text"; text: string }>;
+    }) => {
       const identifier = sessionID(input);
-      if (!identifier || !state(identifier).replay || !Array.isArray(result.system)) return;
-      for (const rule of state(identifier).loaded.values()) result.system.push(block(rule));
+      if (!identifier || !state(identifier).replay) return;
+      for (const rule of state(identifier).loaded.values())
+        input.system.push({ type: "text", text: block(rule) });
       state(identifier).replay = false;
     },
   };
 }
 
-export default rulesInjector;
+export default {
+  id: "agentomatic.rules-injector",
+  async setup(ctx) {
+    const hooks = await rulesInjector({ ...ctx.options, cwd: ctx.location.directory });
+    if (hooks["execute.after"])
+      await ctx.tool.hook("execute.after", async (event) => {
+        if (event.status !== "completed" || (event.tool !== "read" && event.tool !== "edit"))
+          return;
+        const session = await ctx.session
+          .get({ sessionID: event.sessionID })
+          .catch(() => undefined);
+        if (session) {
+          const scoped = { ...event, directory: session.location.directory };
+          await hooks["execute.after"]!(scoped);
+          event.result = scoped.result;
+        }
+      });
+    if (hooks.context) await ctx.session.hook("context", hooks.context);
+    if (hooks.event) return subscribeEvents(ctx, hooks.event);
+  },
+} satisfies Plugin.Plugin;

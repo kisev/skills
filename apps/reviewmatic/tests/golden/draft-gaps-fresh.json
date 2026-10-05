@@ -1,0 +1,78 @@
+{
+  "name": "draft-gaps-fresh",
+  "kind": "draft_gaps",
+  "input": {
+    "findings": [
+      {
+        "id": "own-1",
+        "severity": "medium",
+        "summary": "Finding own-1"
+      }
+    ],
+    "critics": [],
+    "dispositions": [],
+    "critic_count": 2,
+    "ci_job_assessments": [
+      {
+        "job": "build",
+        "classification": "unknown"
+      }
+    ],
+    "run_id": "",
+    "session_id": "",
+    "context_package_path": null,
+    "content": {
+      "summary": "",
+      "architecture_assessment": "",
+      "semver_rationale": "",
+      "chat_assessment": {
+        "necessity": {
+          "status": "unconfirmed",
+          "rationale": ""
+        }
+      },
+      "mr_metadata_assessment": {
+        "title": {
+          "status": "unverified",
+          "rationale": ""
+        }
+      },
+      "label_assessments": [
+        {
+          "name": "semver::patch",
+          "status": "unresolved",
+          "rationale": ""
+        }
+      ],
+      "thread_decisions": [
+        {
+          "id": "42",
+          "rationale": ""
+        }
+      ]
+    }
+  },
+  "expected": {
+    "digest": "c74ed600e1470bafaad26159c12f8d6e6888a01ba44199c6fdefbefd0f4c206c",
+    "valid": true,
+    "python_valid": true,
+    "output": {
+      "dispositions_missing_for": ["own-1"],
+      "content_fields_empty": [
+        "$.content.summary",
+        "$.content.architecture_assessment",
+        "$.content.semver_rationale",
+        "$.content.mr_metadata_assessment.title.status",
+        "$.content.thread_decisions[42].rationale",
+        "$.content.chat_assessment.necessity"
+      ],
+      "labels_unresolved": 1,
+      "ci_jobs_unclassified": 1,
+      "identity_missing": ["$.run_id", "$.session_id"],
+      "context_package": [
+        "not recorded; run record-package before launching critics and check-review"
+      ],
+      "critics_expected": ["2 of 2 independent critic receipts are still expected"]
+    }
+  }
+}

@@ -10,6 +10,14 @@ Global archives have one global owner, while each project archive is isolated by
 the digest of its resolved project directory so one project's recovery cannot
 remove another project's objects.
 
+Integration selection and saved agent model choices are separate state. The
+profile transaction updates selected roles, model configuration, rendered files,
+and semantic ownership together under
+[REQ-F-006](../../requirements/functional/README.md#req-f-006---manage-package-owned-profiles-safely).
+Application configuration has a separate transaction; npm has no shared rollback
+with either local transaction. CLI reports completed stages and continuation under
+[REQ-I-421](../../requirements/interfaces/README.md#req-i-421---expose-scenario-oriented-integration-administration).
+
 Stable, substantive XDG state keeps content-addressed versions indefinitely.
 Human-readable stable Markdown contains only its latest body followed by a
 `History` list of absolute paths to earlier body-only snapshots. A changed write
@@ -21,7 +29,7 @@ pointer is not copied when its complete history remains reachable through verifi
 immutable artifacts. Locks, caches, transaction journals, one-use receipts, and
 credentials are not versioned as stable state.
 
-Direct target-mutation commands outside guarded code-review publication record an advisory marker below
+Direct target-mutation commands that use the shared marker wrapper record an advisory marker below
 `$XDG_STATE_HOME/agent-skills/post-success/v1/` only after its process exits zero.
 The marker binds the skill, action, target or plan binding, and exact argv/stdin
 digest. It has no TTL and is not publication proof, authorization, a postcondition,
@@ -38,11 +46,11 @@ a marker cannot invalidate the approved command or block its required follow-up.
 Configured XDG roots must be absolute and normalized; state traversal rejects
 symlink components and state snapshots are durable before current-state replacement.
 
-Code-review owns its one-action guards under `artifacts/publication_actions` and
-its serialized publication ledger under `code-review-publication` within the
-target collection root. The ledger retains successful postconditions and an
-in-progress reservation after ambiguous results. It is separate from advisory
-markers and governed by [the code-review contract](../../capabilities/skills/code-review.md).
+Code-review owns immutable review evidence, source drafts, decisions, and plans
+with a stable `runbook.md`. It does not persist publication locks, reservations,
+or receipts. Local command status is not remote publication proof. Historical
+guarded state is retained without migration or replay; see
+[the code-review contract](../../capabilities/skills/code-review.md).
 
 Mattermost triage owns its dedicated private XDG namespace for one-origin,
 one-identity incremental checkpoints, immutable evidence, stable current output,

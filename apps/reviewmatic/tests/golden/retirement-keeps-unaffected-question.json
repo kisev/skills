@@ -1,0 +1,173 @@
+{
+  "name": "retirement-keeps-unaffected-question",
+  "kind": "superseded_results",
+  "input": {
+    "previous": {
+      "payload": {
+        "schema": "portable-gitlab/context-package/v2",
+        "mode": "mr",
+        "binding": {
+          "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "artifact_root": "/tmp/reviewmatic-artifacts",
+          "repo_root": "/tmp/reviewmatic-checkout",
+          "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "goal": {
+          "status": "known",
+          "text": "Review the merge request delta."
+        },
+        "acceptance_criteria": {
+          "status": "known",
+          "items": ["No blocking findings remain."]
+        },
+        "background": "The MR fixes the recorded regression.",
+        "claims": [],
+        "constraints": [],
+        "prior_decisions": [],
+        "questions": [
+          {
+            "id": "q-retry",
+            "subject": "Does the head set the key?",
+            "source": "Discussion 42 of the collected evidence",
+            "critic": true,
+            "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb"
+          },
+          {
+            "id": "q-caller",
+            "subject": "Do existing callers pass a stable key?",
+            "source": "Discussion 42 of the collected evidence",
+            "critic": true,
+            "context_digest": "9947dbd2d741207900287e40289329697acc6195b3f2cd4a047d36ea5a830597"
+          }
+        ],
+        "thread_registry": [],
+        "supersedes": null,
+        "external_mutations": false
+      },
+      "digest": "c887b6e45d227a1f886eb4c0f37894bfc1a257387ff1e6c4637abb5436f4bb31"
+    },
+    "next": {
+      "schema": "portable-gitlab/context-package/v2",
+      "mode": "mr",
+      "binding": {
+        "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "/tmp/reviewmatic-artifacts",
+        "repo_root": "/tmp/reviewmatic-checkout",
+        "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "goal": {
+        "status": "known",
+        "text": "Review the merge request delta."
+      },
+      "acceptance_criteria": {
+        "status": "known",
+        "items": ["No blocking findings remain."]
+      },
+      "background": "The MR fixes the recorded regression.",
+      "claims": [],
+      "constraints": [],
+      "prior_decisions": [],
+      "questions": [
+        {
+          "id": "q-retry",
+          "subject": "Is credential revocation enforced when a key is reused?",
+          "source": "Discussion 42 of the collected evidence",
+          "critic": true,
+          "context_digest": "19e7df701873319df8f41ad3f317891d08ca08143c5c7119d59346b3fb40111f"
+        },
+        {
+          "id": "q-caller",
+          "subject": "Do existing callers pass a stable key?",
+          "source": "Discussion 42 of the collected evidence",
+          "critic": true,
+          "context_digest": "9947dbd2d741207900287e40289329697acc6195b3f2cd4a047d36ea5a830597"
+        }
+      ],
+      "thread_registry": [],
+      "supersedes": null,
+      "external_mutations": false
+    },
+    "answers": [
+      {
+        "question_id": "q-retry",
+        "verdict": "confirmed",
+        "evidence": "Inspected the exact head.",
+        "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb"
+      },
+      {
+        "question_id": "q-caller",
+        "verdict": "confirmed",
+        "evidence": "Inspected the exact head.",
+        "context_digest": "9947dbd2d741207900287e40289329697acc6195b3f2cd4a047d36ea5a830597"
+      }
+    ],
+    "verifications": [
+      {
+        "question_id": "q-retry",
+        "verdict": "confirmed",
+        "evidence": "Inspected the exact head.",
+        "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb",
+        "original": {
+          "run_id": "run-a",
+          "session_id": "s-a"
+        }
+      }
+    ]
+  },
+  "expected": {
+    "digest": "93890956859c9980e64206af43f527234a41e0012d2be2636b7beca0b1a491d3",
+    "valid": true,
+    "python_valid": true,
+    "output": {
+      "entry": {
+        "context_digest": "11f4932532dc7a08368090082c6afc8c00fbdcd2ba80ab44e3871e1cd3f6a011",
+        "package_digest": "c887b6e45d227a1f886eb4c0f37894bfc1a257387ff1e6c4637abb5436f4bb31",
+        "answers": [
+          {
+            "question_id": "q-retry",
+            "verdict": "confirmed",
+            "evidence": "Inspected the exact head.",
+            "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb"
+          }
+        ],
+        "verifications": [
+          {
+            "question_id": "q-retry",
+            "verdict": "confirmed",
+            "evidence": "Inspected the exact head.",
+            "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb",
+            "original": {
+              "run_id": "run-a",
+              "session_id": "s-a"
+            }
+          }
+        ]
+      },
+      "question_ids": ["q-retry"],
+      "answers": [
+        {
+          "question_id": "q-retry",
+          "verdict": "confirmed",
+          "evidence": "Inspected the exact head.",
+          "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb"
+        }
+      ],
+      "verifications": [
+        {
+          "question_id": "q-retry",
+          "verdict": "confirmed",
+          "evidence": "Inspected the exact head.",
+          "context_digest": "1a49faabfe68e92bc17b0a7fc81a784613c8c6f5a821f792059fa121d0dc32bb",
+          "original": {
+            "run_id": "run-a",
+            "session_id": "s-a"
+          }
+        }
+      ]
+    }
+  }
+}

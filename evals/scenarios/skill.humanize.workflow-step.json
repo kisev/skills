@@ -1,0 +1,45 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "5d270e543170d8a0f1a612578c6574cf88ddd7b5520d10d446ebd8d1e8f48c03",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:briefing", "skill:humanize"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "skill.humanize.workflow-step",
+  "input": {
+    "fixture": {
+      "selected": ["skill:briefing", "skill:humanize"]
+    },
+    "prompt": "\u0421\u0443\u043c\u043c\u0430\u0440\u0438\u0437\u0443\u0439 \u0437\u0430\u043c\u0435\u0442\u043a\u0438 \u043e \u0432\u0441\u0442\u0440\u0435\u0447\u0435 \u043d\u0430\u0432\u044b\u043a\u043e\u043c briefing.\n\n\u0417\u0430\u043c\u0435\u0442\u043a\u0438: \u0412\u0441\u0442\u0440\u0435\u0447\u0430 \u043f\u043e \u0440\u0435\u043b\u0438\u0437\u0443 2.4, \u0432\u0442\u043e\u0440\u043d\u0438\u043a. \u0410\u043d\u044f: \u043f\u043e\u0441\u043b\u0435 \u043f\u0435\u0440\u0435\u0440\u0430\u0431\u043e\u0442\u043a\u0438 \u043a\u043e\u043d\u0432\u0435\u0439\u0435\u0440\u0430 \u043f\u043e\u0438\u0441\u043a \u0443\u0441\u043a\u043e\u0440\u0438\u043b\u0441\u044f \u0432 \u0434\u0432\u0430 \u0440\u0430\u0437\u0430, \u043c\u0435\u0442\u0440\u0438\u043a\u0438 \u043f\u0440\u0438\u043b\u043e\u0436\u0443 \u0437\u0430\u0432\u0442\u0440\u0430. \u041f\u0451\u0442\u0440: \u043f\u043b\u0430\u043d \u043e\u0442\u043a\u0430\u0442\u0430 \u043d\u0435 \u0433\u043e\u0442\u043e\u0432, \u044d\u0442\u043e \u0431\u043b\u043e\u043a\u0438\u0440\u0443\u0435\u0442 \u0434\u0430\u0442\u0443. \u0414\u043e\u0433\u043e\u0432\u043e\u0440\u0438\u043b\u0438\u0441\u044c: \u041f\u0451\u0442\u0440 \u0433\u043e\u0442\u043e\u0432\u0438\u0442 \u043f\u043b\u0430\u043d \u043e\u0442\u043a\u0430\u0442\u0430 \u0434\u043e \u043f\u044f\u0442\u043d\u0438\u0446\u044b, \u0410\u043d\u044f \u043f\u0443\u0431\u043b\u0438\u043a\u0443\u0435\u0442 \u043c\u0435\u0442\u0440\u0438\u043a\u0438 \u0432 \u0442\u043e\u043c \u0436\u0435 \u0442\u0438\u043a\u0435\u0442\u0435."
+  },
+  "invariants": [
+    {
+      "contains": "`humanize` to the drafted summary",
+      "id": "briefing-applies-humanize",
+      "path": "skills/briefing/references/workflow.md"
+    },
+    {
+      "contains": "only on an explicit invocation",
+      "id": "humanize-explicit-activation",
+      "path": "skills/humanize/SKILL.source.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "skill.humanize.workflow-step",
+  "revision": 2,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

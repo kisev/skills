@@ -1,0 +1,96 @@
+{
+  "name": "retirement-nothing-stale",
+  "kind": "superseded_results",
+  "input": {
+    "previous": {
+      "payload": {
+        "schema": "portable-gitlab/context-package/v2",
+        "mode": "mr",
+        "binding": {
+          "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "artifact_root": "/tmp/reviewmatic-artifacts",
+          "repo_root": "/tmp/reviewmatic-checkout",
+          "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "goal": {
+          "status": "known",
+          "text": "Review the merge request delta."
+        },
+        "acceptance_criteria": {
+          "status": "known",
+          "items": ["No blocking findings remain."]
+        },
+        "background": "The MR fixes the recorded regression.",
+        "claims": [],
+        "constraints": [],
+        "prior_decisions": [],
+        "questions": [
+          {
+            "id": "q-retry",
+            "subject": "Is credential revocation enforced when a key is reused?",
+            "source": "Discussion 42 of the collected evidence",
+            "critic": true,
+            "context_digest": "19e7df701873319df8f41ad3f317891d08ca08143c5c7119d59346b3fb40111f"
+          }
+        ],
+        "thread_registry": [],
+        "supersedes": null,
+        "external_mutations": false
+      },
+      "digest": "ade74f73db9a01ef2c344fee4d4f6095e7d473ca7f873a17bc1f42c33d8ee9c2"
+    },
+    "next": {
+      "schema": "portable-gitlab/context-package/v2",
+      "mode": "mr",
+      "binding": {
+        "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "artifact_root": "/tmp/reviewmatic-artifacts",
+        "repo_root": "/tmp/reviewmatic-checkout",
+        "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "goal": {
+        "status": "known",
+        "text": "Review the merge request delta."
+      },
+      "acceptance_criteria": {
+        "status": "known",
+        "items": ["No blocking findings remain."]
+      },
+      "background": "The MR fixes the recorded regression.",
+      "claims": [],
+      "constraints": [],
+      "prior_decisions": [],
+      "questions": [
+        {
+          "id": "q-retry",
+          "subject": "Is credential revocation enforced when a key is reused?",
+          "source": "Discussion 42 of the collected evidence",
+          "critic": true,
+          "context_digest": "19e7df701873319df8f41ad3f317891d08ca08143c5c7119d59346b3fb40111f"
+        }
+      ],
+      "thread_registry": [],
+      "supersedes": null,
+      "external_mutations": false
+    },
+    "answers": [
+      {
+        "question_id": "q-retry",
+        "verdict": "confirmed",
+        "evidence": "Inspected the exact head.",
+        "context_digest": "19e7df701873319df8f41ad3f317891d08ca08143c5c7119d59346b3fb40111f"
+      }
+    ],
+    "verifications": []
+  },
+  "expected": {
+    "digest": "c61c9c78749fa1c2f6a3b40372082f3daddae552b589876cdbc0ee6ceea8b728",
+    "valid": true,
+    "python_valid": true,
+    "output": null
+  }
+}

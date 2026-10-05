@@ -63,6 +63,36 @@ function strings(value: unknown): value is string[] {
 
 export function validateAgentReport(agent: string, report: unknown, card?: ExecutionCard): void {
   if (!object(report)) throw new Error("agent report must be an object");
+  if (
+    (agent === "review" || agent === "critic") &&
+    !card &&
+    report.schema === "portable-gitlab/critic-receipt/v2"
+  ) {
+    const required = [
+      "schema",
+      "evidence_digest",
+      "run_id",
+      "session_id",
+      "findings",
+      "external_mutations",
+    ];
+    const allowed = [...required, "scope_digest", "target_finding_ids"];
+    if (
+      !required.every((key) => key in report) ||
+      Object.keys(report).some((key) => !allowed.includes(key)) ||
+      !/^[0-9a-f]{64}$/.test(String(report.evidence_digest)) ||
+      typeof report.run_id !== "string" ||
+      !report.run_id ||
+      typeof report.session_id !== "string" ||
+      !report.session_id ||
+      !Array.isArray(report.findings) ||
+      report.external_mutations !== false ||
+      ("scope_digest" in report && !/^[0-9a-f]{64}$/.test(String(report.scope_digest))) ||
+      ("target_finding_ids" in report && !strings(report.target_finding_ids))
+    )
+      throw new Error("code-review critic receipt has an invalid transport envelope");
+    return;
+  }
   if (agent === "critic" && !card && "review_report" in report) {
     validateAgentReport("review", report);
     return;

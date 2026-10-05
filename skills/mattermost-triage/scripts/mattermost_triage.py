@@ -484,17 +484,31 @@ def channel_window(
     client: Client, channel_id: str, since_ms: int, until_ms: int
 ) -> list[dict[str, object]]:
     found: dict[str, dict[str, object]] = {}
-    for page in range(MAX_PAGES):
-        query = urllib.parse.urlencode({"page": page, "per_page": PAGE_SIZE, "since": since_ms})
-        posts, count = posts_response(client.get(f"/channels/{channel_id}/posts?{query}"))
+    before: str | None = None
+    cursors: set[str] = set()
+    for _page in range(MAX_PAGES):
+        # Mattermost's since route ignores page/per_page. Walk creation-order
+        # cursors instead, then apply the requested creation-time interval locally.
+        parameters: dict[str, str | int] = {"page": 0, "per_page": PAGE_SIZE}
+        if before is not None:
+            parameters["before"] = before
+        query = urllib.parse.urlencode(parameters)
+        response = client.get(f"/channels/{channel_id}/posts?{query}")
+        if not isinstance(response, dict):
+            raise TriageError("Mattermost posts response is malformed")
+        posts, count = posts_response(response)
         for post in posts:
             created = post["create_at"]
             if not isinstance(created, int):
                 raise TriageError("normalized Mattermost post has an invalid timestamp")
             if since_ms <= created < until_ms:
                 found[str(post["id"])] = post
-        if count < PAGE_SIZE:
+        if count < PAGE_SIZE or min(post_order_key(post)[0] for post in posts) < since_ms:
             break
+        before = response["order"][-1]
+        if before in cursors:
+            raise TriageError("Mattermost post pagination repeated a cursor")
+        cursors.add(before)
     else:
         raise TriageError("Mattermost post pagination exceeded the limit")
     return sorted(found.values(), key=post_order_key)
@@ -531,6 +545,8 @@ def focused_thread(client: Client, post_id: str, channel_id: str) -> list[dict[s
 
 def add_reactions(client: Client, post: dict[str, object]) -> None:
     value = client.get(f"/posts/{post['id']}/reactions")
+    if value is None:
+        value = []
     if not isinstance(value, list):
         raise TriageError("Mattermost reactions response is malformed")
     reactions: list[dict[str, str]] = []

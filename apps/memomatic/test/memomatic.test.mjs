@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdtempSync,
@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import { createSessionTables, insertMessage } from "./opencode-fixture.mjs";
 
 import { parseEntryLine, entryLine } from "../dist/entries.js";
 import { parseRules, isForbidden } from "../dist/rules.js";
@@ -30,6 +31,7 @@ import {
 import { runDream, parseConsolidation } from "../dist/dream.js";
 import { runSessions, parseExtraction } from "../dist/sessions.js";
 import { handleMcpRequest } from "../dist/mcp.js";
+import { normalizeSettings } from "../dist/settings.js";
 import { stableIdFor } from "../dist/store.js";
 
 function environment() {
@@ -99,8 +101,8 @@ test("rules parsing extracts never-save topics and auto-clean", () => {
   assert.deepEqual(rules.autoClean, { olderThanDays: 90, scope: "episodic", source: undefined });
   assert.ok(isForbidden("Don't store INTERNAL CREDENTIALS here", rules));
   assert.ok(!isForbidden("ordinary engineering fact", rules));
-  const sourced = parseRules("- auto-clean: older-than=30d scope=episodic source=stopit\n");
-  assert.deepEqual(sourced.autoClean, { olderThanDays: 30, scope: "episodic", source: "stopit" });
+  const sourced = parseRules("- auto-clean: older-than=30d scope=episodic source=handoff\n");
+  assert.deepEqual(sourced.autoClean, { olderThanDays: 30, scope: "episodic", source: "handoff" });
   const decaying = parseRules("- auto-clean: older-than=90d scope=episodic unused-after=30d\n");
   assert.deepEqual(decaying.autoClean, {
     olderThanDays: 90,
@@ -500,20 +502,11 @@ test("sessions skipped without a model remain available after model setup", asyn
     const data = join(env.root, "data", "opencode");
     mkdirSync(data, { recursive: true });
     const database = new DatabaseSync(join(data, "opencode.db"));
-    database.exec(
-      "CREATE TABLE session(id TEXT, title TEXT, directory TEXT, time_created INTEGER); CREATE TABLE message(session_id TEXT, data TEXT, time_created INTEGER);",
-    );
+    createSessionTables(database);
     database
-      .prepare("INSERT INTO session VALUES (?, ?, ?, ?)")
-      .run("example", "A decision", env.root, 2000);
-    database.prepare("INSERT INTO message VALUES (?, ?, ?)").run(
-      "example",
-      JSON.stringify({
-        role: "user",
-        parts: [{ type: "text", text: "Remember a standing decision." }],
-      }),
-      2000,
-    );
+      .prepare("INSERT INTO session_v2 VALUES (?, ?, ?, ?, ?)")
+      .run("example", "A decision", env.root, 2000, 2000);
+    insertMessage(database, "m", "example", "user", "Remember a standing decision.", 1, 2000);
     database.close();
     const ctx = await context();
     ctx.store.setMeta("ingest-watermark", "123");
@@ -559,14 +552,14 @@ test("auto-clean preserves unrelated, pinned, and fresh entries in the same dail
   const env = environment();
   try {
     const ctx = await context();
-    ctx.rules.autoClean = { olderThanDays: 30, scope: "episodic", source: "stopit" };
+    ctx.rules.autoClean = { olderThanDays: 30, scope: "episodic", source: "handoff" };
     const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
     const file = dailyNotePath(ctx.paths);
     const lines = [
-      entryLine("remove", { observed: "2020-01-01", source: "stopit" }),
+      entryLine("remove", { observed: "2020-01-01", source: "handoff" }),
       entryLine("other source", { observed: "2020-01-01", source: "user" }),
-      entryLine("pinned", { observed: "2020-01-01", source: "stopit", pinned: true }),
-      entryLine("fresh", { observed: new Date().toISOString().slice(0, 10), source: "stopit" }),
+      entryLine("pinned", { observed: "2020-01-01", source: "handoff", pinned: true }),
+      entryLine("fresh", { observed: new Date().toISOString().slice(0, 10), source: "handoff" }),
     ];
     await writeCorpusFile(ctx.paths, file, `${lines.join("\n")}\n`);
     await rebuildIndex(ctx);
@@ -638,7 +631,7 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
     const { writeCorpusFile, dailyNotePath } = await import("../dist/corpus.js");
     const old = new Date(Date.now() - 120 * 86_400_000);
     const file = dailyNotePath(ctx.paths, old);
-    const stopitFile = dailyNotePath(ctx.paths, new Date(old.getTime() - 86_400_000));
+    const handoffFile = dailyNotePath(ctx.paths, new Date(old.getTime() - 86_400_000));
     await writeCorpusFile(
       ctx.paths,
       file,
@@ -650,12 +643,12 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
     );
     await writeCorpusFile(
       ctx.paths,
-      stopitFile,
-      `${entryLine("Old stopit handoff distillate subject to cleanup", {
-        key: "old-stopit",
+      handoffFile,
+      `${entryLine("Old handoff distillate subject to cleanup", {
+        key: "old-handoff",
         observed: old.toISOString().slice(0, 10),
         origin: "agent",
-        source: "stopit",
+        source: "handoff",
       })}\n`,
     );
     await rebuildIndex(ctx);
@@ -670,14 +663,14 @@ test("memory_get marks useful and archive respects auto-clean rules", async () =
     mkdirSync(join(env.config, "memomatic"), { recursive: true });
     writeFileSync(
       join(env.config, "memomatic", "MEMORY_RULES.md"),
-      "- auto-clean: older-than=90d scope=episodic source=stopit\n",
+      "- auto-clean: older-than=90d scope=episodic source=handoff\n",
       "utf8",
     );
     const scoped = await context();
     const scopedArchived = await archiveOldEpisodic(scoped);
     assert.equal(scopedArchived.length, 1);
     assert.ok(scopedArchived[0].endsWith(".md"));
-    assert.ok(!existsSync(stopitFile));
+    assert.ok(!existsSync(handoffFile));
     assert.ok(existsSync(file));
     scoped.store.close();
 
@@ -773,6 +766,79 @@ test("MCP exposes the complete explicit memory lifecycle without plugin hooks", 
   }
 });
 
+test("an unreachable enabled reranker fails the MCP search explicitly", async () => {
+  const env = environment();
+  try {
+    mkdirSync(join(env.config, "memomatic"), { recursive: true });
+    writeFileSync(
+      join(env.config, "memomatic", "settings.json"),
+      JSON.stringify({ reranker: { url: "http://127.0.0.1:1/rerank", model: "reranker" } }),
+    );
+    const ctx = await context();
+    await writeEntry(ctx, { origin: "agent", text: "Reranker failure stays visible." });
+    await processInbox(ctx);
+    ctx.store.close();
+    const response = JSON.parse(
+      await handleMcpRequest({
+        id: 9,
+        method: "tools/call",
+        params: { arguments: { query: "reranker failure stays visible" }, name: "memory_search" },
+      }),
+    );
+    assert.equal(response.result.isError, true);
+    const payload = JSON.parse(response.result.content[0].text);
+    assert.match(payload.error, /reranker request failed/);
+  } finally {
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
+test("malformed bearer tokens fail CLI and MCP diagnostics without leaking the token", async () => {
+  const env = environment();
+  process.env.MEMOMATIC_TEST_BROKEN_TOKEN = "secret\r\nX-Injected: value";
+  try {
+    mkdirSync(join(env.config, "memomatic"), { recursive: true });
+    writeFileSync(
+      join(env.config, "memomatic", "settings.json"),
+      JSON.stringify({
+        embedding: {
+          url: "http://127.0.0.1:9/v1/embeddings",
+          model: "embedding",
+          bearerEnv: "MEMOMATIC_TEST_BROKEN_TOKEN",
+        },
+      }),
+    );
+    const response = JSON.parse(
+      await handleMcpRequest({
+        id: 11,
+        method: "tools/call",
+        params: { arguments: { query: "anything" }, name: "memory_search" },
+      }),
+    );
+    assert.equal(response.result.isError, true);
+    const payload = JSON.parse(response.result.content[0].text);
+    assert.match(
+      payload.error,
+      /bearerEnv "MEMOMATIC_TEST_BROKEN_TOKEN" contains a control character/,
+    );
+    assert.ok(!payload.error.includes("secret"), payload.error);
+    assert.ok(!payload.error.includes("X-Injected"), payload.error);
+    const cli = spawnSync(process.execPath, ["dist/cli.js", "search", "anything"], {
+      cwd: new URL("..", import.meta.url),
+      encoding: "utf8",
+      env: process.env,
+    });
+    assert.notEqual(cli.status, 0);
+    const output = `${cli.stdout}${cli.stderr}`;
+    assert.match(output, /control character/);
+    assert.ok(!output.includes("secret"), output);
+    assert.ok(!output.includes("X-Injected"), output);
+  } finally {
+    delete process.env.MEMOMATIC_TEST_BROKEN_TOKEN;
+    rmSync(env.root, { force: true, recursive: true });
+  }
+});
+
 test("forgetting preserves surviving vectors and line references without embedding access", async () => {
   const env = environment();
   try {
@@ -784,7 +850,9 @@ test("forgetting preserves surviving vectors and line references without embeddi
     await rebuildIndex(ctx);
     for (const entry of ctx.store.allEntries())
       ctx.store.setVector(entry.stableId, new Float32Array([1, 0]));
-    ctx.settings.embedding = { url: "http://127.0.0.1:1/v1/embeddings", model: "unavailable" };
+    ctx.settings.embedding = normalizeSettings({
+      embedding: { url: "http://127.0.0.1:1/v1/embeddings", model: "unavailable" },
+    }).embedding;
     await withRunLock(ctx.paths, async () => {
       await assert.rejects(
         forgetEntry(ctx, { file: "MEMORY.md", line: 1 }),

@@ -14,6 +14,7 @@
     "pytest-xdist>=3.8.0",
     "ruff==0.16.6",
     "skills-ref==0.1.1",
+    "types-PyYAML==6.0.12.20260906",
     "types-jsonschema==4.26.0.20260518",
     "yamllint==1.38.0",
   ]
@@ -23,7 +24,8 @@
   strict = true
   disallow_any_unimported = true
   explicit_package_bases = true
-  files = ["scripts", "shared/references", "tests", "skills/*/scripts/*.py"]
+  mypy_path = ["apps/reviewmatic/src"]
+  files = ["scripts", "dev", "shared/references", "tests", "skills/*/scripts/*.py"]
 
 [tool.pytest.ini_options]
   addopts = [
@@ -35,7 +37,7 @@
     "--durations=10",
   ]
   pythonpath = ["."]
-  testpaths = ["tests", "skills/*/tests"]
+  testpaths = ["tests", "skills/*/tests", "apps/reviewmatic/tests", "apps/shopmatic/tests"]
 
 [tool.ruff]
   target-version = "py312"
@@ -94,6 +96,10 @@
         "S607",                                                             # Git is a required PATH-resolved build dependency.
       ]
       "scripts/build_release_artifacts.py" = ["S603"]                       # Arguments are a fixed internal command vector.
+      "scripts/check_reviewmatic_install.py" = [
+        "S603",                                                             # Test commands use fixed vectors, the selected Git snapshot, and bounded local paths.
+        "S607",                                                             # Git and fake glab are resolved through the smoke's isolated PATH.
+      ]
       "scripts/check_agnix.py" = [
         "S603",                                                             # Arguments are generated from validated repository paths.
         "S607",                                                             # Agnix is provided by the pinned Mise toolchain.
@@ -108,6 +114,7 @@
       ]
       "scripts/build_stage20_corpus.py" = ["RUF001"]                        # Confusable characters are intentional corpus cases.
       "scripts/build_skills.py" = ["S105"]                                  # The value is a public build placeholder, not a credential.
+      "scripts/await_ci_success.py" = ["S310"]                              # Requests use the fixed GitHub HTTPS API origin.
       "scripts/create_github_release.py" = ["S310"]                         # Requests use the fixed GitHub HTTPS API origin.
       "scripts/eval_runner.py" = [
         "PLR0911",                                                          # The evaluator maps many explicit terminal states.
@@ -179,9 +186,6 @@
         "S607",                                                             # The host browser opener is intentionally PATH-resolved.
         "TRY300",                                                           # Transaction success returns remain in their guarded branches.
       ]
-      "skills/skill-improve/scripts/skill_improver.py" = [
-        "S603"
-      ]                                                                     # The validator receives a bounded temporary skill path.
 
     [tool.ruff.lint.mccabe]
       max-complexity = 40

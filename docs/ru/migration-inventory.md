@@ -11,24 +11,24 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Активные переносимые навыки
 
-Активны ровно 38 переносимых навыков:
+Активны ровно 41 переносимый навык:
 
-`agents-md`, `askme`, `ast-grep`, `code-explain`, `code-review`, `commit-msg`,
-`docs-prepare`, `docs-review`, `goal`, `humanize`, `mattermost`,
-`mattermost-triage`, `mr-prepare`, `release-prepare`, `release-review`, `rtk`,
-`skill-improve`, `slides-prompts-prepare`, `spec-manage`, `stopit`, `briefing`,
-`task-prepare`, `task-review`, `task-triage`, `taskmatic`, `team-1on1`,
-`team-agreements`, `team-feedback`, `team-health`, `team-incident`,
+`agents-md`, `asd-ste100`, `askme`, `ast-grep`, `code-explain`, `code-review`,
+`code-simplify`, `commit-msg`, `docs-prepare`, `docs-review`, `eli5`, `goal`,
+`humanize`, `mattermost`, `mattermost-triage`, `mr-prepare`, `release-prepare`,
+`release-review`, `rtk`, `skill-doctor`, `slides-prompts-prepare`, `spec-manage`,
+`handoff`, `briefing`, `task-prepare`, `task-review`, `task-triage`, `taskmatic`,
+`team-1on1`, `team-agreements`, `team-feedback`, `team-health`, `team-incident`,
 `team-onboarding`, `team-people`, `team-performance`, `team-report`,
 `team-retro`, `team-roadmap`, `team-sprint-close` и `team-sprint-start`.
 
 Исходный перечень не содержит дубликатов; перечни сборки и дистрибутива содержат
-те же 38 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
+те же 41 автономных навыков. Общие файлы объявлены в `shared/manifest.json`,
 добавляются только в `.build/skills` и проверяются побайтово.
 
 ## Сведения об очистке переносимых навыков
 
-Текущий инвентарь миграции содержит ровно эти одиннадцать устаревших имён переносимых
+Текущий инвентарь миграции содержит ровно эти тринадцать устаревших имён переносимых
 навыков. Имени `multi-run` в нём нет.
 
 | Устаревшее имя | Текущая замена |
@@ -41,18 +41,22 @@ GitHub Release. Необязательный пакет интеграции - `
 | `lsp-report` | Нет |
 | `project-spec` | `spec-manage` |
 | `skill-improver` | `skill-improve` |
+| `skill-improve` | `skill-doctor` |
+| `stopit` | `handoff` |
 | `walkthrough` | `code-explain` |
 | `team-workflow` | `team-sprint-start`, `team-sprint-close`, `team-retro`, `team-roadmap`, `slides-prompts-prepare` |
 | `summary` | `briefing` |
 
 Операция `update` в CLI `skills` обнаруживает удалённые в источнике имена и
-предлагает удалить их локальные копии. Эти точные имена также можно удалить явно
-через стабильный `skills@latest` с теми же агентами и областью, что и при
-установке. Пакет OpenCode не проверяет и не удаляет переносимые навыки.
+предлагает удалить их локальные копии; предложение требует интерактивного
+запуска в терминале без `--yes`, иначе оно пропускается. Эти точные имена также
+можно удалить явно через стабильный `skills@latest` с теми же агентами и
+областью, что и при установке. Пакет OpenCode не проверяет и не удаляет
+переносимые навыки.
 
 ## Текущий состав интеграции OpenCode
 
-Текущий состав пакета содержит 38 команд: по одной для каждого активного навыка.
+Текущий состав пакета содержит 41 команду: по одной для каждого активного навыка.
 Инструмент пакета `route` доступен без слеш-команды.
 
 Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,
@@ -62,7 +66,7 @@ GitHub Release. Необязательный пакет интеграции - `
 
 ## Принадлежность и архив
 
-После подтверждения `reconcile` и `uninstall` архивируют только компоненты с
+После подтверждения `maintenance cleanup` и `uninstall` архивируют только компоненты с
 точно подтверждённой принадлежностью, прежде чем удалить развёрнутые копии.
 Переносимые навыки и lock-файлы их установщика не входят в область владения
 пакета. Пользовательские, неизвестные, небезопасные и неоднозначные элементы

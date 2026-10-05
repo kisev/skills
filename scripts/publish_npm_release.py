@@ -124,7 +124,12 @@ def require_trusted_publishing_npm() -> None:
         raise PublicationError("npm 11.5.1 or newer is required for trusted publishing")
 
 
-NPM_PUBLISH_ORDER = ("@kisev/safe-fs", "@kisev/memomatic", "@kisev/taskmatic", "@kisev/agentomatic")
+NPM_PUBLISH_ORDER = (
+    "@kisev/safe-fs",
+    "@kisev/memomatic",
+    "@kisev/taskmatic",
+    "@kisev/agentomatic",
+)
 
 
 def _tarball_entry(release_dir: Path, entry: dict[str, Any]) -> dict[str, Any]:
@@ -350,7 +355,7 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             "--no-audit",
             "--no-fund",
             *(f"{entry['name']}@{entry['version']}" for entry in entries),
-            "@opencode-ai/plugin@1.18.29",
+            "@opencode/plugin@2.0.19",
             cwd=root,
             env=env,
         )
@@ -372,20 +377,17 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             if command(str(executable), "--version", cwd=root, env=env).strip() != version:
                 raise PublicationError(f"installed npm CLI {name} reports the wrong version")
             command(str(executable), "--help", cwd=root, env=env)
-        capabilities = json.loads(
+        catalog = json.loads(
             command(
                 str(root / "node_modules" / ".bin" / "agentomatic"),
-                "capabilities",
+                "catalog",
                 "--json",
                 cwd=root,
                 env=env,
             )
         )
-        if (
-            capabilities.get("status") != "ok"
-            or capabilities.get("version") != agentomatic["version"]
-        ):
-            raise PublicationError("installed npm CLI capabilities are invalid")
+        if catalog.get("status") != "ok" or catalog.get("version") != agentomatic["version"]:
+            raise PublicationError("installed npm CLI catalog is invalid")
         command("npm", "audit", "signatures", "--json", cwd=root, env=env)
 
 

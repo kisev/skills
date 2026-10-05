@@ -11,7 +11,7 @@
       "from": "task-prepare",
       "to": "humanize",
       "type": "uses",
-      "reason": "applied before drafting user-facing prose"
+      "reason": "applied to the drafted task title and body"
     },
     {
       "from": "task-prepare",
@@ -53,13 +53,19 @@
       "from": "code-review",
       "to": "humanize",
       "type": "uses",
-      "reason": "applied to all drafted prose"
+      "reason": "applied to drafted thread replies before publication"
+    },
+    {
+      "from": "code-review",
+      "to": "code-simplify",
+      "type": "uses",
+      "reason": "panel critics and the arbitrator apply its shared simplification criteria"
     },
     {
       "from": "mr-prepare",
       "to": "humanize",
       "type": "uses",
-      "reason": "applied to all drafted prose"
+      "reason": "applied to the drafted MR title and description"
     },
     {
       "from": "mr-prepare",
@@ -144,6 +150,12 @@
       "to": "release-review",
       "type": "recommends",
       "reason": "release MRs route to it for the release verdict"
+    },
+    {
+      "from": "code-review",
+      "to": "task-prepare",
+      "type": "recommends",
+      "reason": "full preparation of out-of-MR follow-ups is a separate invocation"
     },
     {
       "from": "code-explain",
@@ -342,6 +354,36 @@
       "to": "humanize",
       "type": "uses",
       "reason": "applied to the team-view artifact prose"
+    },
+    {
+      "from": "skill-doctor",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to diagnosis and bug-report prose"
+    },
+    {
+      "from": "asd-ste100",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to rewritten technical prose"
+    },
+    {
+      "from": "eli5",
+      "to": "humanize",
+      "type": "uses",
+      "reason": "applied to explanation prose"
+    },
+    {
+      "from": "debugging",
+      "to": "tdd",
+      "type": "recommends",
+      "reason": "the regression test lands at a seam agreed and grown the test-first way"
+    },
+    {
+      "from": "verification",
+      "to": "code-review",
+      "type": "recommends",
+      "reason": "a verified change is ready for review before publication"
     }
   ]
 }

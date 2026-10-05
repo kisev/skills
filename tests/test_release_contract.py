@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 
 from scripts import (
+    await_ci_success,
     build_dev_artifacts,
     build_distribution,
     build_release_artifacts,
@@ -686,7 +687,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
         calls.append(arguments)
         if arguments[-1:] == ("--version",):
             return f"{RELEASE_VERSION}\n"
-        if arguments[-2:] == ("capabilities", "--json"):
+        if arguments[-2:] == ("catalog", "--json"):
             return json.dumps({"status": "ok", "version": RELEASE_VERSION}) + "\n"
         return ""
 
@@ -702,7 +703,11 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
     for name in publish_npm_release.NPM_PUBLISH_ORDER:
         assert f"{name}@{RELEASE_VERSION}" in install
-    assert "@opencode-ai/plugin@1.18.29" in install
+    assert "@opencode/plugin@2.0.19" in install
+    catalog_calls = [arguments for arguments in calls if arguments[-2:] == ("catalog", "--json")]
+    assert len(catalog_calls) == 1
+    assert Path(catalog_calls[0][0]).name == "agentomatic"
+    assert not any("capabilities" in arguments for arguments in calls)
     assert ("npm", "audit", "signatures", "--json") in calls
 
 
@@ -936,21 +941,27 @@ def test_maintenance_manifest_publishes_under_its_line_dist_tag(
 def test_pages_composition_keeps_stable_root_and_dev_subpath(tmp_path: Path) -> None:
     stable = tmp_path / "stable"
     dev = tmp_path / "dev-source"
+    site = tmp_path / "site"
     stable.mkdir()
     dev.mkdir()
+    site.mkdir()
     (stable / "index.json").write_text("stable\n", encoding="utf-8")
     (stable / ".nojekyll").write_text("", encoding="utf-8")
     (dev / "index.json").write_text("dev\n", encoding="utf-8")
-    output = tmp_path / "site"
+    (site / "index.html").write_text("<html></html>", encoding="utf-8")
+    output = tmp_path / "pages"
     compose_pages_site.compose(
         output,
         stable_dir=stable,
         stable_url=None,
         dev_dir=dev,
         dev_url=None,
+        site_dir=site,
     )
     assert (output / "index.json").read_text(encoding="utf-8") == "stable\n"
     assert (output / "dev/index.json").read_text(encoding="utf-8") == "dev\n"
+    assert (output / "index.html").read_text(encoding="utf-8") == "<html></html>"
+    assert (output / ".nojekyll").exists()
 
 
 def test_remote_pages_copy_rejects_lock_drift(
@@ -1066,7 +1077,12 @@ def test_release_manifest_rejects_tampered_tarball(
 
     release = tmp_path / "release"
     release.mkdir()
-    for filename in ("safe-fs.tgz", "memomatic.tgz", "taskmatic.tgz", "package.tgz"):
+    for filename in (
+        "safe-fs.tgz",
+        "memomatic.tgz",
+        "taskmatic.tgz",
+        "package.tgz",
+    ):
         (release / filename).write_bytes(content)
     (release / "release.json").write_text(
         json.dumps(
@@ -1323,6 +1339,21 @@ def test_release_environment_revision_must_match_head(monkeypatch: pytest.Monkey
         check_release.validate()
 
 
+def test_ci_trust_decides_only_on_terminal_success() -> None:
+    success = {"id": 1, "status": "completed", "conclusion": "success"}
+    assert await_ci_success.decide([success]) == "success"
+    assert await_ci_success.decide([]) is None
+    active = {"id": 2, "status": "in_progress", "conclusion": None}
+    assert await_ci_success.decide([active]) is None
+    # A cancelled attempt followed by an active re-run keeps waiting.
+    cancelled = {"id": 3, "status": "completed", "conclusion": "cancelled"}
+    assert await_ci_success.decide([cancelled, active]) is None
+    with pytest.raises(await_ci_success.TrustError, match="superseded"):
+        await_ci_success.decide([cancelled])
+    with pytest.raises(await_ci_success.TrustError, match="failed"):
+        await_ci_success.decide([{"id": 4, "status": "completed", "conclusion": "failure"}])
+
+
 def test_release_workflow_gates_publication_and_final_release() -> None:
     workflow = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
     assert (
@@ -1333,7 +1364,12 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert workflow.count("needs: stable-preflight") == 2
     assert "task release:prepare" in workflow
     assert "branches:\n      - dev" in workflow
-    assert "task check" in workflow
+    # The dev publication trusts the terminal CI success of the same revision
+    # instead of repeating the complete gate next to CI.
+    assert "task dev:await-ci" in workflow
+    assert "CI_REVISION: ${{ github.sha }}" in workflow
+    assert "actions: read" in workflow
+    assert "task check" not in workflow
     assert "workflow_run" not in workflow
     assert "DEV_REVISION: ${{ github.sha }}" in workflow
     assert "cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}" in workflow

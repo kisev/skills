@@ -1,7 +1,6 @@
 # Ordinary MR preparation
 
-Use `humanize` for all drafted prose. Read `references/interaction-contract.md`,
-`references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`,
+Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`,
 `references/output-format.md`, and `references/language-policy.md`.
 
 ## Collect and select language
@@ -35,6 +34,9 @@ useful facts or replace the description with a commit/file inventory. Existing
 prose is evidence to verify, not unquestionable truth. Record in private
 `preservation_notes` what significant information was retained, corrected or
 removed and why. Inspect the final draft for unjustified information loss.
+Apply `humanize` to the drafted `title` and `description` before recording
+them in the content JSON; limitation notes, `preservation_notes`, and blocker
+reports are written normally and do not invoke it.
 
 Select a template in this order: explicit user selection, applicable project
 default, sole available template, or best fit by MR purpose. If materially

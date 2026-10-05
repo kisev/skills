@@ -3,10 +3,10 @@ description: Maps relevant files, callers, tests, and established repository pat
 mode: subagent
 hidden: true
 steps: 12
-permission:
-  edit: deny
-  bash: deny
-  task: deny
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: subagent, resource: "*", effect: deny }
 ---
 
 # Mapper

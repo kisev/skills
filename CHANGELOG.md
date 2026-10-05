@@ -8,9 +8,322 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+## \[12.0.0] - 2026-10-05
+
+### Added
+
+- Quality-gate composition now has a single machine-readable source:
+  `gate-registry.json` maps every layer to its input paths and gate task, and
+  encodes the `build:skills` precondition plus the pre-push meta triggers.
+  `scripts/generate_gates.py` renders the CI `matrix.include` blocks and the
+  Lefthook pre-push glob lists from it, and the new `gates:check` task fails
+  every gate (it runs in `check:core` and a dedicated CI job) when a rendered
+  copy, the task graph, or a workflow skeleton drifts in either direction.
+  The dependency audit, documentation, docs-site build, and docs-site
+  contracts layers joined the CI matrix, and `site:test` joined the mandatory
+  gate, so CI literally repeats the complete local gate.
+
+- `reviewmatic` and the `code-review` skill now run reviews as an orchestrated
+  panel: `record-participants` records the critic count and composition plus
+  the arbitrator once (installed `critic-*` profiles or ordinary subagents
+  running the session's agent, provider, and model, never substituted
+  silently), `record-critic --participant` imports every parallel independent
+  receipt bound to its participant, and `record-arbitration` imports one
+  `code-review/arbitration/v1` receipt in which a separate arbitrator returns
+  a verdict for every critic finding, resolves every contradiction, merges
+  duplicates without losing authors, and records the consolidated decisions.
+  In panel mode the orchestrating agent adds no full review of its own and
+  `record-input` accepts only its identity fields. Runbooks gained a
+  review-panel section (participants with profile, provider, and model, never
+  inside published GitLab texts) and an arbitration-verdicts section that
+  keeps every candidate visible, including refuted and duplicate findings.
+  Local `full` and `incremental` reviews support the same panel through the
+  `--bundle` variants; the finalized local report stays schema-identical and
+  the receipts, selection, and arbitration are preserved under
+  `local-panel/`. The inspection index now carries a best-effort literal
+  file-relation map with explicit incompleteness markers.
+
+- Every runbook `shell` block that creates a comment or discussion or changes
+  thread state now starts with a head check that reads the current MR head,
+  compares it with the reviewed head by SHA-256 digest, and stops the block
+  before any write on a failed request, a malformed response, or a moved
+  head. The GET targets the selected MR hostname and checks its exit status
+  before parsing JSON; the check runs only when the user executes the block.
+
+- `reviewmatic` and the `code-review` skill now share one context package for
+  GitLab MR and local WIP reviews. After snapshot preparation the agent records
+  it with `record-package` — goal, claims with sources and separated
+  credibility, constraints, prior decisions, and questions with stable IDs —
+  and critics start only afterwards, reading the package as their primary task
+  context and answering assigned questions in receipt `question_answers` with
+  confirmed, refuted, or not\_verified verdicts. The runtime formats mechanical
+  data (bindings, the MR thread registry covering every collected discussion,
+  retained decisions) and validates structure and bindings without its own
+  model call. The primary review addresses every `not_verified` answer in
+  `question_verifications`, preserving the original answer; direct invocations
+  with unclear task context ask once, automatic ones record unknown goal and
+  acceptance criteria explicitly. The package stays private outside the
+  checkout, binds the `prepare-local` snapshot sections in local mode, involves
+  no GitLab recollection, and refresh reports stale threads while keeping the
+  previous package as immutable history.
+
+### Changed
+
+- `reviewmatic` now has one Python runtime in `apps/reviewmatic`, invoked with
+  `uvx --from` from the selected Git ref. Stable skills use an exact release
+  tag; development skills use `dev`. The TypeScript application and TUI are
+  removed, and the generated manual runbook remains the only publication
+  interface. The former npm package is not deprecated by this change; registry
+  deprecation needs separate confirmation.
+
+- The `task-triage` publication contract now generates direct `glab api`
+  commands with inline JSON heredoc bodies, `#` explanations, and `&&`
+  fail-fast blocks that depend only on `glab`, `jq`, and `sha256sum`. Every
+  writing block starts with an authenticated-user guard, the first writing
+  block of a task verifies the snapshot `updated_at`, later blocks verify
+  their own semantic preconditions against a fresh read, obsolete and
+  duplicate issues receive explanation-and-close blocks, a missing milestone
+  is created and attached in one guarded block, the stale closure publishes
+  its final message and closes the issue in one chain, and the summary lists
+  every action without a command together with its reason. The
+  `apply-information` and `apply-link` runtime helpers, their guard
+  and receipt state, and the task-triage consumption of the shared
+  `mutation_process.py` runtime were removed; legacy helper state stays
+  historical and is never executed.
+
+- A full `task check` now runs every npm test suite exactly once
+  (`package:check` delegates the suites to `package:test`), the release path
+  verifies the tag and builds artifacts within one task invocation that shares
+  the gate's distribution build (`release:verify`, `release:verify:published`;
+  the dependency audit is folded into `check:core`), and the `dev` publication
+  trusts the terminal CI `success` of the exact revision through
+  `task dev:await-ci` (`actions: read`) and stops when that run failed, was
+  cancelled by a newer push, or is missing. A tagged commit keeps exactly one
+  automatic full check in `release:prepare`.
+
+- The local `check:core` push gate now rebuilds the portable distribution
+  (`distribution:build`) instead of comparing it byte-for-byte with the
+  `.build/packages/skills/` cache (`distribution:check`), aligning the local
+  gate with actual CI behavior: the strict comparison already runs in the CI
+  matrix on clean checkouts, and Publish builds dev artifacts from Git
+  sources, so the cache has no consumer that needs a stale drift guard.
+  Editing skill sources without regenerating no longer fails pushes with
+  `distribution artifact drift`; the strict byte comparison of the stored
+  artifact stays in `generate:check` and the CI matrix.
+
+- The `handoff` skill now scopes every handoff to one session: the bundled
+  runner resolves and writes
+  `$XDG_STATE_HOME/agent-skills/handoff/<workspace-id>/<session-id>/handoff.md`
+  and requires an explicit `--session` token (a nonempty
+  `ses_[A-Za-z0-9_-]+` value without path separators) for both `path` and
+  `write`; a missing or invalid session ID fails without creating state.
+  Parallel sessions of one workspace therefore keep independent files and
+  independent `## History` snapshots instead of merging into one shared file,
+  the legacy workspace-level `handoff.md` is never read, written, or removed,
+  and the memomatic distillate is superseded per workspace and session.
+  Restoration uses the session's own path or a full path passed explicitly by
+  the user; there is no list or auto-discovery. Session directories accumulate
+  without retention; cleanup remains a separate task.
+
+- `finish-review` finalizes locally: it no longer rechecks GitLab freshness,
+  no longer returns `refresh_required`, and never restarts analysis because
+  of new threads. Post-review drift is handled by the explicit
+  `refresh-review`, which keeps the recorded panel selection while expecting
+  fresh critic receipts and a fresh arbitration receipt, and by the manual
+  head check. Decision repair of a panel plan now requires a fresh
+  arbitration receipt from a new arbitrator session.
+
+- `humanize` now activates only on an explicit invocation: a direct user
+  request including the `/humanize` command, or an explicit text-preparation
+  step of another skill's workflow; drafting ordinary replies, statuses, or
+  explanations no longer loads it. The skill fixes a constraint priority
+  (meaning and protected fragments, then mandatory constraints, then voice
+  adaptation, so a writing sample guides the voice but never licenses
+  forbidden punctuation or template patterns), extends the prose punctuation
+  rule to U+2013, U+2014, U+00AB, U+00BB, U+201C, and U+201D with a matching
+  verification pattern, scopes the review-comment guidance to its genre, and
+  adds `references/patterns.md` mapping all 26 upstream categories with
+  bilingual before/after examples that add no unsupported facts. The catalog
+  and the workflow name the same twelve weak-alone categories, and the
+  mandatory punctuation bans apply regardless of that classification. All 21
+  dependent skills now invoke it at an explicit step on a concrete artifact,
+  while preliminary statuses, clarifying questions, and blocker reports are
+  written normally. The capability spec adds REQ-F-551, REQ-F-552, and
+  REQ-F-553, and the humanize eval scenarios were replaced with realistic
+  explicit-invocation, code-task near-miss, and chained-invocation pairs;
+  the chain names only the caller skill, and golden bilingual cases report
+  per-case outcomes for protected bytes, preserved claims, allowed
+  punctuation, and absence of invented reactions.
+
+- `skill-improve` is removed and replaced by the new `skill-doctor` skill:
+  experience with real skill usage is now kept as private, incremental
+  per-session diagnoses in XDG state instead of a static checker cycle, with
+  source matching for development use and a preview-confirmed anonymized
+  bug-report archive on a separate request. Catalogs, capability specs
+  (`skill-improve` records are withdrawn, `skill-doctor` adds REQ-F-549 and
+  REQ-F-550, and the command adapter is REQ-I-422), eval surfaces, the
+  migration inventory (`skill-improve` now maps to `skill-doctor`), and
+  documentation are updated.
+
+- Context package results are now bound to the meaningful context they were
+  produced against. `record-package` stamps every question with the digest of
+  its meaningful content — the question plus goal, acceptance criteria,
+  claims, constraints, and thread registry — and every answer and verification
+  copies the `context_digest` it was produced against. `check-review`,
+  `finish-review`, and `finalize-local` reject a missing or superseded
+  binding with a concrete diagnostic, so a late answer or verification
+  collected for the previous package can no longer certify a changed question
+  or produce a false `ready`. Re-recording a changed package retires affected
+  results into `superseded_question_results` with their authorship and
+  original bindings preserved, unaffected questions and background-only edits
+  keep their results, and re-recording the package retires still-unbound
+  results explicitly instead of counting them.
+
+- `reviewmatic prepare-local` now defines the local scope explicitly: without
+  `--ref` it is the uncommitted work against HEAD — staged, unstaged, and
+  non-ignored untracked files; an explicit `--ref <revision>` adds the commits
+  from its merge base with HEAD and is used exactly as it exists locally,
+  without fetching. A missing, ambiguous, or merge-base-less `--ref` stops with
+  a concrete reason, and a boundary without any changes returns `empty_scope`
+  instead of a snapshot that could be finalized as a review. The `code-review`
+  skill selects the remote-MR or local-WIP mode only from the explicit request,
+  and local reports state the scope composition and the exact revisions used.
+
+- Agentomatic now supports only OpenCode `2.0.x`: V1 dependencies, entrypoints,
+  adapters, and checks are removed. V1 users can retain the pre-V2 stable release.
+  Config setup writes native `plugins`, ordered `permissions`, and global
+  `cli.json`, migrating only touched sections and preserving user rules and
+  comments. The core plugin is registered as an exact-version registry spec,
+  because V2 resolves bare package names through the npm `latest` dist-tag;
+  reruns repin bare or stale registrations. Agent definitions and model
+  discovery use V2 contracts. The inactive
+  `lsp-preset` is removed; permission smoke checks run against real V2 evaluation.
+
+- Memomatic's OpenCode client targets V2 only: model calls spawn an isolated
+  `opencode serve` with deny-all permissions, system prompts go through the V2
+  instructions API, and extraction reports mark token usage unavailable.
+  Session ingestion reads the V2 `session_v2`/`session_message` projections
+  read-only; pre-V2 databases fail with a start-V2 instruction instead of
+  parsing legacy layouts.
+
+- The `code-review` skill remains a thin portable archive. It invokes the
+  Python runtime from a selected Git ref through `uvx --from`; stable skills use
+  an exact release tag and development skills use `dev`. After review the skill
+  prints the compact chat summary and the `runbook.md` path. The runbook's direct
+  `glab` commands are the only publication interface.
+
+- The shared GitLab contract drops the code-review-only local WIP branches and
+  the `local_review` module; local reviews moved into `reviewmatic
+  prepare-local`/`finalize-local`. The `portable-gitlab-v2` offline eval
+  protocol and its evidence-contract scenario are removed with the runner.
+
+- The shared GitLab contract also drops its now-dead code-review validation
+  surface: review-plan/decision/critic artifacts and their validators, the
+  `code-review` profile, and the code-review-only presentation/label helpers.
+  The Python application in `apps/reviewmatic` owns those review behaviors;
+  other GitLab skills keep the shared portable contract.
+
+### Added
+
+- `start-review` prepares one managed review worktree per merge request under
+  `<repo>.worktrees/reviewmatic/`: a detached checkout at the exact MR head
+  outside the user's working tree, returned with the source repository and exact
+  base/start/head/target refs. Missing revisions are fetched over Git from the
+  remote matching the MR's source or target project (any remote name, forks
+  included), the repository is never cloned, and the user's checkout is never
+  modified. The same worktree is reused for the same revision and switches to a
+  new head only when no review is active there, the tree is clean, and it holds
+  no unexpected commits; otherwise preparation blocks with the concrete reason.
+  Review worktrees are recorded in `review-worktrees.json`; reviewed code is
+  read locally, never through per-file GitLab content requests, and `--repo-root`
+  is now optional for `start-review`.
+
+- The Python application `apps/reviewmatic` completes the review runtime: GitLab
+  evidence collection, MR and local-WIP review, the panel and arbitrator,
+  incremental state, repair, refresh, managed worktrees, and immutable runbooks.
+  It runs from Git with `uvx`; no npm/PyPI runtime or terminal UI is provided.
+  Runbooks keep copy-ready `glab` commands without publication receipts,
+  reservations, locks, expiry, polling, or automatic retries. Existing artifacts
+  and XDG state remain compatible; the former npm package is not deprecated.
+
+- New portable skills `eli5` and `asd-ste100`. `eli5` explains a complex
+  concept in plain language calibrated to the available knowledge about the
+  reader, preserving essential constraints and uncertainty; it never assumes a
+  five-year-old audience by default, and analogies never replace exact
+  conditions. `asd-ste100` checks and rewrites technical text in the task's
+  language using Simplified Technical English principles while preserving
+  obligation strength, numbers, conditions, and exceptions; it does not claim
+  certified ASD-STE100 compliance and does not transfer English grammar or word
+  lists mechanically to another language. Compact shared clarity rules are
+  defined once in `shared/references/clarity-rules.md` and materialized into
+  `askme`, `goal`, and `task-prepare` (and the new skills) through
+  `shared/manifest.json`: consistent terms; explicit actor, action, conditions,
+  and scope where meaning depends on them; separated facts, decisions,
+  assumptions, and recommendations; simplification that never changes
+  obligation, confidence, numbers, exceptions, or boundaries; already-clear
+  text kept unchanged. Both skills declare a `humanize` relation, and
+  catalogs, capability specs (REQ-F-554/555, REQ-I-423/424), eval surfaces,
+  the migration inventory, and documentation are updated.
+
+### Fixed
+
+- Local review reports with critic answers pass the shared schema again: the
+  closed `context_answer` definition no longer forbids its own fields, the
+  schema mapping guards a non-empty local report, and a full answer with
+  question ID, verdict, evidence, and critic identities finalizes through
+  `finalize-local`.
+- Context package answers and verifications bind to the version of the
+  meaningful package content: re-recording after an edited question, goal,
+  acceptance criterion, claim, or constraint moves the affected results into
+  the draft's `superseded_question_results` history with authorship preserved
+  and requires fresh results for the affected scope, while a background-only
+  edit keeps every collected result.
+- `record-package` for local reviews returns the exact immutable snapshot path
+  in `record_command` instead of a literal `<snapshot>` placeholder, so the
+  returned command executes as printed.
+- Ambiguous local comparison refs are detected for revision expressions:
+  `dup~0` with both a branch and a tag named `dup` stops with the ambiguity
+  instead of silently resolving through the tag; fully qualified refs keep
+  working without fetch.
+- Review worktree paths end with an untruncated hash of the full host, project,
+  and MR identity, so colliding readable names (`group/a-b` versus `group-a/b`),
+  different IIDs, and truncated long project paths never share a tree. Managed
+  trees of the retired layout stop preparation with a concrete manual migration
+  instruction and are never moved, deleted, or shadowed by a second directory.
+- An interrupted repeated preparation no longer frees an occupied worktree: the
+  live occupancy marker survives reuse, and unfinished progress at the marker's
+  artifact root keeps the tree protected until the review finishes or is
+  explicitly superseded.
+- The shared review-worktree registry updates under one short lock, so parallel
+  preparations of different merge requests keep both records; no fetch runs
+  under that lock, and record reuse compares the full identity, not only the
+  path.
+- Remote matching normalizes the project path case on both sides while keeping
+  original values for display, so a remote URL such as
+  `https://gitlab.example/Group/Project.git` is recognized, including fork
+  remotes.
+- With several critics, validation requires every selected critic to answer
+  every critic-assigned question; one critic's answer no longer covers another
+  critic's missing assignment, and authorship, contradictions, and targeted
+  follow-up for `not_verified` answers are preserved.
+
 ## \[11.0.2] - 2026-09-30
 
 ### Fixed
+
+- The skills-state permissions preset now also allows reads and external-directory
+  access under `~/.agents/skills/**`, the canonical portable-skills tree, and
+  external-directory enumeration of the exact roots `~/.agents`,
+  `~/.agents/skills`, `~/.config/opencode/skills`, and
+  `~/.local/state/agent-skills`, so directory scans do not prompt. The
+  preset previously covered only legacy skills state paths, so every skill
+  reference read outside a project directory prompted for access in OpenCode V2.
+
+- The GitLab trace-streaming timeout test no longer races process startup: its
+  patched deadline of 50 ms could expire before the fake `glab` child wrote its
+  pid file under parallel suite load, failing the cleanup check. The deadline is
+  now 2 s while the child still sleeps past it, so the timeout and process-group
+  cleanup assertions are unchanged.
 
 - `release_channel --github-output` now writes the output names the publish
   workflow reads (`dist-tag`, `deploys-pages`); the previous snake\_case names

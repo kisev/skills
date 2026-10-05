@@ -4,14 +4,27 @@
 
 `@kisev/memomatic` — персональная обучающая память для агентов по архитектуре
 памяти OpenClaw: ярусный Markdown-корпус, который можно читать как обычные файлы,
-пересобираемый SQLite-индекс с FTS5 и опциональными локальными эмбеддингами,
-проход извлечения `sessions` и ночной проход консолидации `dream`.
+пересобираемый SQLite-индекс с FTS5, опциональными локальными эмбеддингами и
+опциональным реранкером, проход извлечения `sessions` и ночной проход
+консолидации `dream`.
 
 ## Установка
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install
 npm install --global @kisev/memomatic
+
+# Installed package and active CLI
+npm list --global @kisev/memomatic --depth=0
+memomatic --version
 ```
+
+Тег может сдвинуться между просмотром и установкой; последние команды показывают
+установленный пакет и CLI из PATH. Для dev-канала укажите `@dev` и в просмотре,
+и в установке.
 
 Корпус живёт в `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`, ежедневные
 записи, `DREAMS.md`); правила — в `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
@@ -30,8 +43,9 @@ memomatic dream      # консолидация: inbox + продвижение 
 `memomatic-dream.service`/`.timer` для консолидации).
 
 Перед извлечением сессий настройте `sessions.model` (или оставьте старый
-`dream.model`) и провайдера OpenCode; без модели отметка обработанных сессий
-сохраняется. См.
+`dream.model`) и провайдера OpenCode V2; без модели отметка обработанных сессий
+сохраняется. Извлечение сессий и его сервер модели требуют OpenCode `2.x`;
+база сессий до V2 не разбирается. См.
 [настройку, первую запись и расписание](../../docs/ru/how-to/memomatic.md).
 
 ## CLI, Sessions и Dream
@@ -65,7 +79,7 @@ inbox, бэклог сессий, кандидатов на продвижени
 
 Каждая запись может нести аннотацию `source`. Из неё выводится видимость:
 записи `team-*`, `gitlab` и `spec-manage` можно цитировать в командных
-артефактах; остальные источники (`people-journal`, `stopit`,
+артефактах; остальные источники (`people-journal`, `handoff`,
 `mattermost-triage`, `task-*`, `docs-*`, `user`) — personal-only. Метка
 возвращается в поиске.
 

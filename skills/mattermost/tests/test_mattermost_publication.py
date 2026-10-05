@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+import copy
 import importlib.util
 import json
 import os
+import re
 import stat
 import sys
 import tempfile
@@ -33,6 +35,26 @@ USER_ID = "u" * 26
 POST_ID = "p" * 26
 ORIGIN = "https://chat.example.com"
 TARGET = f"{ORIGIN}/team/channels/dev"
+
+
+def sample_card(kind="issue", locale="en"):
+    card = {
+        "kind": kind,
+        "template": "standard",
+        "locale": locale,
+        "title": "project#123 · Retry delivery",
+        "url": "https://gitlab.example/project/-/issues/123",
+        "summary": "Avoid duplicate notifications.",
+        "status": "Open",
+        "author": "Alice",
+        "assignee": "Bob",
+        "milestone": "1.2",
+        "labels": ["bug"],
+        "omitted_labels": 2,
+    }
+    if kind == "mr":
+        card.update(pipeline="Passed", approvals="1/2")
+    return card
 
 
 class PrepareClient:
@@ -356,6 +378,215 @@ class PublicationTests(unittest.TestCase):
 
         with self.assertRaises(PUB.PublicationError):
             PUB.load_action(entry["path"], entry["digest"])
+
+    def test_cards_prepare_apply_and_bind_full_content(self):
+        for kind in ("issue", "mr"):
+            for locale in ("en", "ru"):
+                with self.subTest(kind=kind, locale=locale):
+                    card = sample_card(kind, locale)
+                    result, _, plan = self.prepare(
+                        [{"target": TARGET, "message": "", "files": [], "card": card}]
+                    )
+                    entry, action = self.action(plan)
+                    self.assertEqual(2, action["schema_version"])
+                    self.assertIn(card["title"], Path(result["plan_path"]).read_text())
+                    client = ApplyClient()
+                    self.assertEqual("applied", self.run_apply(entry, client)[0])
+                    attachment = client.posts[0]["props"]["attachments"][0]
+                    self.assertEqual(card["url"], attachment["title_link"])
+                    self.assertIn(
+                        "ещё 2" if locale == "ru" else "2 more", attachment["fields"][-1]["value"]
+                    )
+                    self.assertEqual("", client.posts[0]["root_id"])
+                    action["card"]["summary"] = "Changed after confirmation"
+                    Path(entry["path"]).write_text(json.dumps(action))
+                    with self.assertRaisesRegex(PUB.PublicationError, "tampered"):
+                        PUB.load_action(entry["path"], entry["digest"])
+
+    def test_gitlab_link_alone_remains_ordinary_message(self):
+        message = "Review https://gitlab.example/team/api/-/merge_requests/248"
+        _, _, plan = self.prepare([{"target": TARGET, "message": message, "files": []}])
+        entry, action = self.action(plan)
+        self.assertEqual(1, action["schema_version"])
+        client = ApplyClient()
+        self.assertEqual("applied", self.run_apply(entry, client)[0])
+        self.assertEqual(message, client.posts[0]["message"])
+        self.assertNotIn("attachments", client.posts[0]["props"])
+
+    def test_card_recovery_requires_matching_attachment(self):
+        _, _, plan = self.prepare(
+            [{"target": TARGET, "message": "", "files": [], "card": sample_card()}]
+        )
+        entry, action = self.action(plan)
+        self.assertEqual("blocked", self.run_apply(entry, ApplyClient(create_error=True))[0])
+        expected = PUB.expected_post(action, "", [])
+        found = {"id": POST_ID, "create_at": action["created_at"] * 1000, **expected}
+        changed = copy.deepcopy(found)
+        changed["props"]["attachments"][0]["title"] = "Different issue"
+        self.assertEqual(
+            "blocked", self.run_apply(entry, ApplyClient(recent=[changed]), mode="inspect")[0]
+        )
+        self.assertEqual(
+            "applied", self.run_apply(entry, ApplyClient(recent=[found]), mode="inspect")[0]
+        )
+
+    def test_attachment_defaults_allowed_but_extra_content_rejected(self):
+        expected = {
+            "id": POST_ID,
+            **PUB.expected_post(
+                {
+                    "channel_id": CHANNEL_ID,
+                    "root_id": "",
+                    "publication_id": "x",
+                    "card": sample_card(),
+                    "attachment": MM.publication_card(sample_card()),
+                },
+                "",
+                [],
+            ),
+        }
+        actual = copy.deepcopy(expected)
+        actual["props"]["attachments"][0]["footer"] = ""
+        self.assertTrue(PUB.post_matches(actual, expected))
+        actual["props"]["attachments"][0]["footer"] = "Unexpected content"
+        self.assertFalse(PUB.post_matches(actual, expected))
+        actual = copy.deepcopy(expected)
+        actual["props"]["attachments"] = []
+        self.assertFalse(PUB.post_matches(actual, expected))
+
+    def test_card_errors_precede_network_and_state(self):
+        for change in ({"summary": "x" * 241}, {"actions": []}, {"locale": "de"}):
+            with mock.patch.object(MM, "Client") as client:
+                with self.assertRaises(MM.MattermostError):
+                    MM.prepare_publication(
+                        {
+                            "messages": [
+                                {
+                                    "target": TARGET,
+                                    "message": "",
+                                    "files": [],
+                                    "card": {**sample_card(), **change},
+                                }
+                            ]
+                        }
+                    )
+                client.assert_not_called()
+        self.assertFalse((self.root / "state").exists())
+
+    def test_renderer_change_requires_new_plan(self):
+        _, _, plan = self.prepare(
+            [{"target": TARGET, "message": "", "files": [], "card": sample_card()}]
+        )
+        entry, action = self.action(plan)
+        changed = {**action["attachment"], "color": "#ffffff"}
+        with mock.patch.object(PUB.mm, "publication_card", return_value=changed):
+            with self.assertRaisesRegex(PUB.PublicationError, "renderer changed"):
+                PUB.load_action(entry["path"], entry["digest"])
+
+    def test_card_rejects_files_body_and_existing_thread(self):
+        for message, files in (("extra", []), ("", ["/file"])):
+            with self.assertRaises(MM.MattermostError):
+                self.prepare(
+                    [{"target": TARGET, "message": message, "files": files, "card": sample_card()}]
+                )
+        with mock.patch.object(MM, "publication_channel", return_value={"root_id": POST_ID}):
+            with self.assertRaises(MM.MattermostError):
+                self.prepare(
+                    [{"target": TARGET, "message": "", "files": [], "card": sample_card()}]
+                )
+
+
+class CardTests(unittest.TestCase):
+    def test_guide_examples_are_executable_contracts(self):
+        guide = (SCRIPTS.parent / "references" / "cards.md").read_text()
+        examples = [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", guide, re.S)]
+        self.assertEqual(6, len(examples))
+        for card in examples:
+            with self.subTest(kind=card["kind"], locale=card["locale"], template=card["template"]):
+                self.assertEqual(card["url"], MM.publication_card(card)["title_link"])
+
+    def test_unknown_and_absent_are_distinct(self):
+        for locale, unknown, absent in (("en", "Unknown", "None"), ("ru", "Неизвестно", "Нет")):
+            card = sample_card(locale=locale)
+            card.update(author=None, assignee="", labels=None, omitted_labels=0)
+            fields = MM.publication_card(card)["fields"]
+            self.assertEqual(unknown, fields[1]["value"])
+            self.assertEqual(absent, fields[2]["value"])
+            self.assertEqual(unknown, fields[-1]["value"])
+
+    def test_custom_content_is_literal_not_executable_markdown(self):
+        for kind in ("issue", "mr"):
+            for locale in ("en", "ru"):
+                card = {
+                    key: value
+                    for key, value in sample_card(kind, locale).items()
+                    if key in {"kind", "locale", "title", "url", "summary"}
+                }
+                card.update(
+                    template="custom",
+                    summary="![image](https://example.com/x) @all",
+                    fields=[{"title": "Review", "value": "**literal**", "short": False}],
+                )
+                result = MM.publication_card(card)
+                self.assertNotIn("![image]", result["text"])
+                self.assertNotIn("@all", result["text"])
+                self.assertEqual(r"\*\*literal\*\*", result["fields"][0]["value"])
+
+    def test_limits_and_localized_errors(self):
+        for locale, phrase in (("en", "shorten"), ("ru", "сократите")):
+            card = sample_card(locale=locale)
+            card["title"] = "x" * 100
+            MM.publication_card(card)
+            card["title"] += "x"
+            with self.assertRaisesRegex(MM.MattermostError, phrase):
+                MM.publication_card(card)
+            card = sample_card(locale=locale)
+            card["summary"] = "x" * 240
+            MM.publication_card(card)
+            card["summary"] += "x"
+            with self.assertRaisesRegex(MM.MattermostError, phrase):
+                MM.publication_card(card)
+
+    def test_height_budget_rejects_individually_valid_fields(self):
+        card = {
+            key: value
+            for key, value in sample_card().items()
+            if key in {"kind", "locale", "title", "url", "summary"}
+        }
+        card.update(
+            template="custom", fields=[{"title": "Field", "value": "x" * 100, "short": False}] * 8
+        )
+        with self.assertRaisesRegex(MM.MattermostError, "estimated lines"):
+            MM.publication_card(card)
+
+    def test_wide_summary_has_separate_height_limit(self):
+        card = sample_card()
+        card["summary"] = "界" * 160
+        MM.publication_card(card)
+        card["summary"] += "界"
+        with self.assertRaisesRegex(MM.MattermostError, "card.summary.*8 estimated lines"):
+            MM.publication_card(card)
+
+    def test_malformed_cards_fail_cleanly(self):
+        for change in (
+            {"labels": "bug"},
+            {"labels": [None]},
+            {"omitted_labels": True},
+            {"omitted_labels": -1},
+            {"labels": None},
+            {"author": []},
+            {"summary": "one\ntwo\nthree\nfour"},
+            {"summary": "tab\ttext"},
+            {"url": "javascript:alert(1)"},
+            {"url": "https://user:pass@example.com"},
+            {"url": "https://[invalid"},
+            {"url": "https://example.com:bad"},
+            {"locale": []},
+            {"kind": {}},
+            {"status": 0},
+        ):
+            with self.subTest(change=change), self.assertRaises(MM.MattermostError):
+                MM.publication_card({**sample_card(), **change})
 
 
 if __name__ == "__main__":

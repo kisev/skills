@@ -9,6 +9,7 @@ import {
   listAgentProfiles,
   validateBuiltAgentProfilePlan,
   type LegacyInstallerManifest,
+  type AgentProfileRequest,
 } from "./agent-profiles.js";
 import {
   applyTransaction,
@@ -20,7 +21,6 @@ import {
   migrateLegacyDeploymentNamespace,
   migrateLegacyNamespaces,
   readRegular,
-  recoverTransaction,
   sha256,
   stable,
   type FileMutation,
@@ -74,6 +74,7 @@ export type Plan = {
   operations: PlanItem[];
   dependency?: DependencyPlan & { applied?: "changed" | "unchanged" | "skipped" };
   requires_restart: boolean;
+  digest: string;
 };
 type Asset = { relativePath: string; content: Buffer; sha256: string; mode: number };
 type ManifestFile = {
@@ -107,13 +108,16 @@ export type ArchiveCandidate = {
   kind: "command" | "agent" | "plugin" | "state" | "config-backup";
 };
 
+function migrationInventory(): {
+  retired_command_hashes?: Record<string, string>;
+  retired_plugin_hashes?: Record<string, string>;
+  renamed?: Record<string, string>;
+} {
+  return JSON.parse(readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8"));
+}
+
 function retiredAssetPaths(): Set<string> {
-  const inventory = JSON.parse(
-    readFileSync(resolve(assetsRoot, "migration-inventory.json"), "utf8"),
-  ) as {
-    retired_command_hashes?: Record<string, string>;
-    retired_plugin_hashes?: Record<string, string>;
-  };
+  const inventory = migrationInventory();
   return new Set([
     ...Object.keys(inventory.retired_command_hashes ?? {}),
     ...Object.keys(inventory.retired_plugin_hashes ?? {}),
@@ -130,6 +134,70 @@ export function defaultSelection(): InstallerSelection {
     agents: [...FIXED_AGENT_ROLES],
     plugins: ["rtk"],
     core_activation: true,
+  };
+}
+
+const RENAME_CHAIN_LIMIT = 8;
+
+function migrateSavedCommand(renamed: Record<string, string>, name: string): string {
+  let current = name;
+  for (let depth = 0; depth < RENAME_CHAIN_LIMIT; depth += 1) {
+    const replacement: string | undefined = renamed[current];
+    if (replacement === undefined) return current;
+    current = replacement;
+  }
+  return current;
+}
+
+export function savedSelection(
+  manifest: Pick<Manifest, "commands" | "agents" | "plugins">,
+): Partial<InstallerSelection> {
+  const renamed = migrationInventory().renamed ?? {};
+  const requested = (manifest.commands ?? defaultSelection().commands).map((name) =>
+    migrateSavedCommand(renamed, name),
+  );
+  const commands = requested.filter((name) => SKILL_COMMANDS.includes(name));
+  const agents = (manifest.agents ?? FIXED_AGENT_ROLES).filter((role) =>
+    FIXED_AGENT_ROLES.includes(role),
+  );
+  const plugins = (manifest.plugins ?? ["rtk"]).filter((plugin) =>
+    SELECTABLE_PLUGINS.includes(plugin),
+  );
+  if (requested.join("\0") !== commands.join("\0"))
+    process.stderr.write(
+      `Saved selection migrated to the current catalog: ${requested.join(", ")} -> ${commands.join(", ") || "none"}\n`,
+    );
+  return { commands, agents, plugins };
+}
+
+export async function installedSelection(
+  scope: Scope,
+  cwd = process.cwd(),
+  home = homedir(),
+  overrides: Partial<InstallerSelection> = {},
+): Promise<InstallerSelection | null> {
+  const { manifest } = await currentManifest(deploymentRoot(scope, cwd, home));
+  return manifest
+    ? normalizeSelection({
+        ...savedSelection(manifest),
+        core_activation: manifest.core_activation,
+        ...overrides,
+      })
+    : null;
+}
+
+export async function coreSelectionMutation(
+  root: string,
+  enabled: boolean,
+): Promise<FileMutation | undefined> {
+  const owned = await currentManifest(root);
+  if (!owned.manifest || !owned.raw || owned.manifest.core_activation === enabled) return undefined;
+  return {
+    path: MANIFEST_NAME,
+    operation: "write",
+    content: Buffer.from(`${stable({ ...owned.manifest, core_activation: enabled })}\n`),
+    mode: 0o600,
+    expected: { sha256: sha256(owned.raw) },
   };
 }
 
@@ -521,6 +589,7 @@ async function build(
   home = homedir(),
   requestedSelection?: Partial<InstallerSelection>,
   provisionDependency = true,
+  profileChanges: AgentProfileRequest[] = [],
 ): Promise<BuiltInstallerPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const owned = await currentManifest(root);
@@ -528,9 +597,7 @@ async function build(
     requestedSelection ??
       (owned.manifest
         ? {
-            commands: owned.manifest.commands,
-            agents: owned.manifest.agents,
-            plugins: owned.manifest.plugins,
+            ...savedSelection(owned.manifest),
             core_activation: owned.manifest.core_activation,
           }
         : undefined),
@@ -546,7 +613,7 @@ async function build(
         }
       : undefined;
   const profiles = await buildAgentProfilePlan(
-    { action },
+    { action, changes: profileChanges },
     scope,
     cwd,
     home,
@@ -846,7 +913,12 @@ async function build(
       ),
   };
   return {
-    plan: { ...base },
+    plan: {
+      ...base,
+      digest: sha256(
+        stable({ base, mutations, manifest: owned.raw, profiles: profiles.plan.digest }),
+      ),
+    },
     mutations,
     expectedManifest: manifestContent,
     profiles,
@@ -860,21 +932,18 @@ export async function preview(
   home = homedir(),
   selection?: Partial<InstallerSelection>,
   provisionDependency = true,
+  profileChanges: AgentProfileRequest[] = [],
 ): Promise<Plan> {
-  // Infrastructure normalization like stale-lock reclamation: idempotent,
-  // preserves every legacy byte, and never touches user configuration.
-  await migrateLegacyNamespaces(home);
+  // Preview never migrates namespaces, creates locks, or recovers transactions.
   const stateRoot = lifecycleRoot(scope, cwd, home);
-  const root = deploymentRoot(scope, cwd, home);
   try {
-    return await withLifecycleLock(stateRoot, async () => {
-      if (await recoverTransaction(root, stateRoot, [archiveRoot(scope, cwd, home)]))
-        throw new InstallerError(
-          "recovered_transaction",
-          "Recovered an interrupted transaction; request a fresh plan",
-        );
-      return (await build(action, scope, cwd, home, selection, provisionDependency)).plan;
-    });
+    if (await readRegular(join(stateRoot, "transaction-journal.json")))
+      throw new InstallerError(
+        "recovery_required",
+        "Run maintenance recover before a fresh preview",
+      );
+    return (await build(action, scope, cwd, home, selection, provisionDependency, profileChanges))
+      .plan;
   } catch (error) {
     if (error instanceof InstallerError) throw error;
     if (error instanceof LifecycleError) throw new InstallerError(error.code, error.message);
@@ -887,9 +956,13 @@ export async function apply(
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
-  options: TransactionOptions & { dependencyRunner?: DependencyRunner } = {},
+  options: TransactionOptions & {
+    dependencyRunner?: DependencyRunner;
+    expectedDigest?: string;
+  } = {},
   selection?: Partial<InstallerSelection>,
   provisionDependency = true,
+  profileChanges: AgentProfileRequest[] = [],
 ): Promise<Plan> {
   const { dependencyRunner, ...transactionOptions } = options;
   const stateRoot = lifecycleRoot(scope, cwd, home);
@@ -898,12 +971,22 @@ export async function apply(
   try {
     return await withLifecycleLock(stateRoot, async () => {
       await migrateLegacyDeploymentNamespace(root);
-      if (await recoverTransaction(root, stateRoot, [archiveRoot(scope, cwd, home)]))
+      if (await readRegular(join(stateRoot, "transaction-journal.json")))
         throw new InstallerError(
-          "recovered_transaction",
-          "Recovered an interrupted transaction; request a fresh plan",
+          "recovery_required",
+          "Run maintenance recover before a fresh preview",
         );
-      const built = await build(action, scope, cwd, home, selection, provisionDependency);
+      const built = await build(
+        action,
+        scope,
+        cwd,
+        home,
+        selection,
+        provisionDependency,
+        profileChanges,
+      );
+      if (options.expectedDigest && built.plan.digest !== options.expectedDigest)
+        throw new InstallerError("stale_plan", "Installation changed; request a fresh preview");
       if (
         built.plan.operations.some(
           (item) =>
@@ -944,7 +1027,7 @@ export async function apply(
               inventory.drift.length ||
               inventory.profiles
                 .filter((item) => item.ownership !== "user-owned")
-                .some((item) => item.state !== "current"))
+                .some((item) => item.state !== "current" && item.state !== "not-installed"))
           ) {
             throw new InstallerError(
               "final_validation_failed",

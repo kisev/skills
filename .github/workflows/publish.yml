@@ -10,6 +10,7 @@ name: Publish
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: publication
@@ -154,7 +155,7 @@ jobs:
     name: Dev artifacts
     if: ${{ github.ref == 'refs/heads/dev' && github.event.deleted != true }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 75
     env:
       DEV_REVISION: ${{ github.sha }}
       DEV_RUN_NUMBER: ${{ github.run_number }}
@@ -168,8 +169,11 @@ jobs:
         with:
           fetch-depth: 0
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - name: Run the complete dev publication gate
-        run: task check
+      - name: Await the terminal CI success for this revision
+        env:
+          CI_REVISION: ${{ github.sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: task dev:await-ci
       - name: Derive immutable dev identity
         id: identity
         run: |

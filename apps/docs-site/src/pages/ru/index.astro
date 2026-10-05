@@ -1,0 +1,61 @@
+---
+import Base from "../../layouts/Base.astro";
+import { useUi } from "../../i18n/ui";
+import { localizedPath } from "../../i18n/utils";
+import { integrationInstallCommands } from "../../install-commands.mjs";
+
+const t = useUi("ru");
+const installLatest = integrationInstallCommands("latest");
+const installDev = integrationInstallCommands("dev");
+const components = [
+  { name: t.components.table.portable, provides: t.components.table.portableProvides },
+  { name: t.components.table.agentomatic, provides: t.components.table.agentomaticProvides },
+  { name: t.components.table.memomatic, provides: t.components.table.memomaticProvides },
+  { name: t.components.table.reviewmatic, provides: t.components.table.reviewmaticProvides },
+  { name: t.components.table.taskmatic, provides: t.components.table.taskmaticProvides },
+];
+---
+
+<Base locale="ru" title={t.hero.title} description={t.site.tagline}>
+  <section class="hero">
+    <h1>{t.hero.title}</h1>
+    <p class="lead">{t.hero.lead}</p>
+    <div class="actions">
+      <a class="button primary" href={localizedPath("/skills/", "ru")}>{t.hero.browse}</a>
+      <a class="button" href={localizedPath("/examples/", "ru")}>{t.hero.examples}</a>
+    </div>
+  </section>
+
+  <section>
+    <h2>{t.install.title}</h2>
+    <p class="lead">{t.install.lead}</p>
+    <p>{t.install.verificationNote} {t.install.ownershipNote}</p>
+    <h3>{t.install.latest}</h3>
+    <pre><code>{installLatest}</code></pre>
+    <h3>{t.install.dev}</h3>
+    <pre><code>{installDev}</code></pre>
+  </section>
+
+  <section>
+    <h2>{t.components.title}</h2>
+    <p class="lead">{t.components.lead}</p>
+    <table class="components">
+      <thead>
+        <tr>
+          <th>{t.components.table.component}</th>
+          <th>{t.components.table.provides}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          components.map((component) => (
+            <tr>
+              <td>{component.name}</td>
+              <td>{component.provides}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </section>
+</Base>

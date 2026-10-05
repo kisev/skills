@@ -1,0 +1,35 @@
+---
+import SiteFooter from "../components/SiteFooter.astro";
+import SiteHeader from "../components/SiteHeader.astro";
+import type { Locale } from "../i18n/ui";
+import { withBase } from "../i18n/utils";
+import "../styles/global.css";
+
+interface Props {
+  locale: Locale;
+  title: string;
+  description: string;
+  hideLocaleSwitch?: boolean;
+}
+
+const { locale, title, description, hideLocaleSwitch = false } = Astro.props;
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · Agent Skills</title>
+    <meta name="description" content={description} />
+    <link rel="icon" type="image/svg+xml" href={withBase("/favicon.svg")} />
+    <link rel="stylesheet" href={withBase("/pagefind/pagefind-ui.css")} />
+  </head>
+  <body>
+    <SiteHeader locale={locale} hideLocaleSwitch={hideLocaleSwitch} />
+    <main data-pagefind-body>
+      <slot />
+    </main>
+    <SiteFooter locale={locale} />
+  </body>
+</html>

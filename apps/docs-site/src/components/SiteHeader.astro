@@ -1,0 +1,51 @@
+---
+import { localeNames, useUi, type Locale } from "../i18n/ui";
+import { alternateLocalePath, localizedPath } from "../i18n/utils";
+
+interface Props {
+  locale: Locale;
+  hideLocaleSwitch?: boolean;
+}
+
+const { locale, hideLocaleSwitch = false } = Astro.props;
+const t = useUi(locale);
+const other: Locale = locale === "en" ? "ru" : "en";
+const path = Astro.url.pathname;
+const routes = [
+  { path: "/skills/", label: t.nav.skills },
+  { path: "/examples/", label: t.nav.examples },
+];
+const isActive = (route: string) => {
+  const href = localizedPath(route, locale);
+  return path === href || path.startsWith(href);
+};
+---
+
+<div class="site-header">
+  <div class="inner">
+    <a class="brand" href={localizedPath("/", locale)}>
+      {t.site.name}
+      <small>{t.site.tagline}</small>
+    </a>
+    <nav>
+      {
+        routes.map((route) => (
+          <a
+            href={localizedPath(route.path, locale)}
+            class={isActive(route.path) ? "active" : undefined}
+          >
+            {route.label}
+          </a>
+        ))
+      }
+      <a href="https://github.com/kisev/skills">{t.nav.github}</a>
+      {
+        !hideLocaleSwitch && (
+          <a class="locale-switch" href={alternateLocalePath(path, locale)} lang={other}>
+            {localeNames[other]}
+          </a>
+        )
+      }
+    </nav>
+  </div>
+</div>

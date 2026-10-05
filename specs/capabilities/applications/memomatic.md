@@ -41,16 +41,56 @@ failed relevance gates. Full token matches rank first; age decay still excludes
 old low-ranking episodic entries.
 
 Qwen3 embedding queries use an English task instruction in `Instruct`/`Query`
-format; documents remain raw. Other models keep raw queries unless an explicit
-`embedding.queryInstruction` is configured. The index records a fingerprint of
-endpoint, model and document format. Missing/mismatched fingerprints or dimensions
-require explicit reindexing. Invalid, incomplete or unavailable embeddings fail
-visibly; failed indexing preserves the previous committed index. A completed
-reindex replaces entries, vectors and the fingerprint in one transaction.
+format; documents stay raw apart from the document prefix. Other models keep
+raw queries unless an explicit `embedding.queryInstruction` is configured; an
+explicit empty value disables wrapping. Optional `embedding.queryPrefix` and
+`embedding.documentPrefix` settings format queries and documents independently,
+defaulting to raw text. Raw inputs are split into chunks first and every chunk
+is formatted afterwards, so each document chunk carries the document prefix and
+each query chunk the query prefix plus instruction, all inside
+`embedding.maxTextChars`; a wrapper leaving no room for text fails explicitly.
+Embedding and reranker endpoints are configured independently, each with a full
+URL, model, optional `bearerEnv` naming the environment variable that holds a
+Bearer token — a token with control characters is rejected before any request,
+so its value never reaches an error message — a configurable per-request
+timeout that may cover cold model loads, and request limits (`maxBatchTexts`,
+`maxTextChars`, `candidates`, `minScore`, `maxDocuments`, `maxChars`). No
+server is built in, both services default to disabled, and tokens never reach
+logs. The index records a fingerprint of endpoint, model and document format
+including prefix, chunk budget and the document-processing version; query-only
+and reranker settings are excluded, so changing them never requires
+recomputing vectors. Missing/mismatched fingerprints or dimensions
+require explicit reindexing. Invalid, incomplete, timed-out or unavailable
+enabled endpoints fail visibly in CLI and MCP without falling back to another
+search mode; failed indexing preserves the previous committed index. A
+completed reindex replaces entries, vectors and the fingerprint in one
+transaction.
+
+Chunk vectors are mean-pooled onto one vector per entry, so chunked entries
+surface once. Reranker documents are chunked so the query, one document chunk
+and the server-side template stay inside `reranker.maxChars`; the remaining
+budget is never inflated, and a query leaving no room for a document chunk
+fails before anything is sent. Chunk scores aggregate by maximum per entry.
+Character budgets are a
+conservative proxy of roughly two characters per token, not exact tokenization;
+defaults target the common 4096-token input budget.
+
+An enabled reranker collects a bounded wide candidate set of up to
+`reranker.candidates` entries from lexical and vector search before the strict
+relevance gates, applies the project filter before sending, and posts
+`{model, query, documents, top_n}` to the configured `/rerank`-style endpoint.
+Because `top_n` equals the number of sent documents, a complete answer must
+contain exactly `top_n` results with unique in-range indices and finite
+scores; an empty or shortened response to a non-empty batch fails instead of
+returning an empty success. Reranker scores
+become the final relevance and order without an unconditional literal-match
+priority; `reranker.minScore` drops weak results. Reranker scores stay ranking
+signals, not universal probabilities.
 
 CLI `search --explain` and MCP `memory_search` with `explain: true` expose matched
 tokens, lexical coverage, vector similarity, relevance, age/importance factors
-and acceptance reason. Optional `project` limits recall to that exact project
+and acceptance reason, plus the candidate count and threshold for reranked
+results. Optional `project` limits recall to that exact project
 plus user-level memory; unscoped entries are not guessed into a project. Returned
 source, origin, kind and project identify learned context. Such context does not
 override repository instructions, policy or current user decisions. No automatic
@@ -60,20 +100,34 @@ injection or full historical rebuild is introduced.
 
 Regression tests cover exact matches, paraphrases, an unknown name, unrelated
 queries, project filtering, inactive embedding endpoints, malformed vectors and
-model changes with equal dimensions. Local Qwen3 calibration uses anonymized
+model changes with equal dimensions, the documented vLLM-style embeddings and
+`/rerank` contract with permuted response indices, Bearer authentication
+without token leakage — including control-character tokens rejected before any
+request through real fetch, CLI and MCP diagnostics — per-chunk query and
+document formatting inside `maxTextChars`, indexes stamped by the previous
+formatting version that require explicit reindexing, chunking with per-input
+pooling, document-format-change migration with preserved indexes on failure,
+explicit timeout and malformed reranker failures, reranker budget rejections
+before any request, incomplete reranker answers failing instead of empty
+successes, and reranker ordering that ranks a relevant paraphrase above
+a literal match. Local Qwen3 calibration uses anonymized
 positive and negative examples; thresholds remain configurable rather than a
-claim of universal semantic accuracy.
+claim of universal semantic accuracy. Live server availability and concrete
+threshold quality are not asserted.
 
 ## Dependencies
 
-Node.js 22.13+, `node:sqlite`, Commander, the build-materialized common CLI runtime, an optional OpenAI-compatible embedding endpoint, and a configured OpenCode provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
+Node.js 22.13+, `node:sqlite`, Commander, `jsonc-parser`, the build-materialized common CLI runtime, optional OpenAI-compatible embedding and `/rerank`-style reranking endpoints, and a configured OpenCode V2 provider for Sessions extraction and Dream consolidation (a legacy `dream` extraction configuration migrates to `sessions` until overridden). Agentomatic does not depend on memomatic; applications remain independently installed.
 
-Session ingestion (the `sessions` command) reads text parts from OpenCode's normalized `part`
-table, ordered within each message; legacy databases with embedded message parts
-remain readable. Sessions use one owned, authenticated loopback OpenCode server
-per run or an explicitly selected existing server. Extraction sessions deny
-tools; only response text and actual usage metadata are consumed. Internal
-extraction sessions remain excluded from later extraction.
+Session ingestion (the `sessions` command) reads user and assistant text from
+OpenCode's native V2 `session_v2`/`session_message` projections in sequence
+order; reasoning, tool, and synthetic parts stay unread. A pre-V2 database fails
+with a visible instruction to start V2 so it migrates history first. Sessions
+use one owned, authenticated loopback OpenCode V2 server per run or an
+explicitly selected existing server. Extraction sessions deny tools through
+ordered deny-all permissions; only response text is consumed because transient
+V2 generation reports no exact token usage. Internal extraction sessions remain
+excluded from later extraction.
 
 ## Remote/Local Effects
 
@@ -124,9 +178,9 @@ Per-call timeout defaults to 180 seconds, additional retries to one, fragment bo
 size to 24000 characters, and session idle age to ten minutes. Whole-run duration
 and session-count limits default to zero (unlimited).
 
-Local SQL shall select text parts before transferring payloads. Modern session,
-message and part revisions allow unchanged sessions to bypass body parsing;
-message/content fingerprints retain correctness for changed and legacy sessions.
+Local SQL shall select message rows before transferring payloads. Session and
+ordered-message revisions allow unchanged sessions to bypass body parsing;
+revision-list fingerprints retain correctness for changed sessions.
 Long messages are processed through bounded fragments without truncating the end
 or splitting Unicode surrogate pairs. Only adjacent exact duplicates of the same
 role are removed; semantic importance is not guessed by a local filter. Fragments
@@ -159,7 +213,8 @@ Tests cover continuation and edits of old sessions, complete long-message tails,
 revision-cache hits, interrupted extraction and response reuse, model timeout and
 retry events, unchanged embedding reuse and force, live-owner locks, safe help and
 status, JSON/stdout separation, and owned-server reuse and shutdown. A bounded
-live check validates the OpenCode HTTP contract without processing user history.
+live check validates the native V2 OpenCode HTTP, permission-denial, and
+read-only database contract without processing user history.
 
 ### Corpus constraints
 

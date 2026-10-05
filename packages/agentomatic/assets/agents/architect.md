@@ -3,10 +3,10 @@ description: Analyzes architecture choices, compatibility, and operational risk.
 mode: subagent
 hidden: true
 steps: 16
-permission:
-  edit: deny
-  bash: deny
-  task: deny
+permissions:
+  - { action: edit, resource: "*", effect: deny }
+  - { action: shell, resource: "*", effect: deny }
+  - { action: subagent, resource: "*", effect: deny }
 ---
 
 # Architect

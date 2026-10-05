@@ -4,39 +4,26 @@
 from __future__ import annotations
 
 import argparse
-import errno
 import hashlib
-import importlib
 import importlib.util
 import json
 import os
 import re
-import stat
+import shlex
 import subprocess
-import sys
 import tempfile
-import time
 import urllib.parse
 from datetime import UTC, datetime
 from itertools import pairwise
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, NoReturn, Protocol, TypeGuard, cast
+from typing import TYPE_CHECKING, Any, NoReturn, TypeGuard, cast
 
 from .release_planning import PlanningError
 from .release_planning import validate as validate_release_plan
 
 if TYPE_CHECKING:
-    from .. import mutation_process
-else:
-    try:
-        from .. import mutation_process
-    except ImportError:
-        from . import mutation_process
-
-if TYPE_CHECKING:
     from ..state_artifacts import (
         ensure_private_directory,
-        render_mutation_command,
         versioned_markdown,
         xdg_state_home,
     )
@@ -44,14 +31,12 @@ else:
     try:
         from ..state_artifacts import (
             ensure_private_directory,
-            render_mutation_command,
             versioned_markdown,
             xdg_state_home,
         )
     except ImportError:
         from .state_artifacts import (
             ensure_private_directory,
-            render_mutation_command,
             versioned_markdown,
             xdg_state_home,
         )
@@ -63,31 +48,6 @@ COLLECTION_RE = re.compile(
     r"https://(?P<host>[A-Za-z0-9.-]+)/(?P<project>.+?)/-/(?:issues|work_items)/?$"
 )
 DIGEST_RE = re.compile(r"[a-f0-9]{64}")
-MUTATION_TIMEOUT_SECONDS = 60.0
-MUTATION_OUTPUT_LIMIT = 1024 * 1024
-MUTATION_TERMINATION_GRACE_SECONDS = 0.5
-MUTATION_REAP_TIMEOUT_SECONDS = 0.5
-LOCK_TIMEOUT_SECONDS = 5.0
-LOCK_RETRY_SECONDS = 0.05
-
-
-class FileLocking(Protocol):
-    LOCK_EX: int
-    LOCK_NB: int
-
-    def flock(self, descriptor: int, operation: int) -> None: ...
-
-
-fcntl: FileLocking | None
-try:
-    fcntl = cast("FileLocking", importlib.import_module("fcntl"))
-except ImportError:
-    fcntl = None
-
-
-def marker_helper() -> Path:
-    sibling = Path(__file__).with_name("state_artifacts.py")
-    return sibling if sibling.exists() else Path(__file__).parents[1] / "state_artifacts.py"
 
 
 MAX_PAGES = 100
@@ -169,6 +129,7 @@ TEXT = {
         "action_milestone": "Update milestone",
         "action_create_milestone": "Create milestone",
         "action_link": "Create issue link",
+        "action_replace_link": "Replace conflicting issue link",
         "action_replace_link_delete": "Delete conflicting issue link",
         "action_replace_link_create": "Create replacement issue link",
         "action_message": "Publish message",
@@ -177,6 +138,27 @@ TEXT = {
         "action_information_ping_2": "Publish second follow-up",
         "action_information_close": "Publish stale closure message",
         "action_close": "Close issue",
+        "guard_user": "Verify the authenticated user still matches the triage snapshot",
+        "guard_user_stop": "authenticated GitLab user changed; regenerate the triage plan",
+        "guard_fresh": "Verify the target is unchanged since triage",
+        "guard_fresh_stop": "the target changed after triage; refresh the analysis and regenerate the plan",
+        "guard_open": "Verify the target is still open",
+        "guard_open_stop": "the target is closed; refresh the analysis and regenerate the plan",
+        "guard_title": "Verify the title is unchanged since triage",
+        "guard_title_stop": "the title changed after triage; refresh the analysis and regenerate the plan",
+        "guard_description": "Verify the description is unchanged since triage",
+        "guard_description_stop": "the description changed after triage; refresh the analysis and regenerate the plan",
+        "guard_labels": "Verify the labels still match the triage snapshot",
+        "guard_labels_stop": "labels changed after triage; refresh the analysis and regenerate the plan",
+        "guard_milestone": "Verify the milestone still matches the triage snapshot",
+        "guard_milestone_stop": "the milestone changed after triage; refresh the analysis and regenerate the plan",
+        "guard_conversation": "Verify the conversation is unchanged and the prepared message is not published yet",
+        "guard_conversation_stop": "the conversation changed or the message is already published; refresh the analysis and regenerate the plan",
+        "guard_links": "Verify the observed issue links are unchanged",
+        "guard_links_stop": "issue links changed after triage; refresh the analysis and regenerate the plan",
+        "guard_milestone_search": "Find the proposed milestone or create it when absent",
+        "regenerate": "Regeneration required",
+        "uncovered": "Actions without commands",
     },
     "ru": {
         "summary": "Сводка триажа задач",
@@ -248,6 +230,7 @@ TEXT = {
         "action_milestone": "Обновить майлстоун",
         "action_create_milestone": "Создать майлстоун",
         "action_link": "Создать связь задач",
+        "action_replace_link": "Заменить конфликтующую связь задач",
         "action_replace_link_delete": "Удалить конфликтующую связь задач",
         "action_replace_link_create": "Создать заменяющую связь задач",
         "action_message": "Опубликовать сообщение",
@@ -256,6 +239,27 @@ TEXT = {
         "action_information_ping_2": "Опубликовать второй пинг",
         "action_information_close": "Опубликовать финальное сообщение",
         "action_close": "Закрыть задачу",
+        "guard_user": "Проверить, что аутентифицированный пользователь совпадает со снимком триажа",  # noqa: RUF001
+        "guard_user_stop": "пользователь GitLab изменился; перегенерируйте план триажа",
+        "guard_fresh": "Проверить, что цель не изменилась после триажа",
+        "guard_fresh_stop": "цель изменилась после триажа; обновите анализ и перегенерируйте план",
+        "guard_open": "Проверить, что цель всё ещё открыта",
+        "guard_open_stop": "цель закрыта; обновите анализ и перегенерируйте план",
+        "guard_title": "Проверить, что заголовок не изменился после триажа",
+        "guard_title_stop": "заголовок изменился после триажа; обновите анализ и перегенерируйте план",
+        "guard_description": "Проверить, что описание не изменилось после триажа",
+        "guard_description_stop": "описание изменилось после триажа; обновите анализ и перегенерируйте план",
+        "guard_labels": "Проверить, что метки совпадают со снимком триажа",  # noqa: RUF001
+        "guard_labels_stop": "метки изменились после триажа; обновите анализ и перегенерируйте план",
+        "guard_milestone": "Проверить, что майлстоун совпадает со снимком триажа",  # noqa: RUF001
+        "guard_milestone_stop": "майлстоун изменился после триажа; обновите анализ и перегенерируйте план",
+        "guard_conversation": "Проверить, что обсуждение не изменилось и сообщение ещё не опубликовано",
+        "guard_conversation_stop": "обсуждение изменилось или сообщение уже опубликовано; обновите анализ и перегенерируйте план",
+        "guard_links": "Проверить, что наблюдаемые связи задач не изменились",
+        "guard_links_stop": "связи задач изменились после триажа; обновите анализ и перегенерируйте план",
+        "guard_milestone_search": "Найти предложенный майлстоун или создать его при отсутствии",  # noqa: RUF001
+        "regenerate": "Требуется перегенерация",
+        "uncovered": "Действия без команд",
     },
 }
 RU_VALUES: dict[str, dict[str | None, str]] = {
@@ -295,14 +299,6 @@ RU_VALUES: dict[str, dict[str | None, str]] = {
 
 class WorkflowError(ValueError):
     """Expected safe workflow failure."""
-
-
-class MutationNotAttempted(WorkflowError):
-    """The mutation process could not start, so no external write was possible."""
-
-
-class MutationOutcomeUnknown(WorkflowError):
-    """The mutation process started, but its external outcome cannot be proven."""
 
 
 class Parser(argparse.ArgumentParser):
@@ -386,11 +382,6 @@ def fsync_directory(path: Path) -> None:
             os.close(descriptor)
     except (AttributeError, NotImplementedError, OSError) as exc:
         raise WorkflowError("durable state updates require POSIX directory fsync") from exc
-
-
-def durable_unlink(path: Path) -> None:
-    path.unlink()
-    fsync_directory(path.parent)
 
 
 def write_json(path: Path, value: object) -> None:
@@ -503,7 +494,11 @@ def paginated(hostname: str, endpoint: str) -> list[dict[str, Any]]:
                 items.append(raw)
                 if len(items) > MAX_ITEMS:
                     raise WorkflowError("GitLab collection exceeds the item limit")
-        if len(value) < 100:
+        # The issue-links API returns the entire collection, including at CE's
+        # 100-link boundary; a second page would repeat that same collection.
+        if len(value) < 100 or re.fullmatch(
+            r"projects/[^/]+/issues/[0-9]+/links", endpoint.split("?", maxsplit=1)[0]
+        ):
             return items
     raise WorkflowError("GitLab pagination exceeds the page limit")
 
@@ -887,20 +882,6 @@ def discussion_notes(
     return result
 
 
-def conversation_state(
-    discussions: list[dict[str, Any]], discussion_id: str | None = None
-) -> dict[str, Any]:
-    notes = [
-        note
-        for note in discussion_notes(discussions, discussion_id)
-        if note.get("system") is not True
-    ]
-    note_ids = [note.get("id") for note in notes]
-    if not all(positive(note_id) for note_id in note_ids) or len(set(note_ids)) != len(note_ids):
-        raise WorkflowError("information conversation has invalid stable note IDs")
-    return {"note_ids": note_ids, "digest": digest(notes)}
-
-
 def validate_message(snapshot: dict[str, Any], value: object, label: str) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != {"target", "body"}:
         raise WorkflowError(f"{label} must contain target and body")
@@ -1173,7 +1154,10 @@ def observed_issue_links(
             relation_type = link.get("link_type")
             if relation_type not in {"relates_to", "blocks", "is_blocked_by"}:
                 raise WorkflowError("observed issue link type is invalid")
-            link_id = link.get("id")
+            # REST list responses expose the relationship ID separately from the issue ID.
+            link_id = link.get("issue_link_id", link.get("id"))
+            if "issue_link_id" in link and not positive(link_id):
+                raise WorkflowError("observed issue link has an invalid relationship ID")
             if not positive(link_id):
                 matching = next(
                     (
@@ -1656,836 +1640,399 @@ def issue_relations_markdown(value: list[dict[str, Any]], locale: str) -> str:
     )
 
 
-def api_command(
-    host: str,
-    method: str,
-    endpoint: str,
-    request: Path,
-    *,
-    action_id: str,
-    binding: str,
-) -> str:
-    return render_mutation_command(
-        [
-            "glab",
-            "api",
-            "--hostname",
-            host,
-            "--method",
-            method,
-            endpoint,
-            "--silent",
-            "--header",
-            "Content-Type: application/json",
-            "--input",
-            str(request),
-        ],
-        skill="task-triage",
-        action=action_id,
-        binding=binding,
-        helper=marker_helper(),
-    )
-
-
 def code_block(content: str, language: str) -> list[str]:
     fence = "`" * max(3, max((len(match) + 1 for match in re.findall(r"`+", content)), default=3))
     return [f"{fence}{language}", content, fence]
 
 
-def action(
-    root: Path,
+def shell_quote(value: str) -> str:
+    return shlex.quote(value)
+
+
+def oneline(value: object) -> str:
+    """Collapse one analysis rationale into a single comment line."""
+    return " ".join(str(value).split())
+
+
+def inline_json(value: object) -> str:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
+def stream_digest(value: str) -> str:
+    """Digest the exact byte stream that `jq -r ... | sha256sum` hashes."""
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
+def bodies_digest(bodies: list[str]) -> str:
+    """Replicate `jq -sr '[..] | sort | .[]' | sha256sum` for snapshot note bodies."""
+    return stream_digest("".join(f"{body}\n" for body in sorted(bodies)))
+
+
+def field_digest(value: object) -> str:
+    """Replicate `jq -r '. // \"\"' | sha256sum` for one observed text field."""
+    return stream_digest(f"{value or ''}\n")
+
+
+def observed_updated_at(snapshot: dict[str, Any], target: dict[str, Any]) -> str | None:
+    """Return the snapshot updated_at timestamp for an observed write target."""
+    if target.get("kind", "issue") == "issue":
+        value = snapshot.get("issue", {}).get("updated_at")
+    else:
+        value = next(
+            (
+                item.get("updated_at")
+                for item in [*snapshot.get("merge_requests", []), *snapshot.get("closed_by", [])]
+                if isinstance(item, dict)
+                and item.get("project_id") == target.get("project_id")
+                and item.get("iid") == target.get("iid")
+            ),
+            None,
+        )
+    return value if isinstance(value, str) and value.strip() else None
+
+
+def conversation_bodies(discussions: list[dict[str, Any]], discussion_id: str | None) -> list[str]:
+    """Non-system note bodies of one conversation, or of every discussion."""
+    return [
+        str(note.get("body") or "")
+        for note in discussion_notes(discussions, discussion_id)
+        if note.get("system") is not True
+    ]
+
+
+def link_match_expression() -> str:
+    return (
+        "((.project_id == $p and .iid == $i)"
+        " or (.source_issue.project_id == $p and .source_issue.iid == $i)"
+        " or (.target_issue.project_id == $p and .target_issue.iid == $i))"
+    )
+
+
+def guard_stop(key: str, locale: str) -> str:
+    return f"{{ echo {shell_quote(TEXT[locale][key])} >&2; false; }}"
+
+
+def user_guard(host: str, current_user: dict[str, Any], locale: str) -> str:
+    """Stop the block before any write when the authenticated user changed."""
+    check = (
+        f"(glab api --hostname {shell_quote(host)} user"
+        f" | jq -e --argjson id {int(current_user['id'])}"
+        f" --arg username {shell_quote(str(current_user['username']))}"
+        " '.id == $id and .username == $username' >/dev/null"
+        f" || {guard_stop('guard_user_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_user']}", check])
+
+
+def fresh_guard(host: str, endpoint: str, updated_at: str, locale: str) -> str:
+    """Stop the block when the target changed after triage."""
+    check = (
+        f'([ "$(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}'
+        f" | jq -r '.updated_at')\" = {shell_quote(updated_at)} ]"
+        f" || {guard_stop('guard_fresh_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_fresh']}", check])
+
+
+def open_guard(host: str, endpoint: str, locale: str) -> str:
+    """Stop the block when the target issue or merge request is closed."""
+    check = (
+        f"(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}"
+        " | jq -e '.state == \"opened\"' >/dev/null"
+        f" || {guard_stop('guard_open_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_open']}", check])
+
+
+def title_guard(host: str, endpoint: str, observed_title: str, locale: str) -> str:
+    check = (
+        f'([ "$(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}'
+        f" | jq -r '.title')\" = {shell_quote(observed_title)} ]"
+        f" || {guard_stop('guard_title_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_title']}", check])
+
+
+def description_guard(host: str, endpoint: str, value: object, locale: str) -> str:
+    check = (
+        f'(body_digest="$(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}'
+        ' | jq -r \'.description // ""\' | sha256sum)"'
+        f' && [ "${{body_digest%% *}}" = {shell_quote(field_digest(value))} ]'
+        f" || {guard_stop('guard_description_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_description']}", check])
+
+
+def labels_guard(host: str, endpoint: str, expected: list[str], locale: str) -> str:
+    check = (
+        f'([ "$(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}'
+        ' | jq -c \'[(.labels // [])[] | if type == "object" then .name else . end]'
+        " | sort')\" = "
+        f"{shell_quote(inline_json(sorted(expected)))} ]"
+        f" || {guard_stop('guard_labels_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_labels']}", check])
+
+
+def milestone_guard(host: str, endpoint: str, milestone_id: int | None, locale: str) -> str:
+    expression = (
+        ".milestone == null" if milestone_id is None else f".milestone.id == {int(milestone_id)}"
+    )
+    check = (
+        f"(glab api --hostname {shell_quote(host)} {shell_quote(endpoint)}"
+        f" | jq -e '{expression}' >/dev/null"
+        f" || {guard_stop('guard_milestone_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_milestone']}", check])
+
+
+def conversation_guard(
     host: str,
-    kind: str,
+    discussions_endpoint: str,
+    discussion_id: str | None,
+    expected: str,
+    locale: str,
+) -> str:
+    """Stop the block when the conversation changed or the message is published."""
+    selector = (
+        "[.[][] | .notes[]? | select(.system != true) | .body]"
+        if discussion_id is None
+        else "[.[][] | select(.id == $d) | .notes[]? | select(.system != true) | .body]"
+    )
+    arguments = "" if discussion_id is None else f" --arg d {shell_quote(discussion_id)}"
+    check = (
+        f'(note_digest="$(glab api --hostname {shell_quote(host)}'
+        f" --paginate {shell_quote(discussions_endpoint + '?per_page=100')}"
+        f" | jq -sr{arguments} '{selector} | sort | .[]'"
+        ' | sha256sum)"'
+        f' && [ "${{note_digest%% *}}" = {shell_quote(expected)} ]'
+        f" || {guard_stop('guard_conversation_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_conversation']}", check])
+
+
+def absent_link_guard(
+    host: str, links_endpoint: str, project_id: int, iid: int, locale: str
+) -> str:
+    check = (
+        f'([ "$(glab api --hostname {shell_quote(host)} '
+        f"{shell_quote(links_endpoint + '?per_page=100')}"
+        f" | jq --argjson p {int(project_id)} --argjson i {int(iid)}"
+        f" '[.[] | select({link_match_expression()})] | length')\" = 0 ]"
+        f" || {guard_stop('guard_links_stop', locale)}) &&"
+    )
+    return "\n".join([f"# {TEXT[locale]['guard_links']}", check])
+
+
+def inline_write(
+    host: str,
     method: str,
     endpoint: str,
-    payload: dict[str, Any],
-    preview: str,
-) -> dict[str, str]:
-    request, request_digest = write_artifact(root, "commands", payload)
-    return {
-        "kind": kind,
-        "preview": preview,
-        "command": api_command(
-            host,
-            method,
-            endpoint,
-            request,
-            action_id=f"{kind}:{request_digest}",
-            binding=digest(
-                {
-                    "kind": kind,
-                    "method": method,
-                    "endpoint": endpoint,
-                    "request_digest": request_digest,
-                }
-            ),
-        ),
-    }
-
-
-def message_action(
-    root: Path, host: str, target: dict[str, Any], body: str, kind: str = "message"
-) -> dict[str, str]:
-    collection = "issues" if target["kind"] == "issue" else "merge_requests"
-    endpoint = f"projects/{target['project_id']}/{collection}/{target['iid']}"
-    if target["discussion_id"] is None:
-        endpoint += "/notes"
-    else:
-        encoded = urllib.parse.quote(target["discussion_id"], safe="")
-        endpoint += f"/discussions/{encoded}/notes"
-    return action(root, host, kind, "POST", endpoint, {"body": body}, body)
-
-
-def triage_runner() -> Path:
-    runtime = Path(__file__).resolve()
-    bundled = runtime.parents[1] / "triage_task.py"
-    if bundled.is_file():
-        return bundled
-    for parent in runtime.parents:
-        source = parent / "skills" / "task-triage" / "scripts" / "triage_task.py"
-        if source.is_file():
-            return source
-    raise WorkflowError("task-triage runner is unavailable")
-
-
-def information_command(guard: Path, guard_digest: str, stage: str) -> str:
-    argv = [
-        sys.executable,
-        "-I",
-        "-S",
-        "-B",
-        str(triage_runner()),
-        "apply-information",
-        "--guard",
-        str(guard),
-        "--stage",
-        stage,
-    ]
-    return render_mutation_command(
-        argv,
-        skill="task-triage",
-        action=f"information:{stage}:{guard_digest}",
-        binding=digest({"guard_digest": guard_digest, "stage": stage}),
-        helper=marker_helper(),
+    body: str,
+    *,
+    chain: bool = True,
+    expand: bool = False,
+    suffix: str = "",
+) -> str:
+    """Render one direct glab api write with an inline JSON heredoc body."""
+    delimiter = "TRIAGE_JSON_" + hashlib.sha256(body.encode()).hexdigest()[:16].upper()
+    boundary = delimiter if expand else f"'{delimiter}'"
+    command = (
+        f"glab api --hostname {shell_quote(host)} --method {method} {shell_quote(endpoint)}"
+        f" --header 'Content-Type: application/json' --input - <<{boundary}{suffix}"
     )
+    if chain:
+        command += " &&"
+    return f"{command}\n{body}\n{delimiter}"
 
 
-def link_command(guard: Path, guard_digest: str, stage: str) -> str:
-    argv = [
-        sys.executable,
-        "-I",
-        "-S",
-        "-B",
-        str(triage_runner()),
-        "apply-link",
-        "--guard",
-        str(guard),
-        "--stage",
-        stage,
-    ]
-    return render_mutation_command(
-        argv,
-        skill="task-triage",
-        action=f"link:{stage}:{guard_digest}",
-        binding=digest({"guard_digest": guard_digest, "stage": stage}),
-        helper=marker_helper(),
-    )
-
-
-def replacement_link_actions(
-    root: Path,
-    host: str,
-    source: dict[str, Any],
-    current_user: dict[str, Any],
-    relation: dict[str, Any],
-) -> list[dict[str, str]]:
-    guard_value = {
-        "schema": "task-triage/link-guard/v1",
-        "host": host,
-        "current_user": current_user,
-        "source": {"project_id": source["project_id"], "iid": source["iid"]},
-        "target": {
-            "project_id": relation["target_project_id"],
-            "iid": relation["target_issue_iid"],
-        },
-        "existing_link": relation["existing_link"],
-        "desired_type": relation["relation_type"],
-    }
-    guard, guard_digest = write_artifact(root, "link-guards", guard_value)
-    return [
-        {
-            "kind": "replace_link_delete",
-            "preview": json.dumps(relation["existing_link"], ensure_ascii=False, indent=2),
-            "command": link_command(guard, guard_digest, "delete"),
-        },
-        {
-            "kind": "replace_link_create",
-            "preview": json.dumps(
-                {
-                    "target_project_id": relation["target_project_id"],
-                    "target_issue_iid": relation["target_issue_iid"],
-                    "link_type": relation["relation_type"],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ),
-            "command": link_command(guard, guard_digest, "create"),
-        },
-    ]
-
-
-def information_actions(
-    root: Path,
-    host: str,
-    request: dict[str, Any],
-    current_user: dict[str, Any],
-    snapshot: dict[str, Any],
-) -> list[dict[str, str]]:
-    target, discussions = conversation_for(snapshot, request["target"], "information guard")
-    observed_conversation = (
-        conversation_state(discussions, target["discussion_id"])
-        if request["action"] == "new"
-        else None
-    )
-    guard, guard_digest = write_artifact(
-        root,
-        "information-guards",
-        {
-            "schema": "task-triage/information-guard/v4",
-            "host": host,
-            "current_user": current_user,
-            "request": request,
-            "conversation_state": observed_conversation,
-        },
-    )
-    message = {
-        "kind": f"information_{request['action']}",
-        "preview": request["body"],
-        "command": information_command(guard, guard_digest, "message"),
-    }
-    if request["action"] != "close":
-        return [message]
-    return [
-        message,
-        {
-            "kind": "close",
-            "preview": request["rationale"],
-            "command": information_command(guard, guard_digest, "close"),
-        },
-    ]
-
-
-def read_information_guard(path: Path) -> tuple[dict[str, Any], str]:
-    if len(path.parents) < 3:
-        raise WorkflowError("information guard path is invalid")
-    scope = path.parents[2].name
-    if re.fullmatch(r"[a-f0-9]{32}", scope) is None:
-        raise WorkflowError("information guard scope is invalid")
-    expected = (
-        xdg_state_home()
-        / "agent-skills"
-        / "task-triage"
-        / scope
-        / "artifacts"
-        / "information-guards"
-    )
-    if path.parent != expected:
-        raise WorkflowError("information guard is outside the task-triage state root")
-    private_directory(expected)
-    if path.suffix != ".json" or not DIGEST_RE.fullmatch(path.stem):
-        raise WorkflowError("information guard path is invalid")
-    try:
-        raw = path.read_bytes()
-    except OSError as exc:
-        raise WorkflowError("information guard is unavailable") from exc
-    if hashlib.sha256(raw).hexdigest() != path.stem:
-        raise WorkflowError("information guard digest does not match")
-    guard = parse_object(raw, "information guard")
-    schema = guard.get("schema")
-    expected_fields = {"schema", "host", "current_user", "request"}
-    if schema in {
-        "task-triage/information-guard/v2",
-        "task-triage/information-guard/v3",
-        "task-triage/information-guard/v4",
-    }:
-        expected_fields.add("conversation_state")
-    if set(guard) != expected_fields or schema not in {
-        "task-triage/information-guard/v1",
-        "task-triage/information-guard/v2",
-        "task-triage/information-guard/v3",
-        "task-triage/information-guard/v4",
-    }:
-        raise WorkflowError("information guard fields are invalid")
-    if not isinstance(guard.get("host"), str) or not isinstance(guard.get("current_user"), dict):
-        raise WorkflowError("information guard identity is invalid")
-    if schema in {
-        "task-triage/information-guard/v2",
-        "task-triage/information-guard/v3",
-        "task-triage/information-guard/v4",
-    }:
-        state = guard["conversation_state"]
-        request = guard.get("request")
-        target = request.get("target") if isinstance(request, dict) else None
-        requires_state = (
-            isinstance(request, dict)
-            and request.get("action") == "new"
-            and isinstance(target, dict)
-            and (
-                schema == "task-triage/information-guard/v4" or target.get("discussion_id") is None
-            )
-        )
-        if requires_state:
-            if (
-                not isinstance(state, dict)
-                or set(state) != {"note_ids", "digest"}
-                or not isinstance(state.get("note_ids"), list)
-                or not all(positive(note_id) for note_id in state["note_ids"])
-                or len(set(state["note_ids"])) != len(state["note_ids"])
-                or not isinstance(state.get("digest"), str)
-                or DIGEST_RE.fullmatch(state["digest"]) is None
-            ):
-                raise WorkflowError("information guard conversation state is invalid")
-        elif state is not None:
-            raise WorkflowError("information guard conversation state is invalid")
-    return guard, path.stem
-
-
-def fresh_information_snapshot(guard: dict[str, Any]) -> dict[str, Any]:
-    target = guard["request"].get("target")
-    if not isinstance(target, dict):
-        raise WorkflowError("information guard target is invalid")
-    project_id, iid = target.get("project_id"), target.get("iid")
-    if not positive(project_id) or not positive(iid):
-        raise WorkflowError("information guard target identity is invalid")
-    kind = target.get("kind")
-    collection = (
-        "issues" if kind == "issue" else "merge_requests" if kind == "merge_request" else None
-    )
-    if collection is None:
-        raise WorkflowError("information guard target kind is invalid")
-    base = f"projects/{project_id}/{collection}/{iid}"
-    subject = glab_json(guard["host"], base)
-    if not isinstance(subject, dict) or subject.get("iid") not in {None, iid}:
-        raise WorkflowError("fresh information target is incomplete")
-    discussions = paginated(guard["host"], f"{base}/discussions")
-    if kind == "issue":
-        return {
-            "target": {"project_id": project_id, "iid": iid},
-            "issue": subject,
-            "discussions": discussions,
-            "merge_request_conversations": [],
-        }
-    return {
-        "target": {"project_id": -1, "iid": -1},
-        "issue": {"state": "opened"},
-        "discussions": [],
-        "merge_request_conversations": [
-            {"project_id": project_id, "iid": iid, "discussions": discussions}
-        ],
-    }
-
-
-def run_mutation_process(command: list[str], payload: bytes) -> subprocess.CompletedProcess[bytes]:
-    try:
-        return mutation_process.run_mutation_process(
-            command,
-            payload,
-            timeout=MUTATION_TIMEOUT_SECONDS,
-            output_limit=MUTATION_OUTPUT_LIMIT,
-            grace=MUTATION_TERMINATION_GRACE_SECONDS,
-        )
-    except mutation_process.MutationNotAttempted as exc:
-        raise MutationNotAttempted(str(exc)) from exc
-    except mutation_process.MutationOutcomeUnknown as exc:
-        raise MutationOutcomeUnknown(str(exc)) from exc
-
-
-def glab_mutation(host: str, method: str, endpoint: str, payload: dict[str, Any]) -> dict[str, Any]:
-    if not re.fullmatch(r"[A-Za-z0-9._~%/?=&,+:-]+", endpoint) or ".." in endpoint:
-        raise WorkflowError("generated GitLab endpoint is unsafe")
-    command = [
-        "glab",
-        "api",
-        "--hostname",
-        host,
-        "--method",
-        method,
-        endpoint,
-        "--header",
-        "Content-Type: application/json",
-        "--input",
-        "-",
-    ]
-    result = run_mutation_process(command, canonical(payload))
-    if result.returncode != 0:
-        raise MutationOutcomeUnknown("GitLab mutation failed; inspect the target before retrying")
-    try:
-        response = json.loads(result.stdout) if result.stdout.strip() else {}
-    except (UnicodeError, json.JSONDecodeError) as exc:
-        raise MutationOutcomeUnknown(
-            "GitLab mutation returned invalid JSON; inspect the target"
-        ) from exc
-    if not isinstance(response, dict):
-        raise MutationOutcomeUnknown("GitLab mutation response is incomplete; inspect the target")
-    return response
-
-
-def information_receipt_path(guard_path: Path, guard_digest: str) -> Path:
-    root = guard_path.parents[2]
-    return private_directory(root / "receipts" / "information") / f"{guard_digest}.json"
-
-
-def lock_information_lifecycle(path: Path) -> int:
-    if (
-        os.name != "posix"
-        or fcntl is None
-        or not callable(getattr(fcntl, "flock", None))
-        or not isinstance(getattr(fcntl, "LOCK_EX", None), int)
-        or not isinstance(getattr(fcntl, "LOCK_NB", None), int)
-    ):
-        raise WorkflowError("information lifecycle locking requires POSIX fcntl")
-    no_follow = getattr(os, "O_NOFOLLOW", 0)
-    if not no_follow:
-        raise WorkflowError("information lifecycle locking requires POSIX O_NOFOLLOW")
-    flags = os.O_RDWR | os.O_CREAT | no_follow
-    try:
-        descriptor = os.open(path, flags, 0o600)
-        lock_stat = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(lock_stat.st_mode)
-            or lock_stat.st_uid != os.geteuid()
-            or lock_stat.st_nlink != 1
-            or lock_stat.st_mode & 0o077
-        ):
-            raise WorkflowError("information lifecycle lock must be a private owned regular file")
-        os.fchmod(descriptor, 0o600)
-        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
-        while True:
-            try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except OSError as exc:
-                if exc.errno not in {errno.EACCES, errno.EAGAIN}:
-                    raise
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise WorkflowError(
-                        "timed out waiting for the information lifecycle lock"
-                    ) from exc
-                time.sleep(min(LOCK_RETRY_SECONDS, remaining))
-            else:
-                return descriptor
-    except WorkflowError:
-        if "descriptor" in locals():
-            os.close(descriptor)
-        raise
-    except OSError as exc:
-        if "descriptor" in locals():
-            os.close(descriptor)
-        raise WorkflowError("information lifecycle lock is unavailable") from exc
-
-
-def apply_information(guard_path: Path, stage: str) -> None:
-    resolved_guard = guard_path.resolve()
-    guard, guard_digest = read_information_guard(resolved_guard)
-    receipt = information_receipt_path(resolved_guard, guard_digest)
-    lock = lock_information_lifecycle(receipt.with_suffix(".lock"))
-    try:
-        apply_information_locked(guard, guard_digest, receipt, stage)
-    finally:
-        os.close(lock)
-
-
-def apply_information_locked(
-    guard: dict[str, Any], guard_digest: str, receipt: Path, stage: str
-) -> None:
-    if guard["schema"] != "task-triage/information-guard/v4":
-        raise WorkflowError("legacy information guard must be regenerated")
-    request = guard["request"]
-    if not isinstance(request, dict):
-        raise WorkflowError("information guard request is invalid")
-    action_name = request.get("action")
-    if stage not in {"message", "close"} or (stage == "close" and action_name != "close"):
-        raise WorkflowError("information lifecycle stage is invalid")
-    if receipt.exists():
-        receipt_value = read_object(receipt, "information lifecycle receipt")
-        if receipt_value.get("status") == "closed":
-            raise WorkflowError("information lifecycle closure was already applied")
-        if stage == "message" and receipt_value.get("status") == "in_progress":
-            raise WorkflowError(
-                "information publication outcome is unknown; refresh and create a new assessment"
-            )
-        if stage == "message":
-            raise WorkflowError("information lifecycle message was already published")
-        if receipt_value.get("status") == "in_progress":
-            raise WorkflowError(
-                "information closure outcome is unknown; inspect the target before retrying"
-            )
-    current_user = guard["current_user"]
-    authenticated_user = glab_json(guard["host"], "user")
-    if (
-        not isinstance(authenticated_user, dict)
-        or authenticated_user.get("id") != current_user.get("id")
-        or authenticated_user.get("username") != current_user.get("username")
-    ):
-        raise WorkflowError("authenticated GitLab user changed; regenerate the triage action")
-    snapshot = fresh_information_snapshot(guard)
-    target = request.get("target")
-    if not isinstance(target, dict):
-        raise WorkflowError("information guard target is invalid")
-    if stage == "message":
-        if request["action"] == "new":
-            _, discussions = conversation_for(snapshot, target, "information guard")
-            if (
-                conversation_state(discussions, target["discussion_id"])
-                != guard["conversation_state"]
-            ):
-                raise WorkflowError(
-                    "information conversation changed; regenerate the triage action"
-                )
-        validated = validate_information_request(
-            snapshot, current_user, request, "information guard"
-        )
-        collection = "issues" if target["kind"] == "issue" else "merge_requests"
-        endpoint = f"projects/{target['project_id']}/{collection}/{target['iid']}"
-        if target["discussion_id"] is None:
-            endpoint += "/notes"
-        else:
-            endpoint += f"/discussions/{urllib.parse.quote(target['discussion_id'], safe='')}/notes"
-        payload = {"body": validated["body"]}
-        write_json(
-            receipt,
-            {
-                "status": "in_progress",
-                "guard_digest": guard_digest,
-                "body": request["body"],
-            },
-        )
-        try:
-            response = glab_mutation(guard["host"], "POST", endpoint, payload)
-        except MutationNotAttempted:
-            durable_unlink(receipt)
-            raise
-        note_id = response.get("id")
-        if not positive(note_id):
-            raise MutationOutcomeUnknown(
-                "information message response has no stable note ID; inspect the target"
-            )
-        try:
-            write_json(
-                receipt,
-                {"guard_digest": guard_digest, "note_id": note_id, "body": request["body"]},
-            )
-        except (OSError, WorkflowError) as exc:
-            raise MutationOutcomeUnknown(
-                "information message was applied but its receipt could not be stored"
-            ) from exc
-        return
-
-    receipt_value = read_object(receipt, "information lifecycle receipt")
-    if (
-        set(receipt_value) != {"guard_digest", "note_id", "body"}
-        or receipt_value.get("guard_digest") != guard_digest
-        or receipt_value.get("body") != request.get("body")
-        or not positive(receipt_value.get("note_id"))
-    ):
-        raise WorkflowError("information lifecycle receipt is invalid")
-    note_id = receipt_value.get("note_id")
-    notes = discussion_notes(snapshot["discussions"], target["discussion_id"])
-    positions = {note.get("id"): index for index, note in enumerate(notes)}
-    if note_id not in positions:
-        raise WorkflowError("closure message was not observed in the fresh discussion")
-    final_note = notes[positions[note_id]]
-    author = final_note.get("author")
-    if (
-        not isinstance(author, dict)
-        or author.get("id") != current_user.get("id")
-        or final_note.get("body") != receipt_value["body"]
-    ):
-        raise WorkflowError("closure message does not match the fresh discussion")
-    for note in notes[positions[note_id] + 1 :]:
-        if note.get("system") is not True:
-            raise WorkflowError("closure message has a later note that must be assessed")
-    filtered = []
-    for discussion in snapshot["discussions"]:
-        copied = dict(discussion)
-        copied["notes"] = [
-            note for note in discussion.get("notes", []) if note.get("id") != note_id
-        ]
-        filtered.append(copied)
-    validate_information_request(
-        {**snapshot, "discussions": filtered}, current_user, request, "information guard"
-    )
-    endpoint = f"projects/{target['project_id']}/issues/{target['iid']}"
-    close_reservation = {
-        "status": "in_progress",
-        "stage": "close",
-        "guard_digest": guard_digest,
-        "note_id": note_id,
-        "body": request["body"],
-    }
-    write_json(receipt, close_reservation)
-    try:
-        glab_mutation(guard["host"], "PUT", endpoint, {"state_event": "close"})
-    except MutationNotAttempted:
-        write_json(receipt, receipt_value)
-        raise
-    try:
-        closed_issue = glab_json(guard["host"], endpoint)
-    except (OSError, WorkflowError) as exc:
-        raise MutationOutcomeUnknown(
-            "information closure could not be verified; inspect the target"
-        ) from exc
-    if (
-        not isinstance(closed_issue, dict)
-        or closed_issue.get("project_id") != target["project_id"]
-        or closed_issue.get("iid") != target["iid"]
-        or closed_issue.get("state") != "closed"
-    ):
-        raise MutationOutcomeUnknown(
-            "information closure is not confirmed by a fresh exact issue response; inspect the target"
-        )
-    try:
-        write_json(
-            receipt,
-            {
-                "status": "closed",
-                "guard_digest": guard_digest,
-                "note_id": note_id,
-                "body": request["body"],
-            },
-        )
-    except (OSError, WorkflowError) as exc:
-        raise MutationOutcomeUnknown(
-            "information closure was applied but its receipt could not be stored"
-        ) from exc
-
-
-def read_link_guard(path: Path) -> tuple[dict[str, Any], str]:
-    if len(path.parents) < 3:
-        raise WorkflowError("link guard path is invalid")
-    scope = path.parents[2].name
-    if re.fullmatch(r"[a-f0-9]{32}", scope) is None:
-        raise WorkflowError("link guard scope is invalid")
-    expected = (
-        xdg_state_home() / "agent-skills" / "task-triage" / scope / "artifacts" / "link-guards"
-    )
-    if path.parent != expected:
-        raise WorkflowError("link guard is outside the task-triage state root")
-    private_directory(expected)
-    if path.suffix != ".json" or not DIGEST_RE.fullmatch(path.stem):
-        raise WorkflowError("link guard path is invalid")
-    raw = path.read_bytes()
-    if hashlib.sha256(raw).hexdigest() != path.stem:
-        raise WorkflowError("link guard digest does not match")
-    guard = parse_object(raw, "link guard")
-    if (
-        set(guard)
-        != {
-            "schema",
-            "host",
-            "current_user",
-            "source",
-            "target",
-            "existing_link",
-            "desired_type",
-        }
-        or guard.get("schema") != "task-triage/link-guard/v1"
-    ):
-        raise WorkflowError("link guard fields are invalid")
-    for field in ("source", "target"):
-        identity = guard.get(field)
-        if (
-            not isinstance(identity, dict)
-            or set(identity) != {"project_id", "iid"}
-            or not positive(identity.get("project_id"))
-            or not positive(identity.get("iid"))
-        ):
-            raise WorkflowError("link guard identity is invalid")
-    existing = guard.get("existing_link")
-    if (
-        not isinstance(existing, dict)
-        or set(existing) != {"id", "relation_type"}
-        or not positive(existing.get("id"))
-        or existing.get("relation_type") not in {"relates_to", "blocks", "is_blocked_by"}
-        or guard.get("desired_type") not in {"relates_to", "blocks", "is_blocked_by"}
-        or existing.get("relation_type") == guard.get("desired_type")
-        or not isinstance(guard.get("host"), str)
-        or not isinstance(guard.get("current_user"), dict)
-    ):
-        raise WorkflowError("link guard relation is invalid")
-    return guard, path.stem
-
-
-def link_receipt_path(guard_path: Path, guard_digest: str) -> Path:
-    root = guard_path.parents[2]
-    return private_directory(root / "receipts" / "links") / f"{guard_digest}.json"
-
-
-def fresh_target_links(guard: dict[str, Any]) -> list[dict[str, Any]]:
-    source = guard["source"]
-    links = paginated(
-        guard["host"], f"projects/{source['project_id']}/issues/{source['iid']}/links"
-    )
-    return observed_issue_links(
-        {"links": links}, guard["target"]["project_id"], guard["target"]["iid"]
-    )
-
-
-def apply_link(path: Path, stage: str) -> bool:
-    resolved = path.resolve()
-    if resolved != path or path.is_symlink():
-        raise WorkflowError("link guard path is invalid")
-    guard, guard_digest = read_link_guard(resolved)
-    current_user = glab_json(guard["host"], "user")
-    if (
-        not isinstance(current_user, dict)
-        or current_user.get("id") != guard["current_user"].get("id")
-        or current_user.get("username") != guard["current_user"].get("username")
-    ):
-        raise WorkflowError("authenticated GitLab user changed since link preparation")
-    receipt = link_receipt_path(resolved, guard_digest)
-    lock = lock_information_lifecycle(receipt.with_suffix(".lock"))
-    try:
-        return apply_link_locked(guard, guard_digest, receipt, stage)
-    finally:
-        os.close(lock)
-
-
-def apply_link_locked(guard: dict[str, Any], guard_digest: str, receipt: Path, stage: str) -> bool:
-    source = guard["source"]
-    existing = guard["existing_link"]
-    issue_endpoint = f"projects/{source['project_id']}/issues/{source['iid']}"
-    if stage == "delete":
-        current_links: list[dict[str, Any]] | None = None
-        if receipt.exists():
-            receipt_value = read_object(receipt, "link replacement receipt")
-            if receipt_value != {"status": "deleting", "guard_digest": guard_digest}:
-                raise WorkflowError("link replacement delete was already completed or superseded")
-            current_links = fresh_target_links(guard)
-            if not current_links:
-                write_json(receipt, {"status": "deleted", "guard_digest": guard_digest})
-                return False
-        if (current_links if current_links is not None else fresh_target_links(guard)) != [
-            existing
-        ]:
-            raise WorkflowError("existing issue link changed; regenerate the replacement")
-        write_json(receipt, {"status": "deleting", "guard_digest": guard_digest})
-        try:
-            glab_mutation(guard["host"], "DELETE", f"{issue_endpoint}/links/{existing['id']}", {})
-        except MutationNotAttempted:
-            durable_unlink(receipt)
-            raise
-        try:
-            if fresh_target_links(guard):
-                raise MutationOutcomeUnknown("deleted issue link is still observed")
-            write_json(receipt, {"status": "deleted", "guard_digest": guard_digest})
-        except (OSError, UnicodeError, WorkflowError) as exc:
-            raise MutationOutcomeUnknown(
-                "issue link deletion could not be verified; inspect the target"
-            ) from exc
-        return True
-    if stage != "create":
-        raise WorkflowError("link replacement stage is invalid")
-    if not receipt.exists():
-        raise WorkflowError("link replacement create requires a delete receipt")
-    receipt_value = read_object(receipt, "link replacement receipt")
-    if receipt_value != {"status": "deleted", "guard_digest": guard_digest}:
-        raise WorkflowError("link replacement delete receipt is invalid")
-    if fresh_target_links(guard):
-        raise WorkflowError("issue link reappeared after deletion; regenerate the replacement")
-    write_json(receipt, {"status": "creating", "guard_digest": guard_digest})
-    payload = {
-        "target_project_id": guard["target"]["project_id"],
-        "target_issue_iid": guard["target"]["iid"],
-        "link_type": guard["desired_type"],
-    }
-    try:
-        glab_mutation(guard["host"], "POST", f"{issue_endpoint}/links", payload)
-    except MutationNotAttempted:
-        write_json(receipt, {"status": "deleted", "guard_digest": guard_digest})
-        raise
-    try:
-        created = fresh_target_links(guard)
-        if len(created) != 1 or created[0]["relation_type"] != guard["desired_type"]:
-            raise MutationOutcomeUnknown("replacement issue link is not observed")
-        write_json(
-            receipt,
-            {
-                "status": "created",
-                "guard_digest": guard_digest,
-                "link_id": created[0]["id"],
-            },
-        )
-    except (OSError, UnicodeError, WorkflowError) as exc:
-        raise MutationOutcomeUnknown(
-            "issue link creation could not be verified; inspect the target"
-        ) from exc
-    return True
+def unchain(command: str) -> str:
+    """Drop the trailing continuation operator from the block's final write."""
+    head, *rest = command.split("\n")
+    return "\n".join([head.removesuffix(" &&"), *rest])
 
 
 def commands_for(
-    root: Path, item: dict[str, Any], current_user: dict[str, Any]
-) -> list[dict[str, str]]:
-    proposed = item["proposed_changes"]
+    item: dict[str, Any], current_user: dict[str, Any], locale: str
+) -> list[dict[str, Any]]:
+    """Build one guarded, fail-fast direct-command block per triage action.
+
+    The first emitted writing block of the task verifies the snapshot
+    updated_at; every later block verifies its own semantic preconditions
+    against a fresh read. A stage whose precondition cannot be precomputed is
+    emitted as a regeneration instruction instead of a command.
+    """
     target = item["evidence"]["target"]
-    host, project_id, iid = target["hostname"], target["project_id"], target["iid"]
+    host = target["hostname"]
+    issue_endpoint = f"projects/{target['project_id']}/issues/{target['iid']}"
     snapshot = read_object(Path(item["evidence"]["evidence_path"]), "issue evidence")
-    issue_endpoint = f"projects/{project_id}/issues/{iid}"
-    commands: list[dict[str, str]] = []
-    for field, kind in (
-        ("title", "title"),
-        ("description", "description"),
-        ("labels", "labels"),
-    ):
+    issue = snapshot.get("issue", {})
+    proposed = item["proposed_changes"]
+    actions: list[dict[str, Any]] = []
+
+    def endpoints(conversation_target: dict[str, Any]) -> tuple[str, str]:
+        collection = "issues" if conversation_target["kind"] == "issue" else "merge_requests"
+        base = f"projects/{conversation_target['project_id']}/{collection}/{conversation_target['iid']}"
+        return base, f"{base}/discussions"
+
+    def note_endpoint(conversation_target: dict[str, Any]) -> str:
+        base, _ = endpoints(conversation_target)
+        if conversation_target["discussion_id"] is None:
+            return f"{base}/notes"
+        encoded = urllib.parse.quote(conversation_target["discussion_id"], safe="")
+        return f"{base}/discussions/{encoded}/notes"
+
+    def notes_preconditions(
+        conversation_target: dict[str, Any], discussions: list[dict[str, Any]]
+    ) -> list[str]:
+        base, discussions_endpoint = endpoints(conversation_target)
+        discussion_id = conversation_target["discussion_id"]
+        return [
+            open_guard(host, base, locale),
+            conversation_guard(
+                host,
+                discussions_endpoint,
+                discussion_id,
+                bodies_digest(conversation_bodies(discussions, discussion_id)),
+                locale,
+            ),
+        ]
+
+    for field, kind in (("title", "title"), ("description", "description"), ("labels", "labels")):
         if field not in proposed:
             continue
         value = proposed[field]
         payload_value = ",".join(value) if field == "labels" else value
-        preview = json.dumps({field: value}, ensure_ascii=False, indent=2)
-        commands.append(
-            action(root, host, kind, "PUT", issue_endpoint, {field: payload_value}, preview)
+        if field == "title":
+            semantic = [title_guard(host, issue_endpoint, str(issue.get("title") or ""), locale)]
+        elif field == "description":
+            semantic = [description_guard(host, issue_endpoint, issue.get("description"), locale)]
+        else:
+            semantic = [
+                labels_guard(
+                    host,
+                    issue_endpoint,
+                    [str(label) for label in (issue.get("labels") or [])],
+                    locale,
+                )
+            ]
+        actions.append(
+            {
+                "kind": kind,
+                "fresh_target": target,
+                "fresh_endpoint": issue_endpoint,
+                "semantic": semantic,
+                "segments": [
+                    (
+                        TEXT[locale][f"action_{kind}"],
+                        inline_write(
+                            host, "PUT", issue_endpoint, inline_json({field: payload_value})
+                        ),
+                    )
+                ],
+                "preview": json.dumps({field: value}, ensure_ascii=False, indent=2),
+            }
         )
+
     release_plan = item["release_plan"]
     decision = release_plan["decision"]["status"]
     milestone = release_plan["milestone"]
-    if decision == "accepted" and milestone["status"] == "create":
-        title = milestone["candidate"]["title"]
-        commands.append(
-            action(
-                root,
-                host,
-                "create_milestone",
-                "POST",
-                f"projects/{project_id}/milestones",
-                {"title": title},
-                title,
-            )
-        )
+    current = issue.get("milestone")
+    current_id = current.get("id") if isinstance(current, dict) else None
+    expected_milestone = current_id if isinstance(current_id, int) else None
     if decision == "accepted" and milestone["status"] == "selected":
-        milestone_id = milestone["candidate"]["id"]
-        commands.append(
-            action(
-                root,
-                host,
-                "milestone",
-                "PUT",
-                issue_endpoint,
-                {"milestone_id": milestone_id},
-                str(milestone["candidate"]["title"]),
-            )
+        actions.append(
+            {
+                "kind": "milestone",
+                "fresh_target": target,
+                "fresh_endpoint": issue_endpoint,
+                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
+                "segments": [
+                    (
+                        TEXT[locale]["action_milestone"],
+                        inline_write(
+                            host,
+                            "PUT",
+                            issue_endpoint,
+                            inline_json({"milestone_id": milestone["candidate"]["id"]}),
+                        ),
+                    )
+                ],
+                "preview": str(milestone["candidate"]["title"]),
+            }
         )
     elif decision != "accepted" and milestone["status"] == "remove":
-        commands.append(
-            action(
-                root,
-                host,
-                "milestone",
-                "PUT",
-                issue_endpoint,
-                {"milestone_id": 0},
-                json.dumps({"milestone_id": 0}, indent=2),
-            )
+        actions.append(
+            {
+                "kind": "milestone",
+                "fresh_target": target,
+                "fresh_endpoint": issue_endpoint,
+                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
+                "segments": [
+                    (
+                        TEXT[locale]["action_milestone"],
+                        inline_write(host, "PUT", issue_endpoint, inline_json({"milestone_id": 0})),
+                    )
+                ],
+                "preview": json.dumps({"milestone_id": 0}, indent=2),
+            }
         )
+    elif decision == "accepted" and milestone["status"] == "create":
+        title = milestone["candidate"]["title"]
+        milestones_endpoint = (
+            f"projects/{target['project_id']}"
+            "/milestones?include_parent_milestones=true&state=active&per_page=100"
+        )
+        create_block = "\n".join(
+            [
+                f"# {TEXT[locale]['guard_milestone_search']}",
+                (
+                    f"milestone_id=$(glab api --hostname {shell_quote(host)} "
+                    f"{shell_quote(milestones_endpoint)}"
+                    f" | jq -r --arg title {shell_quote(title)}"
+                    " 'map(select(.title == $title) | .id) | first // empty' || true) &&"
+                ),
+                'if [ -z "$milestone_id" ]; then',
+                "# " + TEXT[locale]["action_create_milestone"],
+                (
+                    "milestone_id=$("
+                    + inline_write(
+                        host,
+                        "POST",
+                        f"projects/{target['project_id']}/milestones",
+                        inline_json({"title": title}),
+                        chain=False,
+                        suffix=" | jq -er '.id | numbers'",
+                    )
+                    + "\n)"
+                ),
+                "fi &&",
+                f"# {TEXT[locale]['action_milestone']}",
+                inline_write(
+                    host,
+                    "PUT",
+                    issue_endpoint,
+                    '{"milestone_id": $milestone_id}',
+                    chain=False,
+                    expand=True,
+                ),
+            ]
+        )
+        actions.append(
+            {
+                "kind": "create_milestone",
+                "fresh_target": target,
+                "fresh_endpoint": issue_endpoint,
+                "semantic": [milestone_guard(host, issue_endpoint, expected_milestone, locale)],
+                "segments": [("", create_block)],
+                "preview": json.dumps(
+                    {"create": {"title": title}, "attach": {"milestone_id": "$milestone_id"}},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            }
+        )
+
     relation_by_link = {
         (
             relation["target_project_id"],
@@ -2499,27 +2046,211 @@ def commands_for(
             (link["target_project_id"], link["target_issue_iid"], link["link_type"])
         ]
         existing_link = relation["existing_link"]
+        links_endpoint = f"{issue_endpoint}/links"
         if existing_link is not None and existing_link["relation_type"] != link["link_type"]:
-            commands.extend(replacement_link_actions(root, host, target, current_user, relation))
-            continue
-        commands.append(
-            action(
-                root,
-                host,
-                "link",
-                "POST",
-                f"{issue_endpoint}/links",
-                link,
-                json.dumps(link, ensure_ascii=False, indent=2),
+            match = f"{link_match_expression()} and .link_type == $t"
+            arguments = (
+                f"--argjson p {int(link['target_project_id'])}"
+                f" --argjson i {int(link['target_issue_iid'])}"
+                f" --arg t {shell_quote(existing_link['relation_type'])}"
             )
+            stop = guard_stop("guard_links_stop", locale)
+            create_block = "\n".join(
+                [
+                    f"# {TEXT[locale]['guard_links']}",
+                    (
+                        f"links=$(glab api --hostname {shell_quote(host)} "
+                        f"{shell_quote(links_endpoint + '?per_page=100')}) &&"
+                    ),
+                    (
+                        '([ "$(printf \'%s\' "$links" | jq '
+                        f"{arguments} '[.[] | select({match})] | length')\" = 1 ] || {stop}) &&"
+                    ),
+                    (
+                        "link_id=$(printf '%s' \"$links\" | jq -er "
+                        f"{arguments} '.[] | select({match}) | .issue_link_id // .id') &&"
+                    ),
+                    (f'([ "$link_id" = {shell_quote(str(existing_link["id"]))} ] || {stop}) &&'),
+                    f"# {TEXT[locale]['action_replace_link_delete']}",
+                    (
+                        "glab api --hostname "
+                        f"{shell_quote(host)} --method DELETE "
+                        f"{shell_quote(f'{links_endpoint}/{existing_link["id"]}')} &&"
+                    ),
+                    f"# {TEXT[locale]['action_replace_link_create']}",
+                    inline_write(host, "POST", links_endpoint, inline_json(link), chain=False),
+                ]
+            )
+            actions.append(
+                {
+                    "kind": "replace_link",
+                    "fresh_target": target,
+                    "fresh_endpoint": issue_endpoint,
+                    "semantic": [],
+                    "segments": [("", create_block)],
+                    "preview": json.dumps(
+                        {"delete": existing_link, "create": link},
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                }
+            )
+            continue
+        actions.append(
+            {
+                "kind": "link",
+                "fresh_target": target,
+                "fresh_endpoint": issue_endpoint,
+                "semantic": [
+                    absent_link_guard(
+                        host,
+                        links_endpoint,
+                        link["target_project_id"],
+                        link["target_issue_iid"],
+                        locale,
+                    )
+                ],
+                "segments": [
+                    (
+                        TEXT[locale]["action_link"],
+                        inline_write(host, "POST", links_endpoint, inline_json(link)),
+                    )
+                ],
+                "preview": json.dumps(link, ensure_ascii=False, indent=2),
+            }
         )
+
     for message in proposed.get("messages", []):
-        commands.append(message_action(root, host, message["target"], message["body"]))
+        message_target, discussions = conversation_for(
+            snapshot, message["target"], "proposed messages"
+        )
+        base, _ = endpoints(message_target)
+        actions.append(
+            {
+                "kind": "message",
+                "fresh_target": message_target,
+                "fresh_endpoint": base,
+                "semantic": notes_preconditions(message_target, discussions),
+                "segments": [
+                    (
+                        TEXT[locale]["action_message"],
+                        inline_write(
+                            host,
+                            "POST",
+                            note_endpoint(message_target),
+                            inline_json({"body": message["body"]}),
+                        ),
+                    )
+                ],
+                "preview": message["body"],
+            }
+        )
+
     for request in item["information_requests"]:
         if request["action"] == "none":
             continue
-        commands.extend(information_actions(root, host, request, current_user, snapshot))
-    return commands
+        request_target, discussions = conversation_for(
+            snapshot, request["target"], "information request"
+        )
+        base, _ = endpoints(request_target)
+        segments = [
+            (
+                TEXT[locale][f"action_information_{request['action']}"],
+                inline_write(
+                    host,
+                    "POST",
+                    note_endpoint(request_target),
+                    inline_json({"body": request["body"]}),
+                ),
+            )
+        ]
+        if request["action"] == "close":
+            segments.append(
+                (
+                    TEXT[locale]["action_close"],
+                    inline_write(
+                        host,
+                        "PUT",
+                        base,
+                        inline_json({"state_event": "close"}),
+                        chain=False,
+                    ),
+                )
+            )
+            preview = f"{request['body']}\n\n{json.dumps({'state_event': 'close'}, indent=2)}"
+        else:
+            preview = request["body"]
+        actions.append(
+            {
+                "kind": f"information_{request['action']}",
+                "fresh_target": request_target,
+                "fresh_endpoint": base,
+                "semantic": notes_preconditions(request_target, discussions),
+                "segments": segments,
+                "preview": preview,
+            }
+        )
+
+    if item["actuality"]["status"] in {"obsolete", "duplicate"} and issue.get("state") == "opened":
+        actions.append(
+            {
+                "kind": "close",
+                "fresh_target": target,
+                "fresh_endpoint": issue_endpoint,
+                "semantic": [open_guard(host, issue_endpoint, locale)],
+                "segments": [
+                    (
+                        (
+                            f"{TEXT[locale]['action_close']}: "
+                            f"{oneline(item['actuality']['rationale'])}"
+                        ),
+                        inline_write(
+                            host,
+                            "PUT",
+                            issue_endpoint,
+                            inline_json({"state_event": "close"}),
+                            chain=False,
+                        ),
+                    )
+                ],
+                "preview": json.dumps({"state_event": "close"}, indent=2),
+            }
+        )
+
+    result: list[dict[str, Any]] = []
+    fresh_pending = True
+    for one in actions:
+        lines = [user_guard(host, current_user, locale)]
+        if fresh_pending:
+            updated_at = observed_updated_at(snapshot, one["fresh_target"])
+            if updated_at is None:
+                result.append(
+                    {
+                        "kind": one["kind"],
+                        "instruction": TEXT[locale]["guard_fresh_stop"],
+                    }
+                )
+                continue
+            lines.append(fresh_guard(host, one["fresh_endpoint"], updated_at, locale))
+            fresh_pending = False
+        else:
+            lines.extend(one["semantic"])
+        for position, (comment, command) in enumerate(one["segments"]):
+            if comment:
+                lines.append(f"# {comment}")
+            if position == len(one["segments"]) - 1:
+                # The final write must not dangle a continuation operator.
+                lines.append(unchain(command))
+            else:
+                lines.append(command)
+        result.append(
+            {
+                "kind": one["kind"],
+                "preview": one["preview"],
+                "command": "\n".join(lines),
+            }
+        )
+    return result
 
 
 def item_markdown(
@@ -2588,10 +2319,12 @@ def item_markdown(
     ]
     if commands:
         for command in commands:
+            sections.extend([f"### {labels['action_' + command['kind']]}", ""])
+            if "instruction" in command:
+                sections.extend([f"- {labels['regenerate']}: {command['instruction']}", ""])
+                continue
             sections.extend(
                 [
-                    f"### {labels['action_' + command['kind']]}",
-                    "",
                     f"**{labels['preview']}**",
                     "",
                     *code_block(command["preview"], "text"),
@@ -2828,19 +2561,29 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
     )
     reports = private_directory(root / "reports")
     report_entries: list[dict[str, str]] = []
+    uncovered: list[dict[str, str]] = []
     analysis_index = load_analysis_index(root)["items"]
     for item in items:
         target = item["evidence"]["target"]
         context = collection["context"].get(f"{target['hostname']}:{target['project_id']}")
         if not isinstance(context, dict) or not isinstance(context.get("current_user"), dict):
             raise WorkflowError("authenticated GitLab user evidence is unavailable")
-        commands = commands_for(root, item, context["current_user"])
+        commands = commands_for(item, context["current_user"], locale)
         issue = read_object(Path(item["evidence"]["evidence_path"]), "issue evidence")["issue"]
         canonical_url = canonical_project_item_url(
             target["hostname"], context.get("project_path"), "issues", target["iid"]
         )
         if canonical_url is None:
             raise WorkflowError("canonical issue URL is unavailable")
+        uncovered.extend(
+            {
+                "issue": canonical_url,
+                "kind": labels[f"action_{entry['kind']}"],
+                "reason": entry["instruction"],
+            }
+            for entry in commands
+            if "instruction" in entry
+        )
         report = reports / f"{target['hostname']}-{target['project_id']}-{target['iid']}.md"
         report_body = item_markdown(item, commands, locale, canonical_url).encode()
         atomic_write(report, versioned_markdown(report, report_body))
@@ -2977,6 +2720,9 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         )
         for item in pending_request_items
     )
+    uncovered_details = "; ".join(
+        f"{entry['issue']}: {entry['kind']} - {entry['reason']}" for entry in uncovered
+    )
 
     summary_lines = [
         f"# {labels['summary']}",
@@ -2994,6 +2740,8 @@ def publish(args: argparse.Namespace) -> dict[str, Any]:
         f"- {labels['requests_pending']}: {len(active_requests)}; "
         f"{labels['request_issues']}: {len(pending_request_items)}"
         + (f" - {request_details}" if request_details else ""),
+        f"- {labels['uncovered']}: {len(uncovered)}"
+        + (f" - {uncovered_details}" if uncovered_details else ""),
         "",
         f"## {labels['first']}",
         "",
@@ -3102,12 +2850,6 @@ def parser() -> Parser:
     publish_parser = subparsers.add_parser("publish")
     publish_parser.add_argument("--collection", required=True)
     publish_parser.add_argument("--analysis", required=True)
-    apply_parser = subparsers.add_parser("apply-information")
-    apply_parser.add_argument("--guard", required=True)
-    apply_parser.add_argument("--stage", choices=("message", "close"), required=True)
-    link_parser = subparsers.add_parser("apply-link")
-    link_parser.add_argument("--guard", required=True)
-    link_parser.add_argument("--stage", choices=("delete", "create"), required=True)
     return cli
 
 
@@ -3130,51 +2872,9 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         if args.command is None:
             raise WorkflowError("a command is required")
-        if args.command == "apply-information":
-            apply_information(Path(args.guard), args.stage)
-            print(
-                json.dumps(
-                    {
-                        "status": "applied",
-                        "stage": args.stage,
-                        "external_mutations": True,
-                        "mutation_outcome": "applied",
-                    },
-                    sort_keys=True,
-                )
-            )
-            return 0
-        if args.command == "apply-link":
-            mutated = apply_link(Path(args.guard), args.stage)
-            print(
-                json.dumps(
-                    {
-                        "status": "applied" if mutated else "reconciled",
-                        "stage": args.stage,
-                        "external_mutations": mutated,
-                        "mutation_outcome": "applied" if mutated else "none",
-                    },
-                    sort_keys=True,
-                )
-            )
-            return 0
         result = collect(args) if args.command == "collect" else publish(args)
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result["status"] == "ok" else 1
-    except MutationOutcomeUnknown as exc:
-        print(
-            json.dumps(
-                {
-                    "status": "error",
-                    "error": {"code": "mutation_outcome_unknown", "message": str(exc)},
-                    "external_mutations": True,
-                    "mutation_outcome": "unknown",
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            )
-        )
-        return 2
     except (OSError, UnicodeError, WorkflowError) as exc:
         print(
             json.dumps(

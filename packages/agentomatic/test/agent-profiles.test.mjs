@@ -25,6 +25,7 @@ import {
 } from "../dist/agent-profiles.js";
 import { promptText, selectOption, selectOptions } from "../dist/terminal-wizard.js";
 import { apply, preview } from "../dist/installer.js";
+import { recoverConfigSetup } from "../dist/config-setup.js";
 import {
   LifecycleError,
   appendPrivate,
@@ -129,7 +130,11 @@ test("inventory separates package-owned, managed, user-owned, drift, and collisi
         collisionContext.project,
         collisionContext.home,
       );
-      assert.deepEqual(collision.collisions, ["critic"]);
+      assert.deepEqual(collision.collisions, []);
+      assert.equal(
+        collision.profiles.find((profile) => profile.name === "critic").ownership,
+        "user-owned",
+      );
     } finally {
       rmSync(collisionContext.directory, { recursive: true, force: true });
     }
@@ -138,7 +143,7 @@ test("inventory separates package-owned, managed, user-owned, drift, and collisi
   }
 });
 
-test("model catalog and variants use cached opencode commands without refresh", async () => {
+test("model catalog and variants use the native V2 model snapshot API without refresh", async () => {
   const directory = temporary();
   const executable = join(directory, "opencode");
   const originalPath = process.env.PATH;
@@ -146,14 +151,11 @@ test("model catalog and variants use cached opencode commands without refresh", 
     await writeFile(
       executable,
       `#!/bin/sh
-if [ "$1" = "models" ] && [ "$3" = "--verbose" ]; then
-  if [ "$2" = "anthropic" ]; then
-    printf '%s\n' 'anthropic/claude' '{"id":"anthropic/claude"}'
-  else
-    printf '%s\n' 'openai/gpt-5' '{"variants":{"none":{},"low":{},"high":{}}}'
-  fi
+if [ "$1" = "api" ] && [ "$2" = "get" ]; then
+  case "$3" in /api/model\\?location*) ;; *) exit 1 ;; esac
+  printf '%s\n' '{"data":[{"providerID":"anthropic","id":"claude"},{"providerID":"openai","id":"gpt-5","variants":[{"id":"none"},{"id":"low"},{"id":"high"}]}]}'
 else
-  printf '%s\n' 'anthropic/claude' 'openai/gpt-5'
+  exit 1
 fi
 `,
     );
@@ -181,7 +183,7 @@ test("incomplete non-TTY configure exits with JSON guidance and writes no state"
   const context = await roots();
   const result = spawnSync(
     process.execPath,
-    [join(PACKAGE, "dist", "cli.js"), "agent", "configure", "--dry-run", "--json"],
+    [join(PACKAGE, "dist", "cli.js"), "configure", "agent", "--dry-run", "--json"],
     {
       cwd: context.project,
       env: { ...process.env, HOME: context.home, XDG_STATE_HOME: join(context.home, ".state") },
@@ -192,10 +194,7 @@ test("incomplete non-TTY configure exits with JSON guidance and writes no state"
     assert.equal(result.status, 2);
     const error = JSON.parse(result.stdout).error;
     assert.equal(error.code, "terminal_required");
-    assert.equal(
-      error.message,
-      "agent configure requires a terminal or explicit agent <name> and either exact --model provider/model or --provider + --model",
-    );
+    assert.equal(error.message, "This operation requires an interactive terminal");
     assert.deepEqual(await fileSnapshot(join(context.project, ".opencode")), {});
     await assert.rejects(lstat(join(context.home, ".state")), { code: "ENOENT" });
   } finally {
@@ -211,8 +210,8 @@ test("non-TTY configure accepts an exact model without a separate provider", asy
       process.execPath,
       [
         join(PACKAGE, "dist", "cli.js"),
-        "agent",
         "configure",
+        "agent",
         "manager",
         "--model",
         "openai/gpt-5",
@@ -292,13 +291,13 @@ test("single and multi selectors share visual controls and deterministic selecti
   const all = fakeTTY();
   const allResult = selectOptions(
     "Plugins",
-    ["rules-injector", "rtk", "zed-bell"],
+    ["code-simplify", "rules-injector", "rtk", "zed-bell"],
     [],
     all.stdin,
     all.stderr,
   );
   all.stdin.write("a\r");
-  assert.deepEqual(await allResult, ["rules-injector", "rtk", "zed-bell"]);
+  assert.deepEqual(await allResult, ["code-simplify", "rules-injector", "rtk", "zed-bell"]);
 
   const cancelled = fakeTTY();
   const cancelledResult = selectOptions(
@@ -345,7 +344,7 @@ test("model and variant configuration survives package install", async () => {
     assert.equal(changed.result.requires_restart, true);
     assert.match(
       await readFile(join(context.root, "agents", "manager.md"), "utf8"),
-      /model: openai\/gpt-5\nvariant: high/,
+      /model: openai\/gpt-5#high/,
     );
 
     await apply("install", "project", context.project, context.home);
@@ -375,11 +374,13 @@ test("agent deselection removes managed profiles and preserves profile configura
     );
     assert.equal(
       plan.operations.some((item) => item.path === ".agentomatic/agent-profiles.json"),
-      false,
+      true,
     );
     await apply("install", "project", context.project, context.home, {}, selection);
 
-    assert.deepEqual(await readFile(configPath), config);
+    const retained = JSON.parse(await readFile(configPath, "utf8"));
+    assert.deepEqual(retained.fixed, JSON.parse(config).fixed);
+    assert.deepEqual(retained.selected_fixed, []);
     await assert.rejects(
       readFile(join(context.root, ".agentomatic", "agent-profiles.manifest.json")),
       { code: "ENOENT" },
@@ -399,9 +400,9 @@ test("manager can delegate to review and review can complete an independent nest
     await confirmedInstall(context.project, context.home);
     const manager = await readFile(join(context.root, "agents", "manager.md"), "utf8");
     const reviewer = await readFile(join(context.root, "agents", "review.md"), "utf8");
-    assert.match(manager, /review: allow/);
+    assert.match(manager, /action: subagent, resource: "review", effect: allow/);
     assert.match(reviewer, /mode: all/);
-    assert.match(reviewer, /critic: allow/);
+    assert.match(reviewer, /action: subagent, resource: "critic", effect: allow/);
     const { RoutingGate } = await import("../dist/routing.js");
     const gate = new RoutingGate();
     const agents = ["review", "critic"].map((agent) => ({
@@ -465,8 +466,8 @@ test("additional critic atomically changes the exact manager and review pools", 
     );
     for (const name of ["manager", "review"]) {
       const content = await readFile(join(context.root, "agents", `${name}.md`), "utf8");
-      assert.match(content, /critic: allow/);
-      assert.match(content, /critic-security: allow/);
+      assert.match(content, /action: subagent, resource: "critic", effect: allow/);
+      assert.match(content, /action: subagent, resource: "critic-security", effect: allow/);
       assert.doesNotMatch(content, /critic-\*/);
     }
     const manifest = JSON.parse(
@@ -567,7 +568,7 @@ test("injected failure rolls back every published file and final validation", as
   }
 });
 
-test("interrupted transaction recovers before requiring a fresh plan", async () => {
+test("preview preserves an interrupted transaction until explicit recovery", async () => {
   const context = await roots();
   try {
     await confirmedInstall(context.project, context.home);
@@ -581,8 +582,10 @@ test("interrupted transaction recovers before requiring a fresh plan", async () 
     );
     await assert.rejects(
       previewAgentProfileChange(request, "project", context.project, context.home),
-      (error) => error instanceof AgentProfileError && error.code === "recovered_transaction",
+      (error) => error instanceof AgentProfileError && error.code === "recovery_required",
     );
+    const recovery = await recoverConfigSetup("project", true, context.project, context.home);
+    await recoverConfigSetup("project", false, context.project, context.home, recovery.digest);
     assert.deepEqual(await fileSnapshot(context.root), before);
     await previewAgentProfileChange(request, "project", context.project, context.home);
   } finally {
@@ -610,7 +613,13 @@ test("recovery never overwrites a target changed after interruption", async () =
     );
     await writeFile(join(context.root, "agents", "worker.md"), "external change\n");
     await assert.rejects(
-      previewAgentProfileChange({ action: "reconcile" }, "project", context.project, context.home),
+      recoverConfigSetup(
+        "project",
+        false,
+        context.project,
+        context.home,
+        (await recoverConfigSetup("project", true, context.project, context.home)).digest,
+      ),
       (error) => error instanceof LifecycleError && error.code === "recovery_conflict",
     );
     assert.equal(
@@ -767,7 +776,7 @@ test("private append rejects an existing public file", async () => {
   }
 });
 
-test("explicit reconcile repairs only semantic-manifest-owned drift", async () => {
+test("repair preserves changed semantic-manifest-owned bytes", async () => {
   const context = await roots();
   try {
     await confirmedInstall(context.project, context.home);
@@ -780,12 +789,10 @@ test("explicit reconcile repairs only semantic-manifest-owned drift", async () =
       (error) => error instanceof AgentProfileError && error.code === "drift",
     );
     const reconcile = { action: "reconcile" };
-    const repaired = await confirmedProfile(reconcile, context.project, context.home);
-    assert.equal(
-      repaired.plan.operations.find((item) => item.path === "agents/manager.md").reason,
-      "explicit managed profile reconcile",
-    );
-    assert.doesNotMatch(await readFile(manager, "utf8"), /^drift$/);
+    await assert.rejects(confirmedProfile(reconcile, context.project, context.home), {
+      code: "drift",
+    });
+    assert.equal(await readFile(manager, "utf8"), "drift\n");
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }
@@ -1184,8 +1191,8 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
       true,
     );
     run([
-      "agent",
       "configure",
+      "agent",
       "manager",
       "--provider",
       "openai",
@@ -1196,8 +1203,8 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
       "--dry-run",
     ]);
     run([
-      "agent",
       "configure",
+      "agent",
       "manager",
       "--provider",
       "openai",

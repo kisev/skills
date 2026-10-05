@@ -6,10 +6,293 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import cast
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "evals" / "scenarios"
 SKILLS = json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["skills"]
+
+# Per-skill prompt overrides keep contract scenarios realistic where the generic
+# routing template would be misleading, together with the revision that marks
+# the content change. Keys are (skill, kind, locale) and (skill, kind).
+PROMPT_OVERRIDES: dict[tuple[str, str, str], str] = {
+    ("humanize", "trigger", "ru"): (
+        'Примени навык humanize к абзацу из заметки о релизе: "Мы не просто '
+        'ускорили поиск, а переписали его с нуля. Это настоящий прорыв!"'
+    ),
+    ("humanize", "trigger", "en"): (
+        "Apply the humanize skill to this release-note paragraph: \"We didn't "
+        "just speed up search, we rewrote it from scratch. This is a real "
+        'breakthrough!"'
+    ),
+    ("humanize", "near-miss", "ru"): (
+        "Отрефактори функцию format_price в src/pricing.py и обнови её docstring."
+    ),
+    ("humanize", "near-miss", "en"): (
+        "Refactor the format_price function in src/pricing.py and update its docstring."
+    ),
+    ("code-simplify", "trigger", "en"): (
+        "Before I add a caching helper to src/feed.py, walk the prevention ladder "
+        "and tell me whether an existing simpler option already covers this need."
+    ),
+    ("code-simplify", "trigger", "ru"): (
+        "Прежде чем добавлять хелпер кэширования в src/feed.py, пройди по лестнице "
+        "необходимости и скажи, есть ли более простой существующий вариант."
+    ),
+    ("code-simplify", "near-miss", "en"): (
+        "Simplify the wording of this README paragraph; text simplification "
+        "belongs to asd-ste100, humanize, and eli5, not to a code audit."
+    ),
+    ("code-simplify", "near-miss", "ru"): (
+        "Упрости формулировки этого абзаца README; упрощение текста относится к "
+        "asd-ste100, humanize и eli5, а не к аудиту кода."
+    ),
+    ("taskmatic", "near-miss", "en"): (
+        "English: this intentionally does not belong to the taskmatic skill; do "
+        "not route the request into this skill."
+    ),
+    ("taskmatic", "trigger", "en"): (
+        "Select the taskmatic skill for its exact local task board contract scenario."
+    ),
+    ("taskmatic", "trigger", "ru"): (
+        "Выбери навык taskmatic для его точного контрактного сценария локальной доски задач."
+    ),
+    ("team-1on1", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-1on1 skill; do "
+        "not route this request into it."
+    ),
+    ("team-1on1", "trigger", "en"): (
+        "English: select the team-1on1 skill for its exact contract scenario."
+    ),
+    ("team-agreements", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-agreements "
+        "skill; do not route this request into it."
+    ),
+    ("team-agreements", "trigger", "en"): (
+        "English: select the team-agreements skill for its exact contract scenario."
+    ),
+    ("team-feedback", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-feedback "
+        "skill; do not route this request into it."
+    ),
+    ("team-feedback", "trigger", "en"): (
+        "English: select the team-feedback skill for its exact contract scenario."
+    ),
+    ("team-health", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-health skill; "
+        "do not route this request into it."
+    ),
+    ("team-health", "trigger", "en"): (
+        "English: select the team-health skill for its exact contract scenario."
+    ),
+    ("team-incident", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-incident "
+        "skill; do not route this request into it."
+    ),
+    ("team-incident", "trigger", "en"): (
+        "English: select the team-incident skill for its exact contract scenario."
+    ),
+    ("team-onboarding", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-onboarding "
+        "skill; do not route this request into it."
+    ),
+    ("team-onboarding", "trigger", "en"): (
+        "English: select the team-onboarding skill for its exact contract scenario."
+    ),
+    ("team-people", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-people skill; "
+        "do not route this request into it."
+    ),
+    ("team-people", "trigger", "en"): (
+        "English: select the team-people skill for its exact contract scenario."
+    ),
+    ("team-performance", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-performance "
+        "skill; do not route this request into it."
+    ),
+    ("team-performance", "trigger", "en"): (
+        "English: select the team-performance skill for its exact contract scenario."
+    ),
+    ("team-report", "near-miss", "en"): (
+        "English: this intentionally does not belong to the team-report skill; "
+        "do not route this request into it."
+    ),
+    ("team-report", "trigger", "en"): (
+        "English: select the team-report skill for its exact contract scenario."
+    ),
+    ("tdd", "trigger", "en"): (
+        "Add pagination to the users list endpoint. Work test-first: agree the "
+        "seams with me, then take it one failing test at a time."
+    ),
+    ("tdd", "trigger", "ru"): (
+        "Добавь пагинацию в эндпоинт списка пользователей. Работай через тесты: "
+        "согласуй со мной швы и двигайся по одному падающему тесту за цикл."
+    ),
+    ("tdd", "near-miss", "en"): (
+        "Just run the existing test suite and tell me the totals; no new "
+        "behavior is being developed here."
+    ),
+    ("tdd", "near-miss", "ru"): (
+        "Просто прогони существующие тесты и сообщи итог; новую функциональность "
+        "здесь никто не разрабатывает."
+    ),
+    ("debugging", "trigger", "en"): (
+        "Since yesterday the checkout endpoint returns a 500 for guest carts. "
+        "Find the actual cause before touching anything."
+    ),
+    ("debugging", "trigger", "ru"): (
+        "Со вчерашнего дня эндпоинт оформления заказа отдаёт 500 для гостевых "
+        "корзин. Найди настоящую причину, ничего не трогая."
+    ),
+    ("debugging", "near-miss", "en"): (
+        "Refactor the checkout endpoint for readability; nothing is broken, "
+        "this is a cleanup, not a bug hunt."
+    ),
+    ("debugging", "near-miss", "ru"): (
+        "Отрефактори эндпоинт оформления заказа для читаемости; ничего не "
+        "сломано, это уборка, а не охота на баг."
+    ),
+    ("verification", "trigger", "en"): (
+        "Before I tell the team the migration is done, run whatever actually "
+        "proves it and show me the evidence."
+    ),
+    ("verification", "trigger", "ru"): (
+        "Прежде чем сообщать команде, что миграция готова, прогони то, что это "
+        "реально доказывает, и покажи мне доказательства."
+    ),
+    ("verification", "near-miss", "en"): (
+        "Summarize what changed on this branch; no completion is being claimed."
+    ),
+    ("verification", "near-miss", "ru"): (
+        "Сделай сводку изменений этой ветки; завершение никто не заявляет."
+    ),
+}
+REVISION_OVERRIDES: dict[tuple[str, str], int] = {
+    ("humanize", "trigger"): 2,
+    ("humanize", "near-miss"): 2,
+}
+EXTRA_INVARIANTS: dict[tuple[str, str], list[dict[str, str]]] = {
+    ("humanize", "trigger"): [
+        {
+            "id": "humanize-explicit-activation",
+            "path": "skills/humanize/SKILL.source.md",
+            "contains": "only on an explicit invocation",
+        }
+    ],
+    ("humanize", "near-miss"): [
+        {
+            "id": "humanize-explicit-activation",
+            "path": "skills/humanize/SKILL.source.md",
+            "contains": "never activates this skill by itself",
+        }
+    ],
+    ("code-simplify", "trigger"): [
+        {
+            "id": "code-simplify-passive-ladder",
+            "path": "skills/code-simplify/SKILL.source.md",
+            "contains": "passive prevention ladder",
+        }
+    ],
+    ("code-simplify", "near-miss"): [
+        {
+            "id": "code-simplify-text-boundary",
+            "path": "skills/code-simplify/SKILL.source.md",
+            "contains": "asd-ste100, humanize, and eli5",
+        }
+    ],
+    ("tdd", "trigger"): [
+        {
+            "id": "tdd-no-command-adapter",
+            "path": "skills/tdd/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("tdd", "near-miss"): [
+        {
+            "id": "tdd-no-command-adapter",
+            "path": "skills/tdd/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("debugging", "trigger"): [
+        {
+            "id": "debugging-no-command-adapter",
+            "path": "skills/debugging/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("debugging", "near-miss"): [
+        {
+            "id": "debugging-no-command-adapter",
+            "path": "skills/debugging/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("verification", "trigger"): [
+        {
+            "id": "verification-no-command-adapter",
+            "path": "skills/verification/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+    ("verification", "near-miss"): [
+        {
+            "id": "verification-no-command-adapter",
+            "path": "skills/verification/SKILL.source.md",
+            "contains": 'command: "false"',
+        }
+    ],
+}
+
+# Additional explicit-audit pairs for code-simplify: an audit trigger with the
+# report-only contract, and an audit near-miss that stays with the existing
+# review owner instead of starting a code-simplify audit.
+AUDIT_PAIRS: dict[str, dict[str, object]] = {
+    "skill.code-simplify.audit-trigger": {
+        "kind": "trigger",
+        "selected": ["skill:code-simplify"],
+        "not_selected": [],
+        "prompts": {
+            "en": (
+                "Audit the src/feed module for unnecessary complexity and rank the "
+                "findings; do not change anything."
+            ),
+            "ru": (
+                "Проведи аудит модуля src/feed на избыточную сложность и ранжируй "
+                "находки; ничего не меняй."
+            ),
+        },
+        "extra_invariants": [
+            {
+                "id": "code-simplify-audit-explicit-report-only",
+                "path": "skills/code-simplify/references/workflow.md",
+                "contains": "only on an explicit user request",
+            }
+        ],
+    },
+    "skill.code-simplify.audit-near-miss": {
+        "kind": "near-miss",
+        "selected": [],
+        "not_selected": ["skill:code-simplify"],
+        "prompts": {
+            "en": (
+                "Review this merge request for risks before merge; a full MR review "
+                "belongs to code-review, not to the code-simplify audit."
+            ),
+            "ru": (
+                "Проведи полное ревью этого MR на риски перед слиянием; ревью MR "
+                "относится к code-review, а не к аудиту code-simplify."
+            ),
+        },
+        "extra_invariants": [
+            {
+                "id": "code-simplify-audit-review-owner",
+                "path": "skills/code-simplify/references/workflow.md",
+                "contains": "merge-request review routes to `code-review`",
+            }
+        ],
+    },
+}
 
 
 def digest(value: dict[str, object]) -> str:
@@ -29,11 +312,13 @@ def scenario(
     surface: str,
     path: str,
     boundary: str,
+    revision: int = 1,
+    extra_invariants: list[dict[str, str]] | None = None,
 ) -> dict[str, object]:
     value: dict[str, object] = {
         "schema": "eval-scenario/v1",
         "id": identifier,
-        "revision": 1,
+        "revision": revision,
         "locale": locale,
         "pair_id": None if kind == "deterministic" else pair,
         "kind": kind,
@@ -46,7 +331,10 @@ def scenario(
             "structured_outcome": "contract-passed" if selected else "safe-escalation",
             "mutation_boundary": boundary,
         },
-        "invariants": [{"id": f"{pair or identifier}.source", "path": path}],
+        "invariants": [
+            {"id": f"{pair or identifier}.source", "path": path},
+            *(extra_invariants or []),
+        ],
         "sandbox": {"network": False, "user_config": False, "writes": "sandbox-only"},
         "budgets": {"timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1},
     }
@@ -68,12 +356,15 @@ def main() -> None:
             for locale, language in (("en", "English"), ("ru", "Russian")):
                 suffix = "" if locale == "ru" else ".en"
                 wording = "Select" if language == "English" else "Выбери"
-                prompt = (
-                    f"{wording} the {name} skill for its exact contract scenario."
-                    if locale == "en"
-                    else f"Выбери навык {name} для его точного контрактного сценария."
+                prompt = PROMPT_OVERRIDES.get(
+                    (name, kind, locale),
+                    (
+                        f"{wording} the {name} skill for its exact contract scenario."
+                        if locale == "en"
+                        else f"Выбери навык {name} для его точного контрактного сценария."
+                    ),
                 )
-                if kind == "near-miss":
+                if kind == "near-miss" and (name, kind, locale) not in PROMPT_OVERRIDES:
                     prompt = (
                         f"{language}: this is intentionally unrelated to {name}; do not route it to that skill."
                         if locale == "en"
@@ -91,8 +382,34 @@ def main() -> None:
                         "skill",
                         f".build/skills/{name}/SKILL.md",
                         "no-writes",
+                        revision=REVISION_OVERRIDES.get((name, kind), 1),
+                        extra_invariants=EXTRA_INVARIANTS.get((name, kind)),
                     )
                 )
+
+    for pair_id, contract in AUDIT_PAIRS.items():
+        kind = cast("str", contract["kind"])
+        selected = cast("list[str]", contract["selected"])
+        not_selected = cast("list[str]", contract["not_selected"])
+        prompts = cast("dict[str, str]", contract["prompts"])
+        extra = cast("list[dict[str, str]]", contract["extra_invariants"])
+        for locale in ("en", "ru"):
+            suffix = "" if locale == "ru" else ".en"
+            write(
+                scenario(
+                    f"{pair_id}{suffix}",
+                    pair_id,
+                    locale,
+                    kind,
+                    prompts[locale],
+                    selected,
+                    not_selected,
+                    "skill",
+                    ".build/skills/code-simplify/SKILL.md",
+                    "no-writes",
+                    extra_invariants=extra,
+                )
+            )
 
     surfaces = {
         "command": (

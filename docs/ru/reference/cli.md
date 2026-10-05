@@ -34,7 +34,7 @@ taskmatic claim --help
 `MEMOMATIC_CONFIG` и `TASKMATIC_CONFIG`. Общие ключи файла записываются в camelCase:
 `logLevel`, `logFormat`, `progress`, `color`, `json`. Taskmatic также принимает
 поля команд: `home`, `board`, `host`, `port`. Memomatic сохраняет секции
-`sessions`, `dream`, `embedding`, `search`, `archive`. Параметры запуска вроде
+`sessions`, `dream`, `embedding`, `reranker`, `search`, `archive`. Параметры запуска вроде
 `--model` имеют приоритет над соответствующей настройкой `sessions.model`/
 `dream.model`; прежнее значение извлечения из `dream` мигрирует в `sessions`,
 пока новая секция его не переопределит. Эти переопределения не записываются в

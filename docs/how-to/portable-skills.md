@@ -19,16 +19,34 @@ Omitting `--agent` lets the installer select every host that reads
 
 ## Install
 
+Preview the npm installer version, run it, then list the skills actually
+installed. `skills@latest` is the CLI version, not the Pages distribution
+version. The tag can move between commands; npx does not install a global CLI.
+
 Install skills globally:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --global
+
+# Installed skills, not the npm installer
+npx --yes skills@latest list --global
 ```
 
 Install skills in the current project:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills
+
+# Installed skills in this project
+npx --yes skills@latest list
 ```
 
 The command opens a skill picker with every skill preselected; deselect what you
@@ -55,7 +73,14 @@ repository-local maintainer workflow.
 Replace the stable source with the explicit `/dev` source:
 
 ```shell
+# Registry version of the installer (still latest)
+npm view --prefer-online skills@latest version
+
+# Install the dev skill distribution
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
 
 The moving dev channel updates after successful pushes to `dev`. Its technical
@@ -68,7 +93,7 @@ back to stable.
 Update tracked global skills installed from Pages:
 
 ```shell
-npx --yes skills@latest update --global --yes
+npx --yes skills@latest update --global
 ```
 
 Omit `--global` for project scope. An installation created from a Git repository
@@ -76,17 +101,21 @@ or tag remains bound to that source. Repeat the matching `add` command with the
 Pages URL and the same scope to rebind it.
 
 `update` refreshes tracked skills, detects names deleted upstream, and offers to
-remove their local copies. OpenCode package assets have a separate update
-lifecycle described in the [OpenCode integration guide](opencode-integration.md#update).
+remove their local copies. The removal offer appears only when `update` runs in
+a terminal without its `--yes` flag; in non-interactive mode the CLI skips the
+offer and keeps retired copies, so remove them explicitly instead. `update`
+takes skill names, not source URLs, as positional arguments. OpenCode package
+assets have a separate update lifecycle described in the
+[OpenCode integration guide](opencode-integration.md#update).
 
 ## Remove Retired Names
 
-The current [migration inventory](../migration-inventory.md) defines eleven
+The current [migration inventory](../migration-inventory.md) defines thirteen
 retired names. Normally, accept their removal when `skills update` reports them.
 To remove them explicitly from a global installation, run:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver skill-improve walkthrough team-workflow summary doit lsp-report stopit --global --yes
 ```
 
 To remove from one host only, add its `--agent <name>` option.

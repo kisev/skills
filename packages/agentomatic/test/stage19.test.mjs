@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
 
-import rootPlugin, { rulesInjector, rtk, zedBell } from "../dist/index.js";
+import rootPlugin, { codeSimplify, rulesInjector, rtk, zedBell } from "../dist/index.js";
 import { apply, preview } from "../dist/installer.js";
 import { archiveRoot } from "../dist/lifecycle.js";
 
@@ -15,15 +15,9 @@ const PACKAGE = resolve(import.meta.dirname, "..");
 const OLD_PLUGIN = "plugins/background-attempts.js";
 const PACKAGE_METADATA = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8"));
 const PACKAGE_VERSION = PACKAGE_METADATA.version;
-const PACKAGE_SPEC = `@kisev/agentomatic@${PACKAGE_VERSION}`;
-const SKILLS_INSTALLER_SPEC = `skills@${PACKAGE_METADATA.skillsInstallerVersion}`;
 
 function hash(value) {
   return createHash("sha256").update(value).digest("hex");
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 test("installer preserves exact selection and keeps core separate from plugins", async () => {
@@ -232,12 +226,15 @@ test("upgrade archives the retired memomatic wrapper but preserves user edits", 
 
 test("2.0.0 public surface and CLI contracts exclude retired APIs", () => {
   assert.equal("@kisev/memomatic" in PACKAGE_METADATA.dependencies, false);
-  assert.equal(typeof rootPlugin, "function");
+  assert.equal(rootPlugin.server, undefined);
+  assert.equal(typeof rootPlugin.setup, "function");
   assert.equal(typeof rulesInjector, "function");
   assert.equal(typeof rtk, "function");
   assert.equal(typeof zedBell, "function");
+  assert.equal(typeof codeSimplify, "function");
   assert.deepEqual(Object.keys(PACKAGE_METADATA.exports).sort(), [
     ".",
+    "./plugins/code-simplify",
     "./plugins/rtk",
     "./plugins/rules-injector",
     "./plugins/zed-bell",
@@ -296,36 +293,27 @@ test("CLI help is structured and explains commands options workflow and scope", 
   assert.equal(help.status, 0, help.stderr);
   assert.match(
     help.stdout,
-    /Usage:[\s\S]*Commands:[\s\S]*Common options:[\s\S]*Install selection:[\s\S]*Agent model options:[\s\S]*Safe mutation workflow:[\s\S]*Scope behavior:[\s\S]*Examples:[\s\S]*Documentation:/,
+    /Usage:[\s\S]*install[\s\S]*configure[\s\S]*status[\s\S]*doctor[\s\S]*uninstall[\s\S]*Common:[\s\S]*Mutations:/,
   );
-  assert.match(help.stdout, /^  install\s{2,}Select and deploy skill commands/m);
-  assert.match(help.stdout, /^  doctor\s{2,}Inspect versions, ownership, drift/m);
-  assert.match(help.stdout, /^  agent configure\s{2,}Choose an agent model interactively/m);
-  assert.match(help.stdout, /^  critic remove\s{2,}Remove a package-managed additional critic/m);
+  assert.match(help.stdout, /^  install\s{2,}Install components/m);
+  assert.match(help.stdout, /^  doctor\s{2,}Diagnose versions, ownership, drift/m);
+  assert.doesNotMatch(help.stdout, /agent model-set|agent reconcile|critic remove/);
   for (const option of [
     "--global",
     "--dry-run",
     "--yes",
     "--commands <list|none>",
-    "--model <id>",
+    "--agents <list|none>",
   ]) {
     assert.ok(help.stdout.includes(option), option);
   }
   assert.match(
     help.stdout,
-    /^  default\s{2,}Targets \.opencode under the current directory; run from the project root/m,
+    /Project scope uses \.opencode under the current directory; run from the project root/,
   );
-  assert.match(help.stdout, /^  --global\s{2,}Targets ~\/\.config\/opencode/m);
+  assert.match(help.stdout, /--global \(otherwise project\)/);
   assert.doesNotMatch(help.stdout, /--scope/);
-  assert.match(
-    help.stdout,
-    new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --global --dry-run`),
-  );
-  assert.ok(
-    help.stdout.includes(
-      `Portable Agent Skills are installed separately with npx --yes ${SKILLS_INSTALLER_SPEC}.`,
-    ),
-  );
+  assert.match(help.stdout, /Portable skills use the separate skills CLI/);
   assert.doesNotMatch(help.stdout, /Commands: install, uninstall/);
 });
 
@@ -364,7 +352,7 @@ test("CLI rejects removed scope syntax and irrelevant command options", () => {
   }
   const capabilities = spawnSync(
     process.execPath,
-    [join(PACKAGE, "dist", "cli.js"), "capabilities", "--json"],
+    [join(PACKAGE, "dist", "cli.js"), "catalog", "--json"],
     { encoding: "utf8" },
   );
   assert.equal(capabilities.status, 0, capabilities.stderr);
@@ -377,11 +365,15 @@ test("CLI exposes contextual help for every command and group", () => {
     { args: ["uninstall", "--help"], topic: "uninstall", usage: "agentomatic uninstall" },
     { args: ["doctor", "--help"], topic: "doctor", usage: "agentomatic doctor" },
     {
-      args: ["capabilities", "--help"],
-      topic: "capabilities",
-      usage: "agentomatic capabilities",
+      args: ["catalog", "--help"],
+      topic: "catalog",
+      usage: "agentomatic catalog",
     },
-    { args: ["reconcile", "--help"], topic: "reconcile", usage: "agentomatic reconcile" },
+    {
+      args: ["maintenance", "cleanup", "--help"],
+      topic: "maintenance cleanup",
+      usage: "agentomatic maintenance cleanup",
+    },
     { args: ["agent", "--help"], topic: "agent", usage: "agentomatic agent", group: true },
     {
       args: ["agent", "list", "--help"],
@@ -389,30 +381,35 @@ test("CLI exposes contextual help for every command and group", () => {
       usage: "agentomatic agent list",
     },
     {
-      args: ["agent", "configure", "--help"],
-      topic: "agent configure",
-      usage: "agentomatic agent configure",
+      args: ["configure", "agent", "--help"],
+      topic: "configure agent",
+      usage: "agentomatic configure agent",
     },
     {
-      args: ["agent", "model-set", "worker", "--help"],
-      topic: "agent model-set",
-      usage: "agentomatic agent model-set",
+      args: ["configure", "agent", "worker", "--help"],
+      topic: "configure agent",
+      usage: "agentomatic configure agent",
     },
     {
-      args: ["agent", "reconcile", "--help"],
-      topic: "agent reconcile",
-      usage: "agentomatic agent reconcile",
-    },
-    { args: ["critic", "--help"], topic: "critic", usage: "agentomatic critic", group: true },
-    {
-      args: ["critic", "add", "security", "--help"],
-      topic: "critic add",
-      usage: "agentomatic critic add",
+      args: ["maintenance", "repair", "--help"],
+      topic: "maintenance repair",
+      usage: "agentomatic maintenance repair",
     },
     {
-      args: ["critic", "remove", "security", "--help"],
-      topic: "critic remove",
-      usage: "agentomatic critic remove",
+      args: ["configure", "--help"],
+      topic: "configure",
+      usage: "agentomatic configure",
+      group: true,
+    },
+    {
+      args: ["agent", "add-critic", "security", "--help"],
+      topic: "agent add-critic",
+      usage: "agentomatic agent add-critic",
+    },
+    {
+      args: ["agent", "remove", "critic-security", "--help"],
+      topic: "agent remove",
+      usage: "agentomatic agent remove",
     },
   ];
   const outputs = new Map();
@@ -421,14 +418,9 @@ test("CLI exposes contextual help for every command and group", () => {
       encoding: "utf8",
     });
     assert.equal(result.status, 0, `${item.topic}: ${result.stderr}`);
-    assert.ok(
-      result.stdout.startsWith(`agentomatic ${PACKAGE_VERSION} - ${item.topic}\n`),
-      item.topic,
-    );
+    assert.ok(result.stdout.startsWith(`agentomatic ${PACKAGE_VERSION}\n`), item.topic);
     assert.ok(result.stdout.includes(item.usage), item.topic);
-    const expectedSections = item.group
-      ? ["Usage:", "Commands:", "Behavior:", "Examples:"]
-      : ["Usage:", "Options:", "Behavior:", "Examples:"];
+    const expectedSections = ["Usage:", "Common:"];
     const positions = expectedSections.map((section) => result.stdout.indexOf(section));
     assert.ok(
       positions.every((position) => position >= 0),
@@ -439,16 +431,19 @@ test("CLI exposes contextual help for every command and group", () => {
       [...positions].sort((left, right) => left - right),
       item.topic,
     );
-    assert.match(result.stdout, new RegExp(`npx --yes ${escapeRegExp(PACKAGE_SPEC)}`));
+    assert.match(result.stdout, /Project scope/);
     assert.doesNotMatch(result.stdout, /Error \[/);
     outputs.set(item.topic, result.stdout);
   }
 
   assert.match(outputs.get("install"), /--plugins <list\|none>/);
   assert.doesNotMatch(outputs.get("doctor"), /--confirm/);
-  assert.match(outputs.get("agent model-set"), /--model <id>[\s\S]*--variant <id>/);
-  assert.match(outputs.get("agent"), /^  list\s{2,}[\s\S]*^  reconcile\s{2,}/m);
-  assert.match(outputs.get("critic"), /^  add\s{2,}[\s\S]*^  remove\s{2,}/m);
+  assert.match(outputs.get("configure agent"), /--model <value>[\s\S]*--variant <value>/);
+  assert.match(outputs.get("agent"), /agent list[\s\S]*agent add-critic[\s\S]*agent remove/);
+  assert.match(
+    outputs.get("configure"),
+    /configure components[\s\S]*configure agent[\s\S]*configure critics/,
+  );
 });
 
 test("non-TTY install requires explicit complete selection and writes no state", async () => {
@@ -471,5 +466,88 @@ test("non-TTY install requires explicit complete selection and writes no state",
     await assert.rejects(lstat(join(home, ".state")), { code: "ENOENT" });
   } finally {
     rmSync(base, { recursive: true, force: true });
+  }
+});
+
+test("explicit CLI selection replaces retired saved commands without resetting core", async () => {
+  for (const core of [false, true]) {
+    const base = mkdtempSync(join(tmpdir(), "agentomatic-command-rename-"));
+    const project = join(base, "project");
+    const home = join(base, "home");
+    const deployment = join(project, ".opencode");
+    const legacyPath = "commands/stopit.md";
+    const legacyContent = "Load skill `stopit`.\n";
+    const manifestPath = join(deployment, ".agentomatic-manifest.json");
+    try {
+      await Promise.all([mkdir(join(deployment, "commands"), { recursive: true }), mkdir(home)]);
+      await writeFile(join(deployment, legacyPath), legacyContent);
+      const manifest = JSON.stringify({
+        schema_version: 2,
+        package: "@kisev/agentomatic",
+        package_version: PACKAGE_VERSION,
+        version: PACKAGE_VERSION,
+        scope: "project",
+        commands: ["stopit"],
+        agents: [],
+        plugins: [],
+        core_activation: core,
+        files: { [legacyPath]: { sha256: hash(legacyContent), mode: 0o644, kind: "command" } },
+      });
+      await writeFile(manifestPath, manifest);
+      const invoke = (commands, action) =>
+        spawnSync(
+          process.execPath,
+          [
+            join(PACKAGE, "dist/cli.js"),
+            "install",
+            "--commands",
+            commands,
+            "--agents",
+            "none",
+            "--plugins",
+            "none",
+            "--no-dependency",
+            "--json",
+            action,
+          ],
+          {
+            cwd: project,
+            env: {
+              ...process.env,
+              HOME: home,
+              XDG_CONFIG_HOME: join(home, "config"),
+              XDG_DATA_HOME: join(home, ".local/share"),
+              XDG_STATE_HOME: join(home, "state"),
+            },
+            encoding: "utf8",
+          },
+        );
+      const rejected = invoke("stopit", "--dry-run");
+      assert.equal(rejected.status, 2);
+      assert.equal(JSON.parse(rejected.stdout).error.code, "invalid_selection");
+      const planned = invoke("handoff", "--dry-run");
+      assert.equal(planned.status, 0, planned.stdout + planned.stderr);
+      const selection = JSON.parse(planned.stdout).plan.selection;
+      assert.deepEqual(selection.commands, ["handoff"]);
+      assert.equal(selection.core_activation, core);
+      assert.equal(await readFile(manifestPath, "utf8"), manifest);
+      assert.equal(await readFile(join(deployment, legacyPath), "utf8"), legacyContent);
+      const applied = invoke("handoff", "--yes");
+      assert.equal(applied.status, 0, applied.stdout + applied.stderr);
+      const updated = JSON.parse(await readFile(manifestPath, "utf8"));
+      assert.deepEqual(updated.commands, ["handoff"]);
+      assert.equal(updated.core_activation, core);
+      assert.match(
+        await readFile(join(deployment, "commands/handoff.md"), "utf8"),
+        /skill `handoff`/,
+      );
+      await assert.rejects(lstat(join(deployment, legacyPath)), { code: "ENOENT" });
+      const archive = JSON.parse(
+        await readFile(join(archiveRoot("project", project, home), "index.json"), "utf8"),
+      );
+      assert.ok(archive.entries.some((entry) => entry.original_hash === hash(legacyContent)));
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   }
 });

@@ -18,6 +18,9 @@ moves between releases; Git tags remain immutable provenance.
 Portable cleanup belongs to the external `skills` CLI. Package locks, snapshots,
 and rollback do not cover it, as required by
 [REQ-F-005](../../requirements/functional/README.md#req-f-005---archive-owned-retired-assets).
-Old direct publication commands cannot acquire newer helper guarantees retroactively;
-users regenerate review plans before using guarded publication. Ambiguous remote
-outcomes can require manual investigation when a fresh read cannot prove success.
+Old guarded review actions remain historical and are not executed or migrated.
+Manual publication does not promise exactly-once delivery: after timeout or
+cancellation, users inspect GitLab and choose whether to repeat. Related
+suggestions may be partially applied; only safely separable fixes use this form.
+An agent can misclassify prose meaning or targeted-check scope; structural
+validation does not eliminate this risk.

@@ -14,8 +14,6 @@ from jsonschema.validators import validator_for
 
 from scripts import eval_runner
 from shared.references.portable_gitlab.contract import WorkflowError, validate_v2_artifact
-from tests.test_local_review import report_payload as local_review_payload
-from tests.test_review_semver import fallback_assessment, release_assessment
 from tests.test_work_item_contract import item as work_item
 
 if TYPE_CHECKING:
@@ -23,6 +21,7 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATHS = {
+    "apps/reviewmatic/src/reviewmatic/portable/portable_gitlab/artifact-contracts-v2.schema.json",
     "evals/schemas/result-v1.schema.json",
     "evals/schemas/scenario-v1.schema.json",
     "packages/agentomatic/contracts/critic-report-v1.schema.json",
@@ -36,6 +35,7 @@ SCHEMA_PATHS = {
     "shared/references/team_runtime/team-context.schema.json",
     "shared/references/people_runtime/people-context.schema.json",
     "shared/references/work-item-contract.schema.json",
+    "skills/skill-doctor/references/diagnosis.schema.json",
     "skills/taskmatic/references/snapshot.schema.json",
 }
 DIGEST = "a" * 64
@@ -51,6 +51,88 @@ def validator(path: str) -> Validator:
     validator_type = validator_for(schema)
     validator_type.check_schema(schema)
     return validator_type(schema, format_checker=FormatChecker())
+
+
+@pytest.mark.parametrize(
+    ("definition", "instance"),
+    [
+        (
+            "thread_decision",
+            {
+                "id": "42",
+                "url": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
+                "state": "open",
+                "assessment": "accepted",
+                "severity": "medium",
+                "rationale": "The retry still duplicates writes.",
+                "outcome": "reply",
+                "proposed_response": "Reuse the request key.",
+                "routing_response": "The correction is proposed in a positioned thread.",
+                "fix_mode": "suggestion",
+                "patch": None,
+                "fixing_commit": None,
+                "last_note_id": 42,
+                "last_note_body_sha256": DIGEST,
+                "thread_sha256": DIGEST,
+                "suggestions": [
+                    {"path": "review.txt", "line": 2, "body": "```suggestion\nkeyed retry\n```"}
+                ],
+            },
+        ),
+        (
+            "response",
+            {
+                "id": "critic-retry",
+                "decision": "accept",
+                "reason": "Confirmed on the exact head.",
+                "severity_override": {
+                    "original_severity": "high",
+                    "severity": "medium",
+                    "reason": "Only opt-in retry callers are affected.",
+                },
+            },
+        ),
+        (
+            "finding_publication",
+            {
+                "finding_id": "critic-retry",
+                "revision": 1,
+                "type": "existing_thread",
+                "thread_id": "42",
+                "path": None,
+                "line": None,
+                "old_line": None,
+                "body": "The existing discussion owns the validated fix.",
+                "fix_mode": "not_required",
+                "patch": None,
+                "patch_path": None,
+                "patch_sha256": None,
+            },
+        ),
+        (
+            "recommended_issue",
+            {
+                "id": "policy-doc",
+                "revision": 1,
+                "title": "Document the existing retry policy",
+                "problem": "The policy is not discoverable.",
+                "evidence": ["The guide omits the existing option."],
+                "minimum_fix": "Document the option.",
+                "importance": "Non-blocking operational improvement.",
+                "risk": "Operators may select an unsuitable policy.",
+                "reason_out_of_scope": "This MR does not alter the option.",
+                "existing_task": None,
+            },
+        ),
+    ],
+)
+def test_review_extensions_have_concrete_valid_instances(
+    definition: str, instance: dict[str, Any]
+) -> None:
+    schema = load("shared/references/portable_gitlab/artifact-contracts-v2.schema.json")
+    schema.pop("oneOf")
+    schema["$ref"] = f"#/$defs/{definition}"
+    validator_for(schema)(schema).validate(instance)
 
 
 def envelope(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -80,122 +162,106 @@ def identity() -> dict[str, str]:
 
 
 def artifact_instances() -> list[dict[str, Any]]:
-    finding = {
-        "id": "finding-1",
-        "severity": "low",
-        "summary": "The contract example is concrete.",
-        "risk": "Schema drift can invalidate emitted artifacts.",
-        "evidence": ["tests/test_json_schemas.py"],
-        "consequence": "A consumer could reject an artifact.",
-        "relation_to_change": "The schema is part of the maintained contract.",
-        "minimum_fix": "Keep the producer and schema aligned.",
-    }
-    rejected_finding = {
-        **finding,
-        "id": "rejected-1",
-        "summary": "The broader cleanup is not part of this change.",
-    }
-    patch_content = (
-        "diff --git a/example.txt b/example.txt\n"
-        "--- a/example.txt\n"
-        "+++ b/example.txt\n"
-        "@@ -1 +1 @@\n"
-        "-old\n"
-        "+new\n"
-    )
-    patch_digest = hashlib.sha256(patch_content.encode()).hexdigest()
-    body_content = "Finding body\n\n```diff\n" + patch_content.rstrip() + "\n```\n"
-    body_digest = hashlib.sha256(body_content.encode()).hexdigest()
-    issue_content = "Issue body\n"
-    issue_digest = hashlib.sha256(issue_content.encode()).hexdigest()
-    incremental_delta: dict[str, Any] = {
-        "from_head": None,
-        "to_head": "c",
-        "changed_paths": [],
-        "changed_thread_ids": [],
-        "unchanged_thread_ids": [],
-        "changed_note_ids": [],
-        "unchanged_note_ids": [],
-        "metadata_fields": [],
-        "pipelines_changed": False,
-    }
-    incremental = {
-        "contract_version": 1,
-        "requested": "auto",
-        "mode": "full",
-        "reason": "no compatible finalized baseline exists",
-        "incremental_baseline": {
-            "plan_path": None,
-            "plan_digest": None,
-            "state_digest": None,
-        },
-        "previous_findings": [],
-        "previous_finding_publications": [],
-        "previous_recommended_issues": [],
-        "previous_finding_ledger": [],
-        "previous_publication_ledger": [],
-        "previous_thread_decisions": [],
-        "previous_rejected_candidates": [],
-        "reconsidered_rejected_candidates": [],
-        "incremental_delta": incremental_delta,
-        "incremental_delta_digest": hashlib.sha256(
-            json.dumps(
-                incremental_delta,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode()
-            + b"\n"
-        ).hexdigest(),
-        "critic_required": False,
-        "fallback_reasons": [],
-    }
-    presentation = {
-        "title": "Code review publication plan",
-        "incremental_notice": None,
-        "target_label": "Target",
-        "role_label": "Role",
-        "role_value": "reviewer",
-        "verdict_label": "Verdict",
-        "verdict_value": "ready",
-        "metadata_heading": "MR metadata",
-        "labels_heading": "Project labels",
-        "previous_findings_heading": "Previous findings",
-        "open_threads_heading": "Open threads",
-        "closed_threads_heading": "Closed threads",
-        "local_fixes_heading": "Local fixes",
-        "new_findings_heading": "Findings",
-        "recommended_issues_heading": "Recommended issues",
-        "checked_heading": "Reviewed without publication",
-        "architecture_heading": "Architecture",
-        "semver_heading": "SemVer",
-        "checks_heading": "Checks",
-        "publication_heading": "Manual publication",
-        "no_items": "None.",
-        "publication_warning": "No command was executed.",
-        "evidence_label": "Evidence",
-        "relation_label": "Relation to change",
-        "severity_labels": {
-            "critical": "Critical",
-            "high": "High",
-            "medium": "Medium",
-            "low": "Low",
-        },
-        "recovery_label": "If the response succeeds but the state change fails, run only:",
-        "previous_table_headers": [
-            "ID",
-            "Previous status",
-            "Current status",
-            "Rationale",
-            "Action",
-        ],
-    }
     gate = {"status": "passed", "evidence": ["task check"], "range": identity()}
+    context_binding = {
+        "evidence_digest": DIGEST,
+        "artifact_root": "/tmp/portable-artifacts",
+        "repo_root": "/tmp/repository",
+        "base_sha": "a",
+        "start_sha": "b",
+        "head_sha": "c",
+        "target_sha": None,
+        "target_ref": None,
+    }
+    context_package_mr = envelope(
+        "context_package",
+        {
+            "schema": "portable-gitlab/context-package/v2",
+            "mode": "mr",
+            "binding": context_binding,
+            "goal": {"status": "known", "text": "Bound the retry write behind an idempotency key."},
+            "acceptance_criteria": {"status": "unknown", "items": []},
+            "background": "Conversation summary prepared for a future transfer.",
+            "claims": [
+                {
+                    "id": "claim-description",
+                    "kind": "author_claim",
+                    "statement": "The description says the retry is already safe.",
+                    "sources": ["MR description section 'Behavior'"],
+                },
+                {
+                    "id": "claim-agreed",
+                    "kind": "agreed_requirement",
+                    "statement": "Retries must stay idempotent.",
+                    "sources": ["Discussion 42 reviewer request"],
+                    "disputed_by": ["claim-description"],
+                },
+            ],
+            "constraints": ["Do not change public callers."],
+            "prior_decisions": [
+                {
+                    "id": "prior-thread-42",
+                    "decision": "resolve: the exact head already bounds the write.",
+                    "source": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
+                }
+            ],
+            "questions": [
+                {
+                    "id": "q-retry",
+                    "subject": "Does the exact head always set the idempotency key?",
+                    "source": "Discussion 42 of the collected evidence",
+                    "critic": True,
+                    "context_digest": DIGEST,
+                }
+            ],
+            "thread_registry": [
+                {
+                    "id": "42",
+                    "url": "https://gitlab.example/group/project/-/merge_requests/7#note_42",
+                    "state": "open",
+                    "summary": "A reviewer remarked on the retry path.",
+                    "review_relevance": "The change touches this path; the remark is assessed directly.",
+                }
+            ],
+            "supersedes": None,
+            "external_mutations": False,
+        },
+    )
+    context_package_local = envelope(
+        "context_package",
+        {
+            "schema": "portable-gitlab/context-package/v2",
+            "mode": "local",
+            "binding": {
+                "evidence_digest": DIGEST,
+                "artifact_root": "/tmp/portable-artifacts",
+                "repo_root": "/tmp/repository",
+                "base_sha": "a",
+                "head_sha": "c",
+                "ref": None,
+                "sections": {
+                    "committed": DIGEST,
+                    "staged": DIGEST,
+                    "unstaged": DIGEST,
+                    "untracked": DIGEST,
+                },
+            },
+            "goal": {"status": "unknown"},
+            "acceptance_criteria": {"status": "unknown", "items": []},
+            "background": "",
+            "claims": [],
+            "constraints": [],
+            "prior_decisions": [],
+            "questions": [],
+            "supersedes": None,
+            "external_mutations": False,
+        },
+    )
     evidence = envelope(
         "evidence_snapshot",
         {
             "schema_version": 2,
-            "profile": "code-review",
+            "profile": "mr-prepare",
             "external_mutations": False,
             "target": {},
             "project": {},
@@ -219,21 +285,6 @@ def artifact_instances() -> list[dict[str, Any]]:
                 "pipelines": True,
                 "discussions": True,
             },
-            "retrieval_complete": True,
-        },
-    )
-    local = envelope(
-        "local_wip_snapshot",
-        {
-            "schema_version": 2,
-            "profile": "code-review",
-            "external_mutations": False,
-            "repo_root": "/tmp/repository",
-            "base_sha": "a",
-            "head_sha": "b",
-            "ref": "main",
-            "sections": {"committed": {}, "staged": {}, "unstaged": {}, "untracked": {}},
-            "artifact_root": "/tmp/portable-artifacts",
             "retrieval_complete": True,
         },
     )
@@ -285,52 +336,6 @@ def artifact_instances() -> list[dict[str, Any]]:
             },
         },
     )
-    context = envelope(
-        "review_context",
-        {
-            "schema_version": 2,
-            "profile": "code-review",
-            "external_mutations": False,
-            "evidence_digest": DIGEST,
-            "target": {},
-            "role": "reviewer",
-            "current_user_id": 23,
-            "current_user_username": "reviewer",
-            "mr_author_username": "author",
-            "discussions": [],
-            "notes": [],
-            "issue_templates": [],
-            "release_evidence": {
-                "target_branch": "main",
-                "target_sha": "b",
-                "releases": component(),
-                "tags": component(),
-                "errors": [],
-            },
-            "counts": {
-                "discussions": 0,
-                "notes": 0,
-                "content_notes": 0,
-                "system_notes": 0,
-                "open_resolvable": 0,
-                "resolved_resolvable": 0,
-                "plain_discussions": 0,
-            },
-            "exact_git": {
-                "repo_root": "/tmp/repository",
-                "refs": {},
-                "changed_paths": [],
-                "diff_sha256": None,
-                "complete": True,
-                "errors": [],
-            },
-            "incremental": incremental,
-            "complete": True,
-            "errors": [],
-            "artifact_root": "/tmp/portable-artifacts",
-            "prepared_at": CREATED_AT,
-        },
-    )
     publication = envelope(
         "publication_plan",
         {
@@ -368,328 +373,6 @@ def artifact_instances() -> list[dict[str, Any]]:
             },
         },
     )
-    finding_action_spec = {
-        "schema": "code-review/publication-action/v1",
-        "preflight_sha256": DIGEST,
-        "operation": "create_general",
-        "publication": {"id": "finding-1", "revision": 1, "kind": "finding"},
-        "body": {"path": "/tmp/portable-artifacts/finding-1.md", "sha256": body_digest},
-        "expected": {"thread": None, "note": None, "prior_marker": None, "issue": None},
-        "mutation": {"path": None, "line": None, "old_line": None},
-    }
-    issue_action_spec = {
-        "schema": "code-review/publication-action/v1",
-        "preflight_sha256": DIGEST,
-        "operation": "create_issue",
-        "publication": {"id": "issue-1", "revision": 1, "kind": "issue"},
-        "body": {"path": "/tmp/portable-artifacts/issue-1.md", "sha256": issue_digest},
-        "expected": {"thread": None, "note": None, "prior_marker": None, "issue": None},
-        "mutation": {"title": "Track broader schema cleanup"},
-    }
-    label_action_spec = {
-        "schema": "code-review/publication-action/v1",
-        "preflight_sha256": DIGEST,
-        "operation": "update_labels",
-        "publication": None,
-        "body": None,
-        "expected": {"thread": None, "note": None, "prior_marker": None, "issue": None},
-        "mutation": {"add": ["semver::patch"], "remove": [], "proposed": ["semver::patch"]},
-    }
-    review_plan = envelope(
-        "review_plan",
-        {
-            "profile": "code-review",
-            "review_contract_version": 6,
-            "external_mutations": False,
-            "evidence_digest": DIGEST,
-            "context_digest": DIGEST,
-            "decision_digest": DIGEST,
-            "target": {},
-            "role": "reviewer",
-            "mode": "deep",
-            "locale": "en",
-            "incremental": incremental,
-            "verdict": "ready",
-            "complete": True,
-            "summary": "The concrete contract example is valid.",
-            "architecture_assessment": "The existing ownership boundary is preserved.",
-            "semver_impact": "patch",
-            "semver_rationale": "The fix changes behavior without changing the public API.",
-            "semver_assessment": release_assessment(),
-            "mr_metadata_assessment": {
-                "observed": {
-                    "title": "Fix schema drift",
-                    "description": "Align the producer and schema.",
-                    "labels": ["type::bug"],
-                    "workflow_state": "merged",
-                },
-                "assessment": {
-                    field: {
-                        "status": "ok",
-                        "rationale": f"The {field} metadata is sufficient.",
-                        "recommendation": None,
-                    }
-                    for field in ("title", "description", "labels", "workflow_state", "overall")
-                },
-            },
-            "label_review": {
-                "complete": True,
-                "catalog_sha256": canonical_digest(
-                    [{"name": "semver::patch", "description": "Backward-compatible fix"}]
-                ),
-                "catalog": [{"name": "semver::patch", "description": "Backward-compatible fix"}],
-                "assessments": [
-                    {
-                        "name": "semver::patch",
-                        "description": "Backward-compatible fix",
-                        "status": "applicable",
-                        "rationale": "The fix has patch SemVer impact.",
-                        "current": False,
-                    }
-                ],
-                "current": [],
-                "add": ["semver::patch"],
-                "remove": [],
-                "proposed": ["semver::patch"],
-                "unresolved": [],
-                "semver": {
-                    "impact": "patch",
-                    "candidates": ["semver::patch"],
-                    "selected": "semver::patch",
-                },
-            },
-            "publication_preview": {
-                "mr_state": "merged",
-                "warning": "Actions are prepared but were not executed.",
-                "preflight_path": "/tmp/portable-artifacts/preflight.json",
-                "preflight_sha256": DIGEST,
-                "body_files": [
-                    {
-                        "publication_id": "finding-1",
-                        "revision": 1,
-                        "kind": "finding",
-                        "path": "/tmp/portable-artifacts/finding-1.md",
-                        "sha256": body_digest,
-                        "content": body_content,
-                    },
-                    {
-                        "publication_id": "issue-1",
-                        "revision": 1,
-                        "kind": "issue",
-                        "path": "/tmp/portable-artifacts/issue-1.md",
-                        "sha256": issue_digest,
-                        "content": issue_content,
-                    },
-                ],
-                "actions": [
-                    {
-                        "id": "finding:finding-1:r1:create_general",
-                        "sha256": canonical_digest(finding_action_spec),
-                        "kind": "finding",
-                        "publication_id": "finding-1",
-                        "revision": 1,
-                        "operation": "create_general",
-                        "command": "glab api --method POST projects/1/merge_requests/1/discussions -F body=@/tmp/portable-artifacts/finding-1.md",
-                        "spec": finding_action_spec,
-                    },
-                    {
-                        "id": "issue:issue-1:r1:create_issue",
-                        "sha256": canonical_digest(issue_action_spec),
-                        "kind": "issue",
-                        "publication_id": "issue-1",
-                        "revision": 1,
-                        "operation": "create_issue",
-                        "command": "glab api --method POST projects/1/issues -F description=@/tmp/portable-artifacts/issue-1.md",
-                        "spec": issue_action_spec,
-                    },
-                    {
-                        "id": "labels:update",
-                        "sha256": canonical_digest(label_action_spec),
-                        "kind": "labels",
-                        "publication_id": None,
-                        "revision": None,
-                        "operation": "update_labels",
-                        "command": "glab mr update 1 --repo https://gitlab.example/group/project --label semver::patch",
-                        "spec": label_action_spec,
-                    },
-                ],
-            },
-            "presentation": presentation,
-            "chat_assessment": {
-                "necessity": {"status": "supported", "rationale": "The defect is confirmed."},
-                "relevance": {"status": "current", "rationale": "The exact head is current."},
-                "change": "The change fixes the reviewed behavior.",
-            },
-            "checks": ["task check"],
-            "findings": [finding],
-            "finding_publications": [
-                {
-                    "finding_id": "finding-1",
-                    "revision": 1,
-                    "type": "general",
-                    "path": None,
-                    "line": None,
-                    "old_line": None,
-                    "body": "Finding body",
-                    "fix_mode": "patch",
-                    "patch": patch_content,
-                    "patch_path": "/tmp/portable-artifacts/finding-1.patch",
-                    "patch_sha256": patch_digest,
-                }
-            ],
-            "previous_finding_assessments": [],
-            "recommended_issues": [
-                {
-                    "id": "issue-1",
-                    "revision": 1,
-                    "title": "Track broader schema cleanup",
-                    "problem": "Related schemas use inconsistent naming.",
-                    "risk": "Future consumers can drift.",
-                    "evidence": ["shared/schema.json"],
-                    "reason_out_of_scope": "The file is not changed by this review.",
-                    "minimum_fix": "Align the schemas in a separate change.",
-                    "body": "Issue body",
-                }
-            ],
-            "finding_ledger": [
-                {
-                    "id": "finding-1",
-                    "kind": "finding",
-                    "status": "active",
-                    "revision": 1,
-                    "record": {
-                        "finding": finding,
-                        "publication": {
-                            "finding_id": "finding-1",
-                            "revision": 1,
-                            "type": "general",
-                            "path": None,
-                            "line": None,
-                            "old_line": None,
-                            "body": "Finding body",
-                            "fix_mode": "patch",
-                            "patch": patch_content,
-                            "patch_path": "/tmp/portable-artifacts/finding-1.patch",
-                            "patch_sha256": patch_digest,
-                        },
-                    },
-                },
-                {
-                    "id": "issue-1",
-                    "kind": "issue",
-                    "status": "active",
-                    "revision": 1,
-                    "record": {
-                        "issue": {
-                            "id": "issue-1",
-                            "revision": 1,
-                            "title": "Track broader schema cleanup",
-                            "problem": "Related schemas use inconsistent naming.",
-                            "risk": "Future consumers can drift.",
-                            "evidence": ["shared/schema.json"],
-                            "reason_out_of_scope": "The file is not changed by this review.",
-                            "minimum_fix": "Align the schemas in a separate change.",
-                            "body": "Issue body",
-                        }
-                    },
-                },
-            ],
-            "publication_ledger": [],
-            "rejected_candidates": [
-                {
-                    "id": "rejected-1",
-                    "source": "critic",
-                    "finding": rejected_finding,
-                    "reason": "The evidence is outside the changed contract.",
-                    "paths": ["shared/schema.json"],
-                    "thread_ids": [],
-                    "metadata_fields": [],
-                    "ci": False,
-                }
-            ],
-            "rejected_candidate_assessments": [],
-            "rejected_candidate_ledger": [
-                {
-                    "id": "rejected-1",
-                    "source": "critic",
-                    "finding": rejected_finding,
-                    "reason": "The evidence is outside the changed contract.",
-                    "paths": ["shared/schema.json"],
-                    "thread_ids": [],
-                    "metadata_fields": [],
-                    "ci": False,
-                }
-            ],
-            "thread_decisions": [],
-            "markdown": "# Review plan",
-        },
-    )
-    analysis = envelope(
-        "analysis_report",
-        {
-            "schema": "portable-gitlab/analysis-report/v2",
-            "evidence_digest": DIGEST,
-            "run_id": "analysis-run",
-            "session_id": "analysis-session",
-            "findings": [finding],
-            "external_mutations": False,
-        },
-    )
-    critic = envelope(
-        "critic_receipt",
-        {
-            "schema": "portable-gitlab/critic-receipt/v2",
-            "evidence_digest": DIGEST,
-            "run_id": "critic-run",
-            "session_id": "critic-session",
-            "scope_digest": DIGEST,
-            "target_finding_ids": [],
-            "findings": [finding],
-            "external_mutations": False,
-        },
-    )
-    decision = envelope(
-        "review_decision",
-        {
-            "schema": "portable-gitlab/review-decision/v2",
-            "evidence_digest": DIGEST,
-            "finalize_digest": DIGEST,
-            "context_digest": DIGEST,
-            "critic_receipt_digest": DIGEST,
-            "mode": "deep",
-            "external_mutations": False,
-            "run_id": "review-run",
-            "session_id": "review-session",
-            "verdict": "ready",
-            "low_risk": True,
-            "blocking_findings": False,
-            "blocking_finding_ids": [],
-            "owner_decision_reasons": [],
-            "ci_job_assessments": [
-                {
-                    "project_id": 1,
-                    "pipeline_id": 2,
-                    "job_id": 3,
-                    "classification": "process_gate",
-                    "rationale": "The trace reports an unmet approval policy.",
-                    "trace_evidence": "Approval is required.",
-                }
-            ],
-            "findings": [finding],
-            "critic_findings": [rejected_finding],
-            "accepted_findings": [finding],
-            "critic_target_finding_ids": [],
-            "unresolved_threads": [],
-            "responses": [
-                {"id": "finding-1", "decision": "accept", "reason": "confirmed"},
-                {
-                    "id": "rejected-1",
-                    "decision": "reject",
-                    "reason": "outside the changed contract",
-                },
-            ],
-        },
-    )
     readiness = envelope(
         "release_readiness",
         {
@@ -720,29 +403,117 @@ def artifact_instances() -> list[dict[str, Any]]:
             "head_sha": "c",
         },
     )
+    local_review = envelope(
+        "local_review_report",
+        {
+            "evidence_digest": DIGEST,
+            "previous_review_digest": None,
+            "mode": "full",
+            "context_package": {
+                "path": f"/tmp/portable-artifacts/artifacts/context_package/{DIGEST}.json",
+                "digest": DIGEST,
+            },
+            "question_answers": [
+                {
+                    "question_id": "q-renderer",
+                    "verdict": "confirmed",
+                    "evidence": "The staged diff only rewrites plain text values.",
+                    "run_id": "critic-run-1",
+                    "session_id": "critic-session-1",
+                    "context_digest": DIGEST,
+                }
+            ],
+            "question_verifications": [
+                {
+                    "question_id": "q-renderer",
+                    "original": {
+                        "run_id": "critic-run-1",
+                        "session_id": "critic-session-1",
+                        "verdict": "not_verified",
+                    },
+                    "verdict": "confirmed",
+                    "evidence": "The staged diff only rewrites plain text values.",
+                    "context_digest": DIGEST,
+                }
+            ],
+            "superseded_question_results": [
+                {
+                    "context_digest": DIGEST,
+                    "package_digest": DIGEST,
+                    "answers": [
+                        {
+                            "question_id": "q-renderer",
+                            "verdict": "not_verified",
+                            "reason": "The previous package asked a different subject.",
+                            "run_id": "critic-run-1",
+                            "session_id": "critic-session-1",
+                            "context_digest": DIGEST,
+                        }
+                    ],
+                    "verifications": [],
+                }
+            ],
+            "task": {
+                "goal": "Link plain text without modifying mixed Markdown.",
+                "acceptance_criteria": ["Plain references link."],
+                "constraints": [],
+                "accepted_risks": [],
+                "deferred": [],
+                "decision_evidence": "User chose plain-text linking.",
+            },
+            "task_change_reason": None,
+            "findings": [
+                {
+                    "id": "markdown-1",
+                    "severity": "low",
+                    "status": "open",
+                    "summary": "Mixed Markdown is modified.",
+                    "requirement": "Preserve mixed Markdown verbatim.",
+                    "scenario": "A user includes an issue reference in a Markdown table.",
+                    "evidence": "renderer('table #7') rewrites a protected value.",
+                    "consequence": "The generated table is corrupted.",
+                    "origin": "regression",
+                    "minimum_fix": "Keep non-plain-text values unchanged.",
+                    "blocking": True,
+                    "rationale": "A small correction restores the agreed behavior.",
+                    "decision_evidence": None,
+                    "reopen_reason": None,
+                }
+            ],
+            "checks": [
+                {
+                    "name": "Renderer acceptance cases",
+                    "status": "passed",
+                    "required": True,
+                    "evidence": "Plain text and protected input examples inspected.",
+                }
+            ],
+            "assessment": "A narrow renderer fix suffices.",
+            "verdict": "not_ready",
+            "external_mutations": False,
+        },
+    )
     return [
         evidence,
-        local,
         inventory,
-        context,
         publication,
-        review_plan,
-        analysis,
-        critic,
-        decision,
         readiness,
         finalized,
+        local_review,
+        context_package_mr,
+        context_package_local,
     ]
 
 
 def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
-    paths = set(
+    listed_paths = set(
         subprocess.check_output(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.schema.json"],
             cwd=ROOT,
             text=True,
         ).splitlines()
     )
+    paths = {path for path in listed_paths if (ROOT / path).is_file()}
     assert paths == SCHEMA_PATHS
     for path in sorted(paths):
         validator(path)
@@ -751,7 +522,7 @@ def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
 def validate_eval_contract_instances() -> None:
     scenario_validator = validator("evals/schemas/scenario-v1.schema.json")
     scenarios = sorted((ROOT / "evals/scenarios").glob("*.json"))
-    assert len(scenarios) == 277
+    assert len(scenarios) == 312
     for path in scenarios:
         scenario_validator.validate(load(path.relative_to(ROOT)))
 
@@ -795,24 +566,73 @@ def validate_shared_contract_instances() -> None:
     artifact_validator = validator(
         "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
     )
-    instances = [*artifact_instances(), envelope("local_review_report", local_review_payload())]
+    instances = artifact_instances()
     assert {instance["kind"] for instance in instances} == {
-        "analysis_report",
-        "critic_receipt",
+        "context_package",
         "evidence_snapshot",
         "finalize_report",
-        "local_wip_snapshot",
         "local_review_report",
         "publication_plan",
         "release_inventory",
         "release_readiness",
-        "review_context",
-        "review_decision",
-        "review_plan",
     }
     for instance in instances:
         artifact_validator.validate(instance)
         validate_v2_artifact(instance, instance["kind"])
+
+    # Code-review execution is owned by reviewmatic, not the retired Python profile.
+    critics: list[dict[str, Any]] = [
+        {
+            "schema": "portable-gitlab/critic-receipt/v2",
+            "evidence_digest": "a" * 64,
+            "run_id": f"critic-run-{index}",
+            "session_id": f"critic-session-{index}",
+            "findings": [],
+            "question_answers": [
+                {
+                    "question_id": "q-retry",
+                    "verdict": "confirmed" if index == 0 else "refuted",
+                    "evidence": "The exact head sets the idempotency key before write.",
+                    "context_digest": DIGEST,
+                }
+            ],
+            "external_mutations": False,
+        }
+        for index in range(2)
+    ]
+    for receipt in [*critics, {**critics[0], "contributors": critics}]:
+        artifact_validator.validate(
+            {
+                "schema": "portable-gitlab/critic_receipt/v2",
+                "schema_version": 2,
+                "kind": "critic_receipt",
+                "created_at": "2026-10-01T00:00:00Z",
+                "payload": receipt,
+            }
+        )
+
+    # The meaningful-context binding is optional in the canonical schema so
+    # historical artifacts stay readable, but any present binding must be a
+    # real digest.
+    context_package_mr = next(
+        instance
+        for instance in instances
+        if instance["kind"] == "context_package" and instance["payload"]["mode"] == "mr"
+    )
+    local_review = next(
+        instance for instance in instances if instance["kind"] == "local_review_report"
+    )
+    mr_package = dict(context_package_mr["payload"])
+    bad_question = copy.deepcopy(mr_package["questions"][0])
+    bad_question["context_digest"] = "not-a-digest"
+    invalid_package = copy.deepcopy(context_package_mr)
+    invalid_package["payload"] = {**mr_package, "questions": [bad_question]}
+    with pytest.raises(ValidationError):
+        artifact_validator.validate(invalid_package)
+    bad_answer = copy.deepcopy(local_review["payload"])
+    bad_answer["question_answers"][0]["context_digest"] = "not-a-digest"
+    with pytest.raises(ValidationError):
+        artifact_validator.validate({**local_review, "payload": bad_answer})
 
 
 def validate_opencode_contract_instances() -> None:
@@ -825,6 +645,82 @@ def validate_opencode_contract_instances() -> None:
 
 def taskmatic_snapshot_instance() -> dict[str, Any]:
     return cast("dict[str, Any]", load("skills/taskmatic/references/snapshot.example.json"))
+
+
+def skill_doctor_diagnosis_instance() -> dict[str, Any]:
+    return {
+        "schema": "agent-skills/skill-doctor/diagnosis/v1",
+        "session": {
+            "id": "ses_example0001",
+            "host": "opencode",
+            "workspace": "/home/example/workspace",
+            "title": "Investigate a failing skill",
+        },
+        "recorded_at": "2026-10-03T10:00:00Z",
+        "coverage": {
+            "complete": False,
+            "notes": ["2 of 40 parts could not be parsed"],
+            "parts_scanned": 40,
+            "parts_skipped": 2,
+            "truncated": False,
+        },
+        "skills": [
+            {
+                "name": "stopit",
+                "origin": {
+                    "kind": "declared",
+                    "source": "https://kisev.github.io/skills",
+                    "root": None,
+                },
+            }
+        ],
+        "evidence": [
+            {
+                "id": "ev-001",
+                "kind": "skill-error",
+                "excerpt": "error: failed to atomically write the handoff",
+                "time": 100,
+            },
+            {
+                "id": "ev-002",
+                "kind": "user-intervention",
+                "excerpt": "the same error happens again after a retry",
+                "time": 200,
+            },
+        ],
+        "observations": [
+            {
+                "id": "obs-001",
+                "classification": "skill-defect",
+                "skill": "stopit",
+                "status": "suspected",
+                "summary": "The runner reports a write failure and the user repeats the request.",
+                "evidence": ["ev-001", "ev-002"],
+                "fingerprints": ["atomic_write", "handoff_path"],
+                "proposal": "Check the error path of the atomic write helper.",
+                "workaround": None,
+            },
+            {
+                "id": "obs-002",
+                "classification": "environment",
+                "skill": None,
+                "status": "confirmed",
+                "summary": "The state directory was read-only during the first attempt.",
+                "evidence": ["ev-001"],
+                "fingerprints": [],
+                "proposal": "Document the permission requirement.",
+                "workaround": "Fix the directory mode before rerunning.",
+            },
+        ],
+        "conclusions": ["The suspected defect stays unconfirmed until reproduced."],
+        "open_questions": ["Does the failure persist with a writable state root?"],
+    }
+
+
+def validate_skill_doctor_contract_instances() -> None:
+    validator("skills/skill-doctor/references/diagnosis.schema.json").validate(
+        skill_doctor_diagnosis_instance()
+    )
 
 
 def validate_taskmatic_contract_instances() -> None:
@@ -858,6 +754,7 @@ def test_every_committed_json_schema_has_a_concrete_contract() -> None:
     validate_eval_contract_instances()
     validate_shared_contract_instances()
     validate_opencode_contract_instances()
+    validate_skill_doctor_contract_instances()
     validate_taskmatic_contract_instances()
     validate_schema_runtime_rejections()
 
@@ -887,122 +784,9 @@ def validate_schema_runtime_rejections() -> None:
     artifact_validator = validator(
         "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
     )
-    legacy_context = copy.deepcopy(artifacts["review_context"])
-    legacy_context["payload"].pop("incremental")
-    legacy_context["payload"].pop("issue_templates")
-    legacy_context["payload"].pop("current_user_id")
-    legacy_context["payload"].pop("release_evidence")
-    artifact_validator.validate(legacy_context)
-    validate_v2_artifact(legacy_context, "review_context")
-    structured_v2 = copy.deepcopy(artifacts["review_plan"])
-    structured_v2["payload"]["review_contract_version"] = 2
-    structured_v2["payload"].pop("chat_assessment")
-    structured_v2["payload"].pop("locale")
-    structured_v2["payload"].pop("semver_assessment")
-    for publication in structured_v2["payload"]["finding_publications"]:
-        for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
-            publication.pop(key)
-    for entry in structured_v2["payload"]["finding_ledger"]:
-        publication = entry["record"].get("publication")
-        if publication is not None:
-            for key in ("fix_mode", "patch", "patch_path", "patch_sha256"):
-                publication.pop(key)
-    artifact_validator.validate(structured_v2)
-    validate_v2_artifact(structured_v2, "review_plan")
-    fallback_plan = copy.deepcopy(artifacts["review_plan"])
-    fallback_plan["payload"]["semver_assessment"] = fallback_assessment()
-    artifact_validator.validate(fallback_plan)
-    validate_v2_artifact(fallback_plan, "review_plan")
-    semver_mutations: list[dict[str, Any]] = [
-        {"fallback_reason": ""},
-        {"release_impact": "patch"},
-        {"sources": []},
-    ]
-    for mutation in semver_mutations:
-        invalid_semver = copy.deepcopy(fallback_plan)
-        invalid_semver["payload"]["semver_assessment"].update(mutation)
-        with pytest.raises(ValidationError):
-            artifact_validator.validate(invalid_semver)
-        with pytest.raises(WorkflowError):
-            validate_v2_artifact(invalid_semver, "review_plan")
-    legacy_plan = copy.deepcopy(artifacts["review_plan"])
-    for key in (
-        "review_contract_version",
-        "incremental",
-        "presentation",
-        "finding_publications",
-        "previous_finding_assessments",
-        "recommended_issues",
-        "finding_ledger",
-        "publication_ledger",
-        "rejected_candidates",
-        "rejected_candidate_assessments",
-        "rejected_candidate_ledger",
-        "label_review",
-        "chat_assessment",
-        "locale",
-        "semver_assessment",
-    ):
-        legacy_plan["payload"].pop(key)
-    structured_preview = legacy_plan["payload"]["publication_preview"]
-    legacy_plan["payload"]["publication_preview"] = {
-        "mr_state": structured_preview["mr_state"],
-        "warning": structured_preview["warning"],
-        "preflight_command": "glab api --method GET projects/1/merge_requests/1",
-        "body_files": [
-            {
-                "finding_id": item["publication_id"],
-                "path": item["path"],
-                "sha256": item["sha256"],
-                "content": item["content"],
-            }
-            for item in structured_preview["body_files"]
-        ],
-        "commands": [
-            {"finding_id": item["publication_id"], "command": item["command"]}
-            for item in structured_preview["actions"]
-            if item["publication_id"] is not None
-        ],
-    }
-    artifact_validator.validate(legacy_plan)
-    validate_v2_artifact(legacy_plan, "review_plan")
-    minimal_legacy_plan = copy.deepcopy(legacy_plan)
-    for key in ("semver_rationale", "mr_metadata_assessment", "publication_preview"):
-        minimal_legacy_plan["payload"].pop(key)
-    minimal_legacy_plan["payload"]["findings"] = [{"id": "finding-1"}]
-    artifact_validator.validate(minimal_legacy_plan)
-    validate_v2_artifact(minimal_legacy_plan, "review_plan")
     release_inventory = copy.deepcopy(artifacts["release_inventory"])
     release_inventory["payload"]["counts"] = {}
-    review_context = copy.deepcopy(artifacts["review_context"])
-    review_context["payload"]["exact_git"] = {}
-    review_plan = copy.deepcopy(artifacts["review_plan"])
-    review_plan["payload"]["publication_preview"]["body_files"][0]["revision"] = 0
-    invalid_nullable = copy.deepcopy(artifacts["review_plan"])
-    invalid_nullable["payload"]["finding_publications"][0]["path"] = {}
-    invalid_patch = copy.deepcopy(artifacts["review_plan"])
-    invalid_patch["payload"]["finding_publications"][0]["patch"] = None
-    invalid_ledger_patch = copy.deepcopy(artifacts["review_plan"])
-    invalid_ledger_patch["payload"]["finding_ledger"][0]["record"]["publication"]["patch"] = None
-    invalid_headers = copy.deepcopy(artifacts["review_plan"])
-    invalid_headers["payload"]["presentation"]["previous_table_headers"].append("Extra")
-    for kind, instance in (
-        ("release_inventory", release_inventory),
-        ("review_context", review_context),
-        ("review_plan", review_plan),
-        ("review_plan", invalid_nullable),
-        ("review_plan", invalid_patch),
-        ("review_plan", invalid_ledger_patch),
-        ("review_plan", invalid_headers),
-    ):
-        with pytest.raises(ValidationError):
-            artifact_validator.validate(instance)
-        with pytest.raises(WorkflowError):
-            validate_v2_artifact(instance, kind)
-
-    inconsistent_incremental = copy.deepcopy(artifacts["review_context"])
-    inconsistent_incremental["payload"]["incremental"]["mode"] = "incremental"
-    inconsistent_incremental["payload"]["incremental"]["critic_required"] = True
-    artifact_validator.validate(inconsistent_incremental)
+    with pytest.raises(ValidationError):
+        artifact_validator.validate(release_inventory)
     with pytest.raises(WorkflowError):
-        validate_v2_artifact(inconsistent_incremental, "review_context")
+        validate_v2_artifact(release_inventory, "release_inventory")

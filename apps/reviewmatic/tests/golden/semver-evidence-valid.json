@@ -1,0 +1,28 @@
+{
+  "name": "semver-evidence-valid",
+  "kind": "semver_evidence",
+  "input": {
+    "target_branch": "main",
+    "target_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "releases": {
+      "items": [],
+      "complete": true,
+      "errors": [],
+      "pages": 0,
+      "truncated": false
+    },
+    "tags": {
+      "items": [],
+      "complete": true,
+      "errors": [],
+      "pages": 0,
+      "truncated": false
+    },
+    "errors": []
+  },
+  "expected": {
+    "digest": "74a641a81ac18534b788680ede0b782366f5075fa6c98abdf16ea925beab53f2",
+    "valid": true,
+    "python_valid": true
+  }
+}

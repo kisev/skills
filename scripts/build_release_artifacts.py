@@ -204,11 +204,10 @@ def build(tag: str, revision: str) -> dict[str, Any]:
         "MEMOMATIC_TARBALL": str(OUTPUT / by_name["@kisev/memomatic"]),
         "TASKMATIC_TARBALL": str(OUTPUT / by_name["@kisev/taskmatic"]),
         "SAFE_FS_TARBALL": str(OUTPUT / by_name["@kisev/safe-fs"]),
-        "OPENCODE_BINARY": command("mise", "which", "opencode").strip(),
     }
     command(
-        "node",
-        "test/smoke.mjs",
+        "python3",
+        str(ROOT / "scripts/check_opencode_compatibility.py"),
         cwd=ROOT / "packages" / "agentomatic",
         env=smoke_env,
     )

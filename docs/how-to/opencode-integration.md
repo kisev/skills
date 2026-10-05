@@ -8,7 +8,7 @@ skills have a separate lifecycle and must be installed independently through the
 
 ## Requirements and Ownership
 
-The package requires Node.js 22.13+ and OpenCode `>=1.18.29 <1.19.0`.
+The package requires Node.js 22.13+ and OpenCode `>=2.0.0 <2.1.0`.
 See [common CLI conventions](../reference/cli.md) for configuration precedence,
 environment variables, diagnostics and machine output. The existing wizard remains available.
 
@@ -24,7 +24,43 @@ The package and generated wrappers must remain resolvable after the installer
 exits. Import, plugin loading, and npm lifecycle scripts do not install assets,
 install portable skills, or edit OpenCode configuration.
 
+## OpenCode V2
+
+All patch releases in the `2.0.x` minor are supported. Exact versions
+in `evals/contracts/opencode-compatibility.json` are verification samples, not an
+allowlist. The package and optional wrappers use the native V2 `setup` entrypoint,
+hooks, and ordered permissions. There is no V1 runtime or compatibility gate.
+For OpenCode V1, keep the last `11.0.x` stable
+[release](https://github.com/kisev/skills/releases)
+instead of installing the `dev` channel. V1 and V2 share configuration locations;
+do not run V1 against configuration converted to native V2 shapes.
+
+After upgrading an existing installation, use the installer upgrade preview and
+confirm it to replace the managed plugin wrappers, then restart OpenCode. Old
+function-only wrappers cannot load in V2. Preserve user-modified wrapper files;
+the installer reports conflicts instead of overwriting them.
+
+Config setup writes native `plugins` and `permissions` in `opencode.json(c)`.
+The core plugin is registered as an exact-version registry spec
+(`@kisev/agentomatic@<version>`): OpenCode V2 resolves bare package names
+through the npm `latest` dist-tag, which can select a different build than the
+installed one. Rerunning the core fragment repins a bare or stale registration
+in place while foreign plugin entries stay untouched.
+It converts only the sections needed by the selected fragments, not the entire
+configuration. Conflicting legacy/native sections are reported rather than merged
+by guesswork. Do not register the same package twice.
+
+Maintainers install only V2 through the npm backend in `mise.toml`.
+`task package:check` runs installed-tarball smoke checks on its pinned patch,
+including real permission evaluation, alongside hostless behavior tests. These checks need no
+model credentials; dependency provisioning can require registry access.
+
 ## Install
+
+`npm view` previews the registry version; `latest` and `dev` can move before
+installation. npx runs a CLI without installing it globally. After confirming
+an install, use `npm list` in the owning npm project to check the persistent
+dependency; a dry run alone does not install it.
 
 ### Project Scope
 
@@ -33,7 +69,15 @@ the persistent npm dependency in the nearest npm project:
 
 ```shell
 cd /path/to/project
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
 The package lands in project `node_modules` and confirmed assets go under
@@ -45,14 +89,22 @@ reports a manual dependency follow-up instead of creating files.
 Run the installer from any directory:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --global --dry-run
+npx --yes @kisev/agentomatic@latest install --global
+
+# Installed dependency, not npm's global CLI prefix
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
 ```
 
 The confirmed install owns the npm project at `~/.config/opencode`: it creates
 a minimal `package.json` when needed and pins the exact executing version with
 `npm install --save-exact`. Confirmed assets go under `~/.config/opencode`.
-Read-only commands such as `doctor`, `capabilities`, and `agent list` keep
-working from any directory through the same explicit form; run `reconcile` and
+Read-only commands such as `status`, `doctor`, `catalog`, and `agent list` keep
+working from any directory through the same explicit form; run `maintenance cleanup` and
 `uninstall` from the owning npm project through `npx agentomatic`, where the
 executing version must match the installed package. Offline setups can install
 the dependency by hand first: `npm install --save-exact @kisev/agentomatic`,
@@ -64,7 +116,15 @@ provisioning step entirely.
 Address the `dev` dist-tag explicitly to pin its prerelease:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@dev version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@dev install --global --dry-run
+npx --yes @kisev/agentomatic@dev install --global
+
+# Installed dependency
+npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
 ```
 
 Each successful push to `dev` publishes a unique prerelease and moves only the
@@ -73,15 +133,20 @@ command; it re-pins the dependency to the current stable release.
 
 ## Select Assets
 
-In a TTY, `install` opens three selection groups: Skill command adapters, Fixed
-agents, and Selectable plugins. Skill commands and six fixed agents start
-selected; optional plugins start unselected. Skill command adapters are OpenCode
+In a TTY, `install` selects command adapters, fixed agents, optional plugins,
+and core connection, then offers application presets and model/critic setup.
+All profile changes stay staged until the final confirmation. Model setup can
+be skipped without resetting saved models or variants. A repeat install starts
+from the saved component selection; deselection shows owned-file removals.
+On first install, skill commands and six fixed agents start selected; `rtk`
+is the default wrapper. Skill command adapters are OpenCode
 slash commands that load an already-installed same-named portable skill. A
 command adapter selection never selects or installs a skill. Each group supports
-an arbitrary subset: Up/Down moves, Space toggles, A selects all, N selects none,
+an arbitrary subset: Up/Down moves, Space toggles, A toggles all selections,
 Enter confirms, and Escape cancels.
 
-Outside a TTY, pass all three selection groups. This example selects three
+Outside a TTY, the first install requires all three selection groups; subsequent
+runs can reuse the saved set. This example selects three
 commands, all fixed agents, and no wrapper:
 
 ```shell
@@ -95,18 +160,37 @@ If any selection flag is present outside a TTY, `--commands`, `--agents`, and
 `--plugins` are all required. Query exact current names with:
 
 ```shell
-npx --yes @kisev/agentomatic@latest capabilities --json
+npx --yes @kisev/agentomatic@latest catalog --json
 ```
 
-The selectable wrappers are `rules-injector`, `rtk`, and `zed-bell`; `rtk` is
-preselected by the installer. OpenCode loads deployed wrapper files from the
-`plugins` directory automatically, so they need no `plugin` array entry; that
-array stays reserved for the npm core package. Opt out explicitly with
-`--plugins none`.
+If a saved selection contains a command removed by an update, rerun `install`
+with all three selection flags and current names. The explicit selection
+replaces the saved component names before validation; the saved core connection
+choice stays unchanged unless `--core` or `--no-core` overrides it. Preview with
+`--dry-run`, then confirm the same selection. This does not migrate skill state.
+
+The selectable wrappers are `rules-injector`, `rtk`, `zed-bell`, and
+`code-simplify`; `rtk` is preselected by the installer. OpenCode loads deployed
+wrapper files from the `plugins` directory automatically, so they need no
+`plugin` array entry; that array stays reserved for the npm core package. Opt
+out explicitly with `--plugins none`.
+
+The `code-simplify` wrapper injects the compact prevention criteria into every
+session. Its options travel through a plugin array entry:
+`"plugins": [["@kisev/agentomatic/plugins/code-simplify", { "level": "full",
+"scope": ["worker", "review", "critic"] }]]`. The `level` option selects
+`lite` (ladder only), `full` (ladder plus the audit contract, the default),
+`ultra` (plus usage-search and safety-floor guards), or `off`. The optional
+`scope` array enumerates the fixed roles `manager`, `architect`, `mapper`,
+`worker`, `review`, and `critic` — `critic-*` specialist profiles count as
+`critic` — and restricts the injection to the listed roles; without the option
+every role is injected, as before the option existed. Keeping `worker`,
+`review`, and `critic` in the scope preserves the review panel's access to the
+same criteria.
 
 ## RTK Compression Observability
 
-The `rtk` wrapper compresses verbose `bash` tool output above 8,000 characters
+The `rtk` wrapper compresses verbose `shell` tool output above 8,000 characters
 through the external RTK CLI, falls back to head+tail truncation when the
 binary is unavailable, and appends an
 `[rtk: compressed method=...; sizes=...; evidence_complete=false]` marker to
@@ -127,15 +211,17 @@ estimated token savings, and the statistics timestamp.
 
 ## Activate the Core Plugin
 
-The installer records whether the selection needs core integration, but
-`install` and `uninstall` never create or edit `opencode.json`. Connect the
-package with the confirmed `config` command, or add it to the user-owned
-`plugin` array for the same scope manually while preserving existing entries:
+The installer records whether the selection needs core integration. A confirmed
+`install` with core selected applies the same core config step as
+`configure integration`; `--no-core` disconnects the plugin without removing
+the npm dependency. `uninstall` proposes disconnection too. You can also connect
+the package with the confirmed `configure integration` command, or add it to the user-owned `plugins` array for
+the same scope manually while preserving existing entries:
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/agentomatic"]
+  "plugins": ["@kisev/agentomatic"]
 }
 ```
 
@@ -145,17 +231,19 @@ under `~/.config/opencode`. Restart OpenCode after activation or asset changes.
 
 ## Configure User Configs
 
-The `config` command connects the package and recommended fragments into
+`configure` opens a menu for components, agent models, critics, and integration.
+`configure components` changes the installed set without resetting models.
+`configure integration` connects the package and recommended fragments into
 user-owned configuration files:
 
 ```shell
-npx agentomatic config --global --dry-run
-npx agentomatic config --dry-run
+npx agentomatic configure integration --global --dry-run
+npx agentomatic configure integration --dry-run
 ```
 
 In a TTY, target and fragment selectors open when flags are omitted. Targets
 are agents: global scope targets `~/.config/opencode/opencode.json(c)` and
-`tui.json`, `~/.config/kilo/kilo.json(c)` and `tui.json[c]`, and
+`cli.json`, `~/.config/kilo/kilo.json(c)` and `tui.json[c]`, and
 `~/.config/mimocode/mimocode.json(c)` and `tui.json`; project scope targets
 the project `opencode.json(c)` file only. Outside a TTY, pass `--targets` and
 `--fragments` explicitly.
@@ -164,21 +252,38 @@ Selectable fragments:
 
 | Fragment | Targets | Effect |
 | - | - | - |
-| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/agentomatic` in `plugin` |
-| `skills-state-permissions` | opencode, kilo, mimo | Allows `~/.local/state/agent-skills/**` (plus `~/.config/opencode/skills/**` for OpenCode) in `permission.read`, `permission.edit`, and `permission.external_directory` so the standard skills state paths stop prompting |
-| `lsp-preset` | opencode | Adds LSP servers from the shared catalog with standard commands |
+| `core-plugin` | opencode | Adds `$schema` and registers `@kisev/agentomatic` in `plugins` |
+| `core-disable` | opencode | Removes only agentomatic/legacy package registrations, preserving other plugins and presets; cannot be combined with `core-plugin` |
+| `skills-state-permissions` | opencode, kilo, mimo | Allows reads, edits, and external-directory access to standard skills state paths under `~/.local/state/agent-skills/**`; OpenCode also allows reads and external-directory access under the canonical portable-skills tree `~/.agents/skills/**` and the legacy `~/.config/opencode/skills/**`, plus `external_directory` enumeration of those exact roots and `~/.agents` itself, so directory scans (glob/list) do not prompt. OpenCode uses ordered `permissions`; Kilo/MiMo retain their `permission` maps |
 | `secrets-guard` | opencode, kilo, mimo | Denies reads and edits of common secret files (`.env*`, keys, credentials) |
 | `kilo-display` | kilo | Expands reasoning, terminal, edit, and tool blocks |
-| `tui-schema` | opencode, kilo, mimo | Unifies each agent TUI file: per-agent `$schema` (OpenCode, MiMo), `theme: ayu`, `diff_style: stacked`, and the shared leader keybind map; Kilo writes `tui.json[c]`, MiMo and OpenCode write `tui.json` |
+| `tui-schema` | opencode, kilo, mimo | OpenCode writes global `cli.json` with its V2 schema, `theme.name: ayu`, and native keybind IDs. Kilo/MiMo retain their TUI formats, `theme: ayu`, stacked diffs, and existing keybind IDs |
 
-The merge never overwrites user data: existing keys, comments, and unrelated
-entries are preserved; only absent keys are added; a scalar permission map such
-as `"external_directory": "ask"` is widened to a map that keeps the scalar as
-the `"*"` entry. Fragments that cannot merge cleanly are reported as conflicts
-and skipped without blocking the rest of the plan. Like every mutation, `config`
-requires a preview, an explicitly confirmed apply, and a restart of the affected
-tool afterwards. A confirmed `install` with core selected applies its core config
-step; a failed config step prints a retry command. Other fragments use `config`.
+Comments and unrelated entries are preserved. OpenCode migrates the touched
+legacy `plugin`, `permission`, or standalone `tools` section to native V2.
+Permission scalars become wildcard rules; tool/action aliases become `shell`,
+`subagent`, or `edit`. Existing rule order is retained, and new preset rules
+follow it. Differing legacy/native sections, mixed legacy `tools` and
+`permission`, unsupported legacy actions, or explicit rules conflicting with
+the preset are conflicts, not silently overridden. Kilo/MiMo still widen scalar
+permission maps while retaining the scalar as `"*"`.
+Fragments that cannot merge cleanly are reported as conflicts. The CLI blocks
+apply until conflicts are resolved or excluded from the selection. Like every
+mutation, configuration requires a preview, explicit confirmation, and a restart
+of the affected application afterwards. Connection choices are saved for repeat
+install and repair. A failed install configuration step reports which earlier
+stages completed and how to continue with `configure integration`.
+
+V2 no longer reads `tui.json` as its terminal settings. If that file exists but
+`cli.json` does not, start V2 once so its built-in migration preserves your
+preferences, then repeat config setup. The preset leaves existing `cli.json`
+values unchanged and does not translate the old stacked-diff setting or retired
+keybindings into unrelated V2 settings. Project-local terminal configuration is
+not supported. Kilo and MiMo files are unaffected by this V2 migration.
+
+`lsp-preset` is removed: V2 accepts `lsp` but currently does not run language
+servers. Existing user `lsp` entries remain untouched; use your project's lint,
+typecheck, or compiler commands for validation.
 
 Selecting `core-plugin` may access npm and update `package.json`,
 `package-lock.json`, and `node_modules`; the preview shows this dependency plan.
@@ -193,8 +298,8 @@ issue a reusable cross-process receipt; `--yes` authorizes a freshly built plan.
 For a pending config transaction, inspect and explicitly confirm recovery:
 
 ```shell
-npx agentomatic config recover --global --dry-run
-npx agentomatic config recover --global
+npx agentomatic maintenance recover --global --dry-run
+npx agentomatic maintenance recover --global
 ```
 
 Omit `--global` for project scope. Recovery restores the interrupted transaction
@@ -205,23 +310,23 @@ before a new config preview; changed recovery evidence requires another preview.
 Every mutation begins with `--dry-run`. The read-only preview reports
 operations, conflicts, and restart requirements, and ends with an Apply hint
 for the same command that notes the interactive confirmation and the `--yes`
-fallback outside a terminal. If reconcile reports modified
+fallback outside a terminal. If cleanup reports modified
 managed files or ownership conflicts, it is blocked: no apply consent is
 offered. Install or upgrade the current package first, apply its installer
-plan, then repeat reconcile; resolve ownership conflicts manually.
+plan, then repeat cleanup; resolve ownership conflicts manually.
 
 ```shell
 npx agentomatic install --dry-run
 ```
 
-The mandatory OpenCode flow is a single install run with core integration
-confirmed: the wizard asks for command adapters, fixed agents, plugin wrappers,
-and core integration; one consent applies the assets, wires the `core-plugin`
+The OpenCode flow is a single install run: the wizard asks for command adapters,
+fixed agents, wrappers, core connection, optional presets, and optional models
+and additional critics. One confirmation applies owned components and profiles, wires the `core-plugin`
 fragment into the user config, and provisions the persistent npm dependency in
 `~/.config/opencode` that keeps the global plugin resolvable. The dependency
 step removes a pinned legacy `@kisev/skills-opencode` in the same pass.
 Non-interactive runs pass `--core` (or `--no-core`) with the explicit selection
-flags. The `config` command remains the full fragment manager for every target;
+flags. `configure integration` remains the full fragment manager for every target;
 applying its `core-plugin` fragment provisions the same dependency when the
 installer skipped it. Every confirmed config apply first archives the previous
 content of each changed user file into the package archive store
@@ -230,16 +335,29 @@ deduplicated; `doctor --json` reports the latest snapshot under
 `config.backups`.
 Scope-aware commands target the current directory by default. Add `--global`
 once to target global state from any directory. The removed `--scope` option
-is not accepted. Install or upgrade the package and
-apply its installer plan before every reconcile.
+is not accepted. Components/profiles, npm provisioning, and application configuration
+are separate stages, not one atomic transaction. A later failure leaves completed
+stages in place and reports continuation; inspect `status` before retrying.
 
 Without `--dry-run`, a mutation asks for consent directly. In a TTY, the
 interactive selection wizards run first, the plan summary is printed, and
-nothing is written until the final question "Apply these changes?" is answered
+nothing is written until the final question "Apply the displayed changes?" is answered
 with Yes. Outside a TTY, pass the explicit selection flags plus `--yes`;
-without `--yes` the command fails with "Applying outside a terminal requires
-\--yes; use --dry-run to preview". Apply rejects unsafe conflicts and remains
-transactional.
+without `--yes` the command fails with guidance to preview or confirm explicitly.
+Preview never creates locks or automatically recovers journals. A changed source
+invalidates the confirmed plan; each local transaction rolls back on failure.
+
+## Inspect the Installation
+
+```shell
+npx agentomatic status --global
+npx agentomatic status --global --json
+```
+
+`status` shows the installed component set, plugin connection, npm dependency,
+saved models, and critic pool. `agent list` provides the profile table;
+`not-installed` means a saved or available role is not selected, not damaged.
+`catalog --json` describes the running package's capabilities, not this installation.
 
 ## Doctor
 
@@ -252,7 +370,9 @@ npx --yes @kisev/agentomatic@latest doctor --json
 ```
 
 The report includes versions, ownership, drift, collisions, archive counts,
-redacted configuration projections, runtime summaries, and LSP facts. It does
+redacted JSON/JSONC configuration projections, runtime summaries, and LSP facts
+marked unsupported in V2 rather than active. Missing LSP binaries are not OpenCode
+dependency failures. It does
 not serialize raw configuration, environment values, credentials, or secrets.
 Exit status `0` is clean, `1` reports findings, and `2` reports invalid
 input or an incomplete probe failure.
@@ -273,29 +393,37 @@ updates only files whose recorded ownership and SHA-256 still match. User-owned
 or modified managed files remain conflicts. Package update does not reset agent
 model choices, variants, additional critics, or retained profile configuration.
 
-## Reconcile
+## Maintenance
 
-`reconcile` classifies current and historical package commands, plugins, agents,
+`maintenance cleanup` classifies current and historical package commands, plugins, agents,
 and installation metadata for one scope:
 
 ```shell
-npx agentomatic reconcile --dry-run
-npx agentomatic reconcile --yes
-npx agentomatic reconcile --global --dry-run --json
+npx agentomatic maintenance cleanup --dry-run
+npx agentomatic maintenance cleanup --yes
+npx agentomatic maintenance cleanup --global --dry-run --json
+npx agentomatic maintenance repair --global --dry-run
 ```
 
-Before reconcile, update the package through its owning installer. Manage
+Before cleanup, update the package through its owning installer. Manage
 portable skills separately with `npx --yes skills@latest update` or
 `npx --yes skills@latest remove`; their trees and lock files do not affect the
-reconcile plan, conflicts, or operations.
+cleanup plan, conflicts, or operations.
 
-Confirmed reconcile archives the current bytes in a private content-addressed
+Confirmed cleanup archives the current bytes in a private content-addressed
 XDG archive. Package assets are then removed transactionally. User-owned,
 unknown, symlink, unsafe, or ambiguous package entries remain unchanged as
 findings or conflicts. A no-op preview reports that no reconciliation changes
 are required and offers no apply. Portable
 skills, their lock files, worktrees, and runtime state are preserved. The archive
 is inspectable through `doctor`; no archive restore or purge command is provided.
+
+`maintenance repair` restores missing selected components and regenerates owned
+files from saved model choices. It does not add unselected roles or overwrite
+changed managed bytes. Resolve ownership/byte conflicts before retrying; mode-only
+damage to exact-owned bytes can be repaired. Without a saved installation, use
+`install`. `maintenance recover` restores an interrupted journal only after its
+paths and digest are confirmed, then requires a fresh preview.
 
 ## Manage Agents
 
@@ -304,37 +432,75 @@ call:
 
 ```shell
 npx --yes @kisev/agentomatic@latest agent list --global
-npx agentomatic agent configure manager --global --dry-run
-npx agentomatic agent model-set worker --global --model openai/gpt-5 --variant high --dry-run
-npx agentomatic critic add security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx agentomatic agent reconcile --global --dry-run
+npx agentomatic configure agent manager --global --dry-run
+npx agentomatic configure agent worker --global --model openai/gpt-5 --variant high --dry-run
+npx agentomatic configure critics --global
+npx agentomatic agent add-critic security --global --model anthropic/claude-sonnet-4-6 --dry-run
+npx agentomatic agent remove critic-security --global --dry-run
 ```
 
 Fixed roles keep their names, prompts, and permissions; only model and variant
-change. Additional critics use `critic-<safe-suffix>`. Every mutation uses the
+change; generated delegation allowlists reflect the selected roles and critic pool.
+Saving a model for an uninstalled fixed role does not install it. Additional critics
+use `critic-<safe-suffix>`; `agent remove` cannot remove a fixed role. Every mutation uses the
 same preview and confirmation contract.
+
+Specialist profiles are optional for skill-driven independent reviews.
+`code-review` asks once which available critics and how many to use and which
+arbitrator to select; if none are
+installed, the current agent launches ordinary independent native subagents
+running the session's agent, provider, and model, and the recorded selection
+is never substituted silently. The core plugin applies routing receipts and
+structured-report checks to
+package-managed profiles and explicitly routed calls, not ordinary native
+subagents. No standalone `opencode run` workaround or agent installation is
+required for that fallback.
+Routed independent critics may return `review_report` or a code-review receipt;
+the caller retains real native invocation identities in reviewmatic's draft.
+Critics receive the recorded context package — goal, claims with sources,
+constraints, prior decisions, questions — as their primary task context and
+answer the questions assigned to them in their receipts; a separate arbitrator
+then returns one receipt with a verdict for every critic finding and the
+consolidated decisions, so the orchestrating agent adds no full review of its
+own. Parallel critic
+calls keep separate bindings. Receipts expire before launch;
+an already admitted review does not expire merely because the model took longer.
+The core plugin supplies actual current session identity to primary and child
+agents for receipts; this metadata does not authorize mutations or publication.
+
+Rendered agent files use `permissions` and `provider/model#variant`. The CLI
+retains separate `--model` and `--variant` flags and saved profile selections.
+Interactive model selection reads the V2 `/api/model` snapshot through
+`opencode api`; it does not call an LLM or force a catalog refresh. OpenCode may
+start its managed service. If the snapshot is unavailable, the wizard asks for
+an exact provider/model and an optional variant as text input instead of
+aborting; non-interactive runs pass `--model` and `--variant` explicitly.
 
 ## Uninstall
 
 Keep the package resolvable until its assets are removed:
 
-1. Preview and confirm package-owned asset removal.
-2. Remove `@kisev/agentomatic` from the user-owned `plugin` array.
-3. Uninstall the dependency from the same npm project.
-4. Restart OpenCode.
+The preview separates owned components, plugin disconnection, npm removal, and
+saved models. Disconnection is proposed by default; `--no-disconnect` retains it.
+Models are retained. npm removal is opt-in with `--remove-dependency` or the
+interactive question. Other configuration presets remain unchanged.
 
 ```shell
 npx agentomatic uninstall --dry-run
 npx agentomatic uninstall --yes
-npm uninstall @kisev/agentomatic
+npx agentomatic uninstall --remove-dependency --yes
 ```
 
 For global scope, run the same commands from the persistent npm project
-at `~/.config/opencode` with `--global`, then uninstall the dependency there.
+at `~/.config/opencode` with `--global`, or invoke the exact-version package from
+any directory. Keep it resolvable until the command completes, then restart OpenCode.
 Uninstall archives exact manifest-owned assets and
 preserves modified files as conflicts, along with worktrees, runtime state, and
-retained profile configuration. It does not remove portable skills or edit
-`opencode.json`. No archive restore or purge command is provided.
+retained profile configuration. The CLI blocks unsafe conflicts before removal.
+It can edit only the selected plugin registrations in `opencode.json(c)` and
+explicitly remove the package dependency. It does not remove portable skills.
+Completed local stages are not rolled back if a later npm step fails; inspect
+`status` and retry the same uninstall choices. No archive restore or purge command is provided.
 
 ## Boundaries
 
@@ -344,7 +510,7 @@ retained profile configuration. It does not remove portable skills or edit
 - The only package tool is `route`; it has no slash command. Administrative
   operations use the direct `agentomatic` CLI.
 - A confirmed `install` with core selected merges its `plugin` entry into
-  `opencode.json` through the config executor. `uninstall` preserves user configuration.
+  `opencode.json` through the config executor. `uninstall` preserves unrelated configuration.
 - Global scope is cwd-independent; project scope targets `.opencode` under the
   current directory.
 - The installer owns only files proved by manifests and exact hashes.

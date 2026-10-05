@@ -3,7 +3,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { LifecycleError, writeAtomic } from "@kisev/safe-fs";
+import { LifecycleError, writeAtomic, readRegular } from "@kisev/safe-fs";
+import { sha256 } from "./lifecycle.js";
 import { requirePackageVersion } from "./package-metadata.js";
 
 const execFileAsync = promisify(execFile);
@@ -164,4 +165,81 @@ export async function ensureDependency(
     }
   }
   return { ...plan, applied: "changed", ...(removedLegacy ? { removed_legacy: true } : {}) };
+}
+
+export type DependencyRemovalPlan = {
+  dir: string | null;
+  names: string[];
+  sources: Record<string, string | null>;
+};
+
+export async function previewDependencyRemoval(
+  scope: "project" | "global",
+  cwd = process.cwd(),
+  home = homedir(),
+): Promise<DependencyRemovalPlan> {
+  const dir = owningProjectDir(scope, cwd, home);
+  if (!dir) return { dir, names: [], sources: {} };
+  const sources: Record<string, string | null> = {};
+  for (const name of ["package.json", "package-lock.json"]) {
+    const raw = await readRegular(join(dir, name));
+    sources[name] = raw ? sha256(raw) : null;
+  }
+  const raw = await readRegular(join(dir, "package.json"));
+  if (!raw) return { dir, names: [], sources };
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw.toString("utf8"));
+  } catch {
+    throw new SelfInstallError(
+      "invalid_configuration",
+      "Cannot inspect dependency removal: invalid package.json",
+    );
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+    throw new SelfInstallError(
+      "invalid_configuration",
+      "Cannot inspect dependency removal: package.json must be an object",
+    );
+  const names = [SELF_PACKAGE_NAME, LEGACY_SELF_PACKAGE_NAME].filter((name) =>
+    ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].some((key) => {
+      const section = parsed[key];
+      return section && typeof section === "object" && name in section;
+    }),
+  );
+  return { dir, names, sources };
+}
+
+export async function removeDependency(
+  plan: DependencyRemovalPlan,
+  runner: DependencyRunner = execFileAsync as DependencyRunner,
+): Promise<void> {
+  if (!plan.dir || !plan.names.length) return;
+  for (const [name, expected] of Object.entries(plan.sources)) {
+    const raw = await readRegular(join(plan.dir, name));
+    if ((raw ? sha256(raw) : null) !== expected)
+      throw new SelfInstallError("stale_plan", "npm files changed; preview uninstall again");
+  }
+  try {
+    await runner("npm", ["rm", ...plan.names, "--no-audit", "--no-fund"], {
+      cwd: plan.dir,
+      timeout: NPM_INSTALL_TIMEOUT_MS,
+    });
+    const raw = await readRegular(join(plan.dir, "package.json"));
+    const parsed = raw ? JSON.parse(raw.toString("utf8")) : undefined;
+    if (
+      !parsed ||
+      plan.names.some((name) =>
+        ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"].some(
+          (key) => parsed[key] && name in parsed[key],
+        ),
+      )
+    )
+      throw new Error("npm did not remove the selected dependencies");
+  } catch {
+    throw new SelfInstallError(
+      "npm_dependency_failed",
+      "npm removal failed after local stages; inspect package.json and retry uninstall --remove-dependency",
+    );
+  }
 }

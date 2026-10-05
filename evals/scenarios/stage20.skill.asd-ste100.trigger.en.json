@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "9e4ce7d3c76a406f709e443a3f8ba8857cb9375516d9b4a522b10e5cc74f9c1a",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:asd-ste100"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.asd-ste100.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:asd-ste100"]
+    },
+    "prompt": "Select the asd-ste100 skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.asd-ste100.trigger.source",
+      "path": ".build/skills/asd-ste100/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.asd-ste100.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

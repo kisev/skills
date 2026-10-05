@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "18bdf4a59d61107edafa5661a35b393feed1ce37bbeff17c2a939c94fd0f6bfc",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:skill-doctor"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.skill-doctor.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:skill-doctor"]
+    },
+    "prompt": "Select the skill-doctor skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.skill-doctor.trigger.source",
+      "path": ".build/skills/skill-doctor/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.skill-doctor.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

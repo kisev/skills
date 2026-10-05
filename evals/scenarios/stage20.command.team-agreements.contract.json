@@ -1,27 +1,23 @@
 {
-  "id": "stage20.command.team-agreements.contract",
-  "pair_id": null,
-  "kind": "deterministic",
-  "surface": "command",
-  "locale": "neutral",
-  "revision": 1,
-  "host": "any",
   "budgets": {
     "max_cost": 1,
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
+  "digest": "7e8bae524e5bff23ccd11a40fadea023c07b9de3c6baeae8e9d2786258c0c7bb",
+  "expected": {
+    "mutation_boundary": "adapter-only",
+    "not_selected": [],
+    "selected": ["command:team-agreements"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.command.team-agreements.contract",
   "input": {
     "fixture": {
       "selected": ["command:team-agreements"]
     },
     "prompt": "Verify command team-agreements contract."
-  },
-  "expected": {
-    "selected": ["command:team-agreements"],
-    "not_selected": [],
-    "mutation_boundary": "adapter-only",
-    "structured_outcome": "contract-passed"
   },
   "invariants": [
     {
@@ -29,11 +25,15 @@
       "path": "packages/agentomatic/src/registry.ts"
     }
   ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
   "schema": "eval-scenario/v1",
-  "digest": "7e8bae524e5bff23ccd11a40fadea023c07b9de3c6baeae8e9d2786258c0c7bb"
+  "surface": "command"
 }

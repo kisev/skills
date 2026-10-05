@@ -14,8 +14,21 @@ Use Node.js 22.13+. Install the application separately from the `taskmatic` skil
 channel, or select a stable version once a stable release is available:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/taskmatic@dev version
+
+# Install
 npm install --global @kisev/taskmatic@dev
+
+# Installed package and active CLI
+npm list --global @kisev/taskmatic --depth=0
 taskmatic --version
+```
+
+The tag can move between preview and installation. The last commands check the
+installed package and the CLI resolved from PATH. Then initialize the store:
+
+```shell
 taskmatic add "Check the first board" --board main
 taskmatic list --board main
 ```

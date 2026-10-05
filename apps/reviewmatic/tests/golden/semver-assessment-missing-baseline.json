@@ -1,0 +1,21 @@
+{
+  "name": "semver-assessment-missing-baseline",
+  "kind": "semver_assessment",
+  "input": {
+    "mode": "release",
+    "policy": "Stable v1 tags are published by the documented release job.",
+    "sources": ["docs/releases.md at the target revision", "GitLab release v1.4.0"],
+    "baseline": null,
+    "target_branch": "main",
+    "target_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "target_revision": "current",
+    "fallback_reason": null,
+    "release_impact": "major",
+    "release_rationale": "Target already removes a released API; the MR fixes a compatible bug."
+  },
+  "expected": {
+    "digest": "727100fa5a5672ade23c37852b1f7d0b9346da586cecba6942382d593e78c6c1",
+    "valid": false,
+    "python_valid": false
+  }
+}

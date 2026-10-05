@@ -1,0 +1,210 @@
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+
+import core from "../dist/index.js";
+import rtk from "../dist/plugins/rtk.js";
+import rules from "../dist/plugins/rules-injector.js";
+import bell from "../dist/plugins/zed-bell.js";
+import { host } from "./host.mjs";
+
+test("all entrypoints expose only the native V2 implementation", async () => {
+  for (const plugin of [core, rtk, rules, bell]) {
+    assert.equal(typeof plugin.id, "string");
+    assert.equal(typeof plugin.setup, "function");
+    assert.equal(plugin.server, undefined);
+  }
+});
+
+test("V2 route uses host IDs, applies schema defaults, and enforces one-use receipts", async () => {
+  const { context, hooks, tools } = host();
+  await core.setup(context);
+  assert.deepEqual([...tools.keys()], ["route"]);
+  const route = tools.get("route");
+  const input = route.input.parse({
+    action: "preview",
+    category: "exploration",
+    task: "Inspect files",
+  });
+  assert.deepEqual(input.requirements, []);
+  assert.throws(() => route.input.parse({ ...input, action: "unknown" }));
+  const decision = JSON.parse((await route.execute(input, { sessionID: "s" })).content);
+  assert.equal(decision.agent, "mapper");
+  await assert.rejects(
+    hooks["execute.before"]({ tool: "subagent", sessionID: "s", input: { agent: "mapper" } }),
+    /active routing receipt/,
+  );
+  await route.execute({ ...input, action: "dispatch", decision }, { sessionID: "s" });
+  await assert.rejects(
+    hooks["execute.before"]({ tool: "subagent", sessionID: "s", input: { agent: "review" } }),
+    /does not match/,
+  );
+  await hooks["execute.before"]({ tool: "subagent", sessionID: "s", input: { agent: "mapper" } });
+  await assert.rejects(
+    hooks["execute.before"]({ tool: "subagent", sessionID: "s", input: { agent: "mapper" } }),
+    /receipt/,
+  );
+  await assert.rejects(
+    hooks["execute.after"]({
+      tool: "subagent",
+      sessionID: "s",
+      input: { agent: "mapper" },
+      status: "completed",
+      result: { content: "invalid report" },
+    }),
+    /JSON structured report/,
+  );
+});
+
+test("native ordinary subagents work without optional specialist profiles or routing reports", async () => {
+  const { context, hooks } = host("/project", {}, [
+    { id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }] },
+  ]);
+  await core.setup(context);
+  const identity = { sessionID: "ses_primary", system: [] };
+  await hooks.context(identity);
+  await hooks.context(identity);
+  assert.equal(identity.system.length, 1);
+  assert.match(identity.system[0].text, /ses_primary/);
+  const child = { sessionID: "ses_child", system: [] };
+  await hooks.context(child);
+  assert.match(child.system[0].text, /ses_child/);
+  for (const input of [{ agent: "build" }, { agent: "general" }, { agent: "explore" }, {}]) {
+    await hooks["execute.before"]({ tool: "subagent", sessionID: "plain", input });
+    await hooks["execute.after"]({
+      tool: "subagent",
+      sessionID: "plain",
+      input,
+      status: "completed",
+      result: { content: "ordinary subagent text" },
+    });
+  }
+  await assert.rejects(
+    hooks["execute.before"]({ tool: "subagent", sessionID: "plain", input: { agent: "worker" } }),
+    /routing receipt/,
+  );
+  await assert.rejects(
+    hooks["execute.before"]({
+      tool: "subagent",
+      sessionID: "plain",
+      input: { agent: "critic-custom" },
+    }),
+    /routing receipt/,
+  );
+});
+
+test("parallel routed critics retain separate calls and accept code-review receipt envelopes", async () => {
+  const agents = ["review", "critic"].map((id) => ({
+    id,
+    permissions: [{ action: "*", resource: "*", effect: "allow" }],
+  }));
+  const { context, hooks, tools } = host("/project", {}, agents);
+  await core.setup(context);
+  const route = tools.get("route");
+  for (const task of ["Independent check A", "Independent check B"]) {
+    const input = route.input.parse({ action: "preview", category: "review", task });
+    const decision = JSON.parse((await route.execute(input, { sessionID: "parent" })).content);
+    await route.execute({ ...input, action: "dispatch", decision }, { sessionID: "parent" });
+  }
+  const first = { tool: "subagent", sessionID: "parent", id: "call-a", input: { agent: "review" } };
+  const second = { ...first, id: "call-b" };
+  await hooks["execute.before"](first);
+  await hooks["execute.before"](second);
+  const receipt = {
+    schema: "portable-gitlab/critic-receipt/v2",
+    evidence_digest: "a".repeat(64),
+    run_id: "run",
+    session_id: "child",
+    findings: [],
+    external_mutations: false,
+  };
+  await hooks["execute.after"]({
+    ...second,
+    status: "completed",
+    result: { content: JSON.stringify({ ...receipt, run_id: "run-b", session_id: "child-b" }) },
+  });
+  const clock = Date.now;
+  try {
+    const now = clock();
+    Date.now = () => now + 20 * 60 * 1000;
+    await hooks["execute.after"]({
+      ...first,
+      status: "completed",
+      result: { content: JSON.stringify(receipt) },
+    });
+  } finally {
+    Date.now = clock;
+  }
+  await assert.rejects(hooks["execute.before"]({ ...first, id: "replay" }), /routing receipt/);
+});
+
+test("V2 RTK compresses text and preserves files, output, metadata, and failures", async () => {
+  const { context, hooks } = host("/project", { statsPath: null, run: async () => "compressed" });
+  await rtk.setup(context);
+  const file = { type: "file", uri: "file:///artifact", mime: "text/plain" };
+  const event = {
+    tool: "shell",
+    sessionID: "s",
+    input: { command: "git log" },
+    status: "completed",
+    result: {
+      content: [{ type: "text", text: "x".repeat(9000) }, file],
+      output: { code: 0 },
+      metadata: { exit: 0 },
+    },
+  };
+  await hooks["execute.after"](event);
+  assert.match(event.result.content[0].text, /^compressed\n\[rtk:/);
+  assert.deepEqual(event.result.content[1], file);
+  assert.deepEqual(event.result.output, { code: 0 });
+  assert.deepEqual(event.result.metadata, { exit: 0 });
+  const failure = { ...event, status: "error", error: { message: "failed" } };
+  await hooks["execute.after"](failure);
+  assert.deepEqual(failure.error, { message: "failed" });
+  const disabled = host("/project", { enabled: false });
+  await rtk.setup(disabled.context);
+  assert.deepEqual(disabled.hooks, {});
+});
+
+test("V2 rules use session directory and replay after compaction, with subscription cleanup", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "agentomatic-v2-rules-"));
+  try {
+    const sessionDirectory = join(directory, "session");
+    await mkdir(join(sessionDirectory, "nested"), { recursive: true });
+    await writeFile(join(sessionDirectory, "nested", "AGENTS.md"), "Nested rules");
+    const state = host(join(directory, "other"));
+    state.context.session.get = async () => ({ location: { directory: sessionDirectory } });
+    const cleanup = await rules.setup(state.context);
+    const event = {
+      tool: "read",
+      sessionID: "s",
+      input: { path: "nested/file.ts" },
+      status: "completed",
+      result: { content: "file content" },
+    };
+    await state.hooks["execute.after"](event);
+    assert.match(event.result.content, /Nested rules/);
+    state.emit({ type: "session.compacted", data: { sessionID: "s" } });
+    await new Promise((resolve) => setImmediate(resolve));
+    const system = [{ type: "text", text: "Original system" }];
+    await state.hooks.context({ sessionID: "s", system });
+    assert.match(system[1].text, /Nested rules/);
+    await state.hooks.context({ sessionID: "s", system });
+    assert.equal(system.length, 2);
+    await cleanup();
+    assert.equal(state.aborted(), true);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("V2 bell is disabled by default and cleans up an enabled subscription", async () => {
+  const disabled = host();
+  assert.equal(await bell.setup(disabled.context), undefined);
+  const enabled = host("/project", { enabled: true });
+  const cleanup = await bell.setup(enabled.context);
+  await cleanup();
+  assert.equal(enabled.aborted(), true);
+});

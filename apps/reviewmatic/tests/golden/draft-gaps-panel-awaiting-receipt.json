@@ -1,0 +1,88 @@
+{
+  "name": "draft-gaps-panel-awaiting-receipt",
+  "kind": "draft_gaps",
+  "input": {
+    "findings": [
+      {
+        "id": "own-1",
+        "severity": "medium",
+        "summary": "Finding own-1"
+      }
+    ],
+    "critics": [
+      {
+        "run_id": "run-a",
+        "session_id": "session-a",
+        "findings": [
+          {
+            "id": "critic-a-1",
+            "severity": "medium",
+            "summary": "Finding critic-a-1"
+          }
+        ]
+      }
+    ],
+    "dispositions": [
+      {
+        "id": "own-1",
+        "decision": "accept"
+      }
+    ],
+    "critic_count": 2,
+    "ci_job_assessments": [],
+    "run_id": "primary-run",
+    "session_id": "primary-session",
+    "context_package_path": "/tmp/reviewmatic-artifacts/artifacts/context_package/package.json",
+    "content": {
+      "summary": "The bounded change meets the agreed contract.",
+      "architecture_assessment": "Existing ownership is preserved.",
+      "semver_rationale": "Backward-compatible correction.",
+      "chat_assessment": {
+        "necessity": {
+          "status": "supported",
+          "rationale": "Unbounded timeout."
+        }
+      },
+      "mr_metadata_assessment": {
+        "title": {
+          "status": "ok",
+          "rationale": "Sufficient."
+        }
+      },
+      "label_assessments": [],
+      "thread_decisions": []
+    },
+    "participants": {
+      "critics": [
+        {
+          "name": "critic-general",
+          "receipt": {
+            "run_id": "run-a",
+            "session_id": "session-a"
+          }
+        },
+        {
+          "name": "critic-plain"
+        }
+      ],
+      "arbitrator": {
+        "name": "arb-main"
+      }
+    }
+  },
+  "expected": {
+    "digest": "b46681d6e6744661fbb092f4ccc1a7c35c9dd25cc3bcc79032b76ad14f74c533",
+    "valid": true,
+    "python_valid": true,
+    "output": {
+      "dispositions_missing_for": ["critic-a-1"],
+      "content_fields_empty": [],
+      "labels_unresolved": 0,
+      "ci_jobs_unclassified": 0,
+      "identity_missing": [],
+      "context_package": [],
+      "critics_expected": ["1 of 2 independent critic receipts are still expected"],
+      "panel": ["critic critic-plain has no imported receipt bound"]
+    }
+  }
+}

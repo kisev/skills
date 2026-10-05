@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "ee39c4e54f9bf85d2c1d91d270ee4c0dd4e6cbcca8ac3a92d6320f88f8f6723f",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:code-simplify"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "skill.code-simplify.audit-near-miss",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "\u041f\u0440\u043e\u0432\u0435\u0434\u0438 \u043f\u043e\u043b\u043d\u043e\u0435 \u0440\u0435\u0432\u044c\u044e \u044d\u0442\u043e\u0433\u043e MR \u043d\u0430 \u0440\u0438\u0441\u043a\u0438 \u043f\u0435\u0440\u0435\u0434 \u0441\u043b\u0438\u044f\u043d\u0438\u0435\u043c; \u0440\u0435\u0432\u044c\u044e MR \u043e\u0442\u043d\u043e\u0441\u0438\u0442\u0441\u044f \u043a code-review, \u0430 \u043d\u0435 \u043a \u0430\u0443\u0434\u0438\u0442\u0443 code-simplify."
+  },
+  "invariants": [
+    {
+      "id": "skill.code-simplify.audit-near-miss.source",
+      "path": ".build/skills/code-simplify/SKILL.md"
+    },
+    {
+      "contains": "merge-request review routes to `code-review`",
+      "id": "code-simplify-audit-review-owner",
+      "path": "skills/code-simplify/references/workflow.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "skill.code-simplify.audit-near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

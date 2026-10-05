@@ -18,13 +18,16 @@ function description(english: string, russianTrigger: string): string {
 
 const SKILL_NAMES = [
   "agents-md",
+  "asd-ste100",
   "askme",
   "ast-grep",
   "code-explain",
   "code-review",
+  "code-simplify",
   "commit-msg",
   "docs-prepare",
   "docs-review",
+  "eli5",
   "goal",
   "humanize",
   "mattermost",
@@ -33,10 +36,10 @@ const SKILL_NAMES = [
   "release-prepare",
   "release-review",
   "rtk",
-  "skill-improve",
+  "skill-doctor",
   "slides-prompts-prepare",
   "spec-manage",
-  "stopit",
+  "handoff",
   "briefing",
   "task-prepare",
   "task-review",
@@ -57,6 +60,13 @@ const SKILL_NAMES = [
   "team-sprint-start",
 ] as const;
 
+// Skills that opt out of command ownership through their frontmatter
+// `metadata.command: false` label (the inspired-by era). They are installed
+// like every other skill and load through the native Skill tool; only the
+// thin slash-command adapter is absent. Keep this list in sync with the
+// frontmatter labels; tests pin the two-way mapping.
+export const COMMANDLESS_SKILLS = ["debugging", "tdd", "verification"] as const;
+
 const COMMANDS: readonly CommandRegistration[] = [
   ...SKILL_NAMES.map((name) => ({
     name,
@@ -67,7 +77,12 @@ const COMMANDS: readonly CommandRegistration[] = [
             "Create greenfield specs, onboard an existing project, update target state, or review specs",
             "спецификация проекта",
           )
-        : description(`Run the ${name} Agent Skill`, name),
+        : name === "code-simplify"
+          ? description(
+              "Apply the passive prevention ladder while coding and audit a requested scope for unnecessary complexity on an explicit request",
+              "упростить код",
+            )
+          : description(`Run the ${name} Agent Skill`, name),
   })),
   {
     name: "rtk-stats",
@@ -79,7 +94,7 @@ const COMMANDS: readonly CommandRegistration[] = [
       "Show the RTK output-compression observability summary for this host.",
       `Run \`npx --yes @kisev/agentomatic@${requirePackageVersion()} doctor --json\` and render the \`rtk.observability\` check as a short human summary: wrapper status, rtk binary availability, event counters, characters saved, and the token estimate.`,
       "When the doctor command is unavailable, read the stats file directly: `$XDG_STATE_HOME/opencode/skills/rtk/stats.json`, or `~/.local/state/opencode/skills/rtk/stats.json` when that variable is unset.",
-      "Zero counters with an active wrapper mean no verbose bash output has been compressed yet.",
+      "Zero counters with an active wrapper mean no verbose shell output has been compressed yet.",
       "The `/rtk` command still loads the portable rtk skill and is unaffected by this summary.",
     ],
   },
@@ -108,7 +123,12 @@ export function renderCommand(command: CommandRegistration): string {
           "Natural requests are supported. Explicit mode and scope arguments are passed unchanged; the skill verifies safety preconditions and asks before writing if intent remains ambiguous.",
           "Examples: `Create canonical specs for this empty project`; `Document this existing service`; `Change the canonical timeout`; `Audit specs without changes`.",
         ]
-      : [];
+      : command.name === "code-simplify"
+        ? [
+            "Prevention applies passively while coding: the ladder runs on the current change without scanning anything; a targeted caller search by exact name for the code being changed is not scanning, and a conscious cut records a SIMPLIFY debt marker in the same edit.",
+            "Audit is explicit and report-only: name the scope, receive ranked one-line tagged findings plus a separate debt-marker registry, and change nothing.",
+          ]
+        : [];
   return [
     "---",
     `description: ${command.description}`,

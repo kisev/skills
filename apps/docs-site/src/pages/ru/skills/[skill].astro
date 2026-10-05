@@ -1,0 +1,52 @@
+---
+import { getCollection } from "astro:content";
+import ExampleBlock from "../../../components/ExampleBlock.astro";
+import RelatedSkills from "../../../components/RelatedSkills.astro";
+import Base from "../../../layouts/Base.astro";
+import { useUi } from "../../../i18n/ui";
+import { localizedPath } from "../../../i18n/utils";
+import { catalog } from "../../../generated/skills";
+import { skillInstallCommands } from "../../../install-commands.mjs";
+
+export async function getStaticPaths() {
+  const examples = (await getCollection("examples")).filter((entry) => entry.id.startsWith("ru/"));
+  return catalog.skills.map((skill) => ({
+    params: { skill: skill.name },
+    props: {
+      skill,
+      examples: examples
+        .filter((entry) => entry.data.skill === skill.name)
+        .sort((left, right) => left.data.order - right.data.order),
+    },
+  }));
+}
+
+const { skill, examples } = Astro.props;
+const t = useUi("ru");
+const install = skillInstallCommands(skill.name);
+---
+
+<Base locale="ru" title={skill.name} description={skill.descriptionRu}>
+  <p><a href={localizedPath("/skills/", "ru")}>{t.skillPage.backToCatalog}</a></p>
+  <h1>{skill.name}</h1>
+  <p class="lead">{skill.descriptionRu}</p>
+
+  <section>
+    <h2>{t.skillPage.installTitle}</h2>
+    <p>{t.install.verificationNote}</p>
+    <pre><code>{install}</code></pre>
+  </section>
+
+  <RelatedSkills name={skill.name} locale="ru" />
+
+  <section>
+    <h2>{t.skillPage.examplesTitle}</h2>
+    {
+      examples.length === 0 ? (
+        <p class="note">{t.skillPage.noExamples}</p>
+      ) : (
+        examples.map((entry) => <ExampleBlock entry={entry} locale="ru" />)
+      )
+    }
+  </section>
+</Base>

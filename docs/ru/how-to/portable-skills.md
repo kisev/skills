@@ -20,16 +20,34 @@
 
 ## Установка
 
+Посмотрите версию npm-установщика, запустите его, затем выведите реально
+установленные навыки. `skills@latest` - версия CLI, а не дистрибутива Pages.
+Тег может сдвинуться между командами; npx не устанавливает CLI глобально.
+
 Установите навыки глобально:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills --global
+
+# Installed skills, not the npm installer
+npx --yes skills@latest list --global
 ```
 
 Установите навыки в текущем проекте:
 
 ```shell
+# Registry version of the installer
+npm view --prefer-online skills@latest version
+
+# Install skills
 npx --yes skills@latest add https://kisev.github.io/skills
+
+# Installed skills in this project
+npx --yes skills@latest list
 ```
 
 Команда открывает список навыков с предвыбранными всеми позициями; снимите
@@ -58,7 +76,14 @@ URL GitHub Pages - поддерживаемый обновляемый кана�
 Замените стабильный источник на явный источник `/dev`:
 
 ```shell
+# Registry version of the installer (still latest)
+npm view --prefer-online skills@latest version
+
+# Install the dev skill distribution
 npx --yes skills@latest add https://kisev.github.io/skills/dev --global
+
+# Installed skills
+npx --yes skills@latest list --global
 ```
 
 Обновляемый dev-канал публикуется после успешных push в `dev`. Его техническая
@@ -71,7 +96,7 @@ npx --yes skills@latest add https://kisev.github.io/skills/dev --global
 Обновите отслеживаемые навыки, глобально установленные из Pages:
 
 ```shell
-npx --yes skills@latest update --global --yes
+npx --yes skills@latest update --global
 ```
 
 Для области проекта не передавайте `--global`. Установка из репозитория Git или
@@ -79,19 +104,22 @@ npx --yes skills@latest update --global --yes
 подходящую команду `add` с URL Pages и той же областью.
 
 `update` обновляет отслеживаемые навыки, обнаруживает удалённые в источнике имена
-и предлагает удалить их локальные копии. У компонентов пакета OpenCode отдельный
-цикл обновления, описанный в [инструкции по интеграции
-OpenCode](opencode-integration.md#обновление).
+и предлагает удалить их локальные копии. Предложение появляется только при
+запуске `update` в терминале без флага `--yes`; в неинтерактивном режиме CLI
+пропускает его и оставляет устаревшие копии — в этом случае удаляйте их явно.
+Позиционные аргументы `update` — имена навыков, а не URL источников. У
+компонентов пакета OpenCode отдельный цикл обновления, описанный в [инструкции
+по интеграции OpenCode](opencode-integration.md#обновление).
 
 ## Удаление устаревших имён
 
-Текущий [инвентарь миграции](../migration-inventory.md) определяет одиннадцать
+Текущий [инвентарь миграции](../migration-inventory.md) определяет тринадцать
 устаревших имён. Обычно достаточно согласиться на их удаление, когда о них
 сообщит `skills update`. Чтобы явно удалить их из глобальной установки,
 выполните:
 
 ```shell
-npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver walkthrough team-workflow summary doit lsp-report --global --yes
+npx --yes skills@latest remove attempt schedule usage overview project-spec skill-improver skill-improve walkthrough team-workflow summary doit lsp-report stopit --global --yes
 ```
 
 Чтобы удалить только для одной среды, добавьте её параметр `--agent <name>`.

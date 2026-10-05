@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "95312224808c06b20aff8c81249205e47b3820625a5d1a63bda26cbafb5ccb3d",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:code-simplify"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "skill.code-simplify.audit-trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:code-simplify"]
+    },
+    "prompt": "Audit the src/feed module for unnecessary complexity and rank the findings; do not change anything."
+  },
+  "invariants": [
+    {
+      "id": "skill.code-simplify.audit-trigger.source",
+      "path": ".build/skills/code-simplify/SKILL.md"
+    },
+    {
+      "contains": "only on an explicit user request",
+      "id": "code-simplify-audit-explicit-report-only",
+      "path": "skills/code-simplify/references/workflow.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "skill.code-simplify.audit-trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

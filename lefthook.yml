@@ -88,6 +88,15 @@ pre-commit:
             glob: "lefthook.yml"
             run: mise exec -- lefthook validate
 
+          - name: gates
+            glob:
+              - ".github/workflows/ci.yml"
+              - "gate-registry.json"
+              - "lefthook.yml"
+              - "mise.toml"
+              - "taskfile.yml"
+            run: task gates:check
+
           - name: python-lock
             glob:
               - "pyproject.toml"
@@ -104,6 +113,7 @@ commit-msg:
       run: mise exec -- commitlint --edit {1}
 
 pre-push:
+  parallel: false
   files: git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files
   jobs:
     - name: core
@@ -116,6 +126,7 @@ pre-push:
 
     - name: python-tests
       glob:
+        # @gates:begin glob:python-tests
         - "**/*.py"
         - "**/*.schema.json"
         - "skills/**"
@@ -124,9 +135,11 @@ pre-push:
         - "tests/**"
         - "pyproject.toml"
         - "uv.lock"
-        - "taskfile.yml"
-        - "mise.toml"
+        - "gate-registry.json"
         - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
       run: |
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
@@ -134,17 +147,72 @@ pre-push:
         task test:python
       fail_text: "The local push gate failed"
 
+    - name: reviewmatic
+      glob:
+        # @gates:begin glob:reviewmatic
+        - "apps/reviewmatic/**"
+        - "shared/references/portable_gitlab/**"
+        - "shared/references/state_artifacts.py"
+        - "shared/references/mutation_process.py"
+        - "shared/manifest.json"
+        - "gate-registry.json"
+        - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task reviewmatic:check
+      fail_text: "The local push gate failed"
+
+    - name: reviewmatic-install
+      glob:
+        # @gates:begin glob:reviewmatic-install
+        - "apps/reviewmatic/**"
+        - "gate-registry.json"
+        - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task reviewmatic:install-smoke
+      fail_text: "The local push gate failed"
+
+    - name: shopmatic
+      glob:
+        # @gates:begin glob:shopmatic
+        - "apps/shopmatic/**"
+        - "gate-registry.json"
+        - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task shopmatic:check
+      fail_text: "The local push gate failed"
+
     - name: npm-packages
       glob:
+        # @gates:begin glob:npm-packages
         - "packages/**"
         - "apps/**"
         - "shared/**"
         - "scripts/**"
         - "package.json"
         - "package-lock.json"
-        - "taskfile.yml"
-        - "mise.toml"
+        - "gate-registry.json"
         - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
       run: |
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
@@ -152,10 +220,23 @@ pre-push:
         task package:check
       fail_text: "The local push gate failed"
 
-    - name: dependency-audit
+    - name: consumer-smoke
+      glob:
+        # @gates:begin glob:consumer-smoke
+        - "packages/**"
+        - "apps/**"
+        - "shared/**"
+        - "scripts/**"
+        - "package.json"
+        - "package-lock.json"
+        - "gate-registry.json"
+        - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
       run: |
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
         done
-        task dependency:audit
+        task package:consumer-smoke
       fail_text: "The local push gate failed"

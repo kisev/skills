@@ -1,9 +1,15 @@
 # Workflow
 
 Read `references/interaction-contract.md`, `references/work-item-contract.md`,
-and `references/language-policy.md`. Apply `humanize` before drafting prose.
+`references/language-policy.md`, and `references/clarity-rules.md`.
+Apply `humanize` to the drafted task
+title and body at the preparation step below; status updates, clarifying
+questions, and blocker reports are written normally and do not invoke it.
 Write user-facing prose in the language of the latest user request; use
-English when that language is ambiguous.
+English when that language is ambiguous. Apply `references/clarity-rules.md`
+to the prepared text: consistent terms; the actor, action, conditions, and
+scope wherever meaning depends on them; agreed requirements separated from new
+proposals; and a definite check sufficient to verify each acceptance criterion.
 
 ## Select the mode by intent
 

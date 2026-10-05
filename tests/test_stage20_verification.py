@@ -25,8 +25,8 @@ def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts()
         for item in scenarios
         if item["surface"] == "skill" and item["id"].startswith("stage20.")
     ]
-    assert len(skill) == 152
-    assert len({item["input"]["prompt"] for item in skill}) == 152
+    assert len(skill) == 176
+    assert len({item["input"]["prompt"] for item in skill}) == 176
     for name in json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["skills"]:
         selected = [
             item for item in skill if f"skill:{name}" in item["expected"].get("selected", [])
@@ -47,7 +47,7 @@ def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts()
 def test_stage20_compatibility_inventory_is_explicit_and_hostless() -> None:
     validate_compatibility_inventory(ROOT)
     inventory = json.loads((ROOT / "evals/contracts/opencode-compatibility.json").read_text())
-    assert inventory["versions"] == ["1.18.29", "1.18.31", "1.18.32"]
-    assert inventory["range"] == ">=1.18.29 <1.19.0"
+    assert inventory["versions"] == ["2.0.19"]
+    assert inventory["range"] == ">=2.0.0 <2.1.0"
     assert inventory["credentials"] is False
     assert inventory["network"] is False

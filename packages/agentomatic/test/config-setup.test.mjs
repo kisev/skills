@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -15,8 +15,11 @@ import {
   recoverConfigSetup,
 } from "../dist/config-setup.js";
 import { applyJsoncEdits, JsoncError, parseJsonc } from "../dist/jsonc.js";
+import { corePluginEdits, matchesWildcard, permissionEdits } from "../dist/opencode-config.js";
+import { requirePackageVersion } from "../dist/package-metadata.js";
 
 const PACKAGE = resolve(import.meta.dirname, "..");
+const PINNED = `@kisev/agentomatic@${requirePackageVersion()}`;
 
 test("interrupted config recovery is read-only until its exact journal is confirmed", async () => {
   const directory = temporary();
@@ -78,12 +81,78 @@ const FULL_SELECTION = {
   fragments: [
     "core-plugin",
     "skills-state-permissions",
-    "lsp-preset",
     "secrets-guard",
     "kilo-display",
     "tui-schema",
   ],
 };
+
+function assertRule(config, action, resource, effect) {
+  assert.deepEqual(
+    config.permissions.findLast((rule) => rule.action === action && rule.resource === resource),
+    { action, resource, effect },
+  );
+}
+
+test("core-plugin setup preserves V2 plugins and does not create a legacy array", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const file = join(home, ".config/opencode/opencode.jsonc");
+  try {
+    await writeFile(
+      file,
+      '{\n  // V2 plugins\n  "plugins": ["user-plugin", "@kisev/skills-opencode"]\n}\n',
+    );
+    const selection = { targets: ["opencode"], fragments: ["core-plugin"] };
+    const setup = await previewConfigSetup(selection, "global", directory, home);
+    await applyConfigSetup(selection, "global", directory, home, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: setup.receipt,
+    });
+    const source = readFileSync(file, "utf8");
+    const config = parseJsonc(source);
+    assert.deepEqual(config.plugins, ["user-plugin", PINNED]);
+    assert.equal(config.plugin, undefined);
+    assert.match(source, /\/\/ V2 plugins/);
+    const preview = await previewConfigSetup(selection, "global", directory, home);
+    assert.ok(preview.operations.every((operation) => operation.operation === "unchanged"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("core-plugin setup repins a bare or stale registration instead of resolving latest", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const file = join(home, ".config/opencode/opencode.jsonc");
+  try {
+    await writeFile(
+      file,
+      JSON.stringify(
+        {
+          plugins: [
+            "@kisev/agentomatic",
+            "@kisev/agentomatic@0.0.1-dev.0.g000000000000",
+            "user-plugin",
+          ],
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+    const selection = { targets: ["opencode"], fragments: ["core-plugin"] };
+    const setup = await previewConfigSetup(selection, "global", directory, home);
+    await applyConfigSetup(selection, "global", directory, home, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: setup.receipt,
+    });
+    assert.deepEqual(parseJsonc(readFileSync(file, "utf8")).plugins, [PINNED, "user-plugin"]);
+    const again = await previewConfigSetup(selection, "global", directory, home);
+    assert.ok(again.operations.every((operation) => operation.operation === "unchanged"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 test("jsonc editor appends unique values while preserving comments and formatting", () => {
   const text = [
@@ -182,23 +251,39 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const opencode = parseJsonc(
       readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
     );
-    assert.deepEqual(opencode.plugin, ["@kisev/agentomatic"]);
-    assert.equal(opencode.permission.read["~/.local/state/agent-skills/**"], "allow");
-    assert.equal(opencode.permission.read["~/.config/opencode/skills/**"], "allow");
-    assert.equal(opencode.permission.edit["~/.local/state/agent-skills/**"], "allow");
-    assert.equal(opencode.permission.read["**/.env"], "deny");
-    assert.equal(opencode.permission.edit["**/.ssh/**"], "deny");
-    assert.equal(opencode.permission.external_directory["~/.local/state/agent-skills/**"], "allow");
-    assert.deepEqual(opencode.lsp.python.command, ["basedpyright-langserver", "--stdio"]);
-    assert.deepEqual(opencode.lsp.typescript.extensions, [".ts", ".tsx", ".js", ".jsx"]);
+    assert.deepEqual(opencode.plugins, [PINNED]);
+    assert.equal(opencode.permission, undefined);
+    assertRule(opencode, "read", "~/.local/state/agent-skills/**", "allow");
+    assertRule(opencode, "read", "~/.config/opencode/skills/**", "allow");
+    assertRule(opencode, "read", "~/.agents/skills/**", "allow");
+    assertRule(opencode, "edit", "~/.local/state/agent-skills/**", "allow");
+    assertRule(opencode, "read", "*.env", "deny");
+    assertRule(opencode, "edit", "*.ssh/**", "deny");
+    assertRule(opencode, "external_directory", "~/.local/state/agent-skills/**", "allow");
+    assertRule(opencode, "external_directory", "~/.agents/skills/**", "allow");
+    assertRule(opencode, "external_directory", "~/.agents", "allow");
+    assertRule(opencode, "external_directory", "~/.agents/skills", "allow");
+    assertRule(opencode, "external_directory", "~/.config/opencode/skills", "allow");
+    assertRule(opencode, "external_directory", "~/.local/state/agent-skills", "allow");
+    assertRule(opencode, "read", "*.worktrees/reviewmatic/**", "allow");
+    assertRule(opencode, "external_directory", "*.worktrees/reviewmatic/*", "allow");
+    assertRule(opencode, "external_directory", "*.worktrees/reviewmatic", "allow");
+    assertRule(opencode, "external_directory", "*.worktrees", "allow");
+    assert.equal(opencode.lsp, undefined);
 
-    const tui = parseJsonc(readFileSync(join(root, ".config", "opencode", "tui.json"), "utf8"));
-    assert.equal(tui.$schema, "https://opencode.ai/tui.json");
-    assert.equal(tui.diff_style, "stacked");
+    const cli = parseJsonc(readFileSync(join(root, ".config", "opencode", "cli.json"), "utf8"));
+    assert.equal(cli.$schema, "https://opencode.ai/v2/cli.json");
+    assert.deepEqual(cli.theme, { name: "ayu" });
+    assert.equal(cli.diff_style, undefined);
+    assert.equal(cli.keybinds["command.palette.show"], "alt+p");
 
     const kilo = parseJsonc(readFileSync(join(root, ".config", "kilo", "kilo.jsonc"), "utf8"));
     assert.equal(kilo.reasoning_display, "expanded");
     assert.equal(kilo.permission.read["~/.local/state/agent-skills/**"], "allow");
+    assert.equal(kilo.permission.read["*.worktrees/reviewmatic/**"], "allow");
+    assert.equal(kilo.permission.external_directory["*.worktrees/reviewmatic/*"], "allow");
+    assert.equal(kilo.permission.external_directory["*.worktrees/reviewmatic"], "allow");
+    assert.equal(kilo.permission.shell, undefined);
 
     const mimo = parseJsonc(
       readFileSync(join(root, ".config", "mimocode", "mimocode.jsonc"), "utf8"),
@@ -208,6 +293,207 @@ test("config setup applies all fragments globally and stays idempotent", async (
     const second = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
     assert.equal(second.confirmable, false);
     assert.ok(second.operations.every((item) => item.operation === "unchanged"));
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("reviewmatic worktree access stays read-only, structurally scoped, and below secrets denies", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  try {
+    const setup = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
+    await applyConfigSetup(FULL_SELECTION, "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: setup.receipt,
+    });
+    const config = parseJsonc(
+      readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
+    );
+    // A user deny for the managed tree wins: it sits after the preset allow.
+    config.permissions.push({
+      action: "read",
+      resource: "*.worktrees/reviewmatic/**",
+      effect: "deny",
+    });
+    await writeFile(
+      join(root, ".config", "opencode", "opencode.jsonc"),
+      JSON.stringify(config, null, 2),
+      "utf8",
+    );
+    const preview = await previewConfigSetup(FULL_SELECTION, "global", directory, root);
+    assert.ok(
+      preview.operations.some(
+        (item) => item.fragment === "skills-state-permissions" && item.operation === "conflict",
+      ),
+      "an explicit user deny for the managed tree is reported as a conflict, never overwritten",
+    );
+
+    const applied = parseJsonc(
+      readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8"),
+    );
+    const allowIndex = applied.permissions.findIndex(
+      (rule) =>
+        rule.action === "read" &&
+        rule.resource === "*.worktrees/reviewmatic/**" &&
+        rule.effect === "allow",
+    );
+    const denyIndex = applied.permissions.findIndex(
+      (rule) => rule.action === "read" && rule.resource === "**.pem" && rule.effect === "deny",
+    );
+    assert.ok(allowIndex >= 0 && denyIndex > allowIndex, "secrets-guard denies keep priority");
+    assert.deepEqual(
+      applied.permissions.filter(
+        (rule) =>
+          rule.resource.includes(".worktrees") &&
+          rule.action !== "read" &&
+          rule.action !== "external_directory",
+      ),
+      [],
+      "no shell or edit permission is added for the managed worktrees",
+    );
+    const managed =
+      "/repo-owner/project.worktrees/reviewmatic/mr-host-project-iid7-d8ac/commit.txt";
+    assert.equal(matchesWildcard("*.worktrees/reviewmatic/**", managed), true);
+    assert.equal(
+      matchesWildcard("*.worktrees/reviewmatic/**", "/repo-owner/project.worktrees/other/x"),
+      false,
+    );
+    assert.equal(
+      matchesWildcard("~/.local/state/agent-skills/**", "~/.local/state/agent-skill/draft.json"),
+      false,
+      "a typo'd sibling state directory stays outside the preset",
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("upgrading skills-state over recorded user and secret denies preserves their priority", async () => {
+  const directory = temporary();
+  const root = await homeWithConfigs(directory);
+  const file = join(root, ".config", "opencode", "opencode.jsonc");
+  const selection = (fragments) => ({ targets: ["opencode"], fragments });
+  const run = async (fragments) => {
+    const preview = await previewConfigSetup(selection(fragments), "global", directory, root);
+    const applied = await applyConfigSetup(selection(fragments), "global", directory, root, {
+      dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+      receipt: preview.receipt,
+    });
+    return {
+      operations: applied.operations.map((item) => `${item.fragment}:${item.operation}`),
+      preview: preview.operations.map((item) => `${item.fragment}:${item.operation}`),
+    };
+  };
+  // V2 resolves permissions by the last matching rule.
+  const evaluate = (config, action, resource) =>
+    config.permissions
+      .filter(
+        (rule) => matchesWildcard(rule.action, action) && matchesWildcard(rule.resource, resource),
+      )
+      .at(-1)?.effect ?? "ask";
+  try {
+    // A narrower user deny inside the managed tree plus a secret deny, then an
+    // already-configured secrets-guard: the exact upgrade scenario.
+    await writeFile(
+      file,
+      JSON.stringify({
+        permissions: [
+          {
+            action: "read",
+            resource: "/repo/project.worktrees/reviewmatic/private/*",
+            effect: "deny",
+          },
+          { action: "read", resource: "*.env", effect: "deny" },
+        ],
+      }),
+    );
+    await run(["secrets-guard"]);
+    const joint = await run(["skills-state-permissions", "secrets-guard"]);
+    assert.ok(joint.operations.includes("skills-state-permissions:update"));
+    assert.ok(joint.operations.includes("secrets-guard:unchanged"));
+    const config = parseJsonc(readFileSync(file, "utf8"));
+    assert.equal(
+      evaluate(config, "read", "/repo/project.worktrees/reviewmatic/private/file.txt"),
+      "deny",
+    );
+    assert.equal(evaluate(config, "read", "/repo/project.worktrees/reviewmatic/mr-1/.env"), "deny");
+    assert.equal(
+      evaluate(config, "read", "/repo/project.worktrees/reviewmatic/mr-1/src/file.ts"),
+      "allow",
+    );
+    assert.equal(
+      evaluate(config, "external_directory", "/repo/project.worktrees/reviewmatic/mr-1/*"),
+      "allow",
+      "the canonical V2 worktree boundary is covered",
+    );
+    assert.equal(
+      evaluate(config, "external_directory", "/repo/project.worktrees/reviewmatic/*"),
+      "allow",
+    );
+    assert.equal(
+      evaluate(config, "external_directory", "/repo/project.worktrees/*"),
+      "ask",
+      "sibling catalogs under <repo>.worktrees stay unapproved",
+    );
+    assert.equal(evaluate(config, "read", "~/.agent-skill/state/report.json"), "ask");
+    assert.equal(
+      evaluate(config, "read", "~/.local/state/agent-skills/gitlab/abc/report.json"),
+      "allow",
+    );
+    assert.equal(evaluate(config, "read", "~/.local/state/agent-skills/.env"), "deny");
+    assert.equal(evaluate(config, "read", "~/notes/example.env.example"), "allow");
+
+    // Repeated application is a verified no-op that leaves the file identical.
+    const bytes = readFileSync(file);
+    const repeated = await run(["skills-state-permissions", "secrets-guard"]);
+    assert.deepEqual(repeated.operations, [
+      "skills-state-permissions:unchanged",
+      "secrets-guard:unchanged",
+    ]);
+    assert.deepEqual(readFileSync(file), bytes);
+
+    // The reversed fragment order reaches the same protections.
+    const reversedHome = await homeWithConfigs(directory);
+    const reversedFile = join(reversedHome, ".config", "opencode", "opencode.jsonc");
+    await writeFile(
+      reversedFile,
+      JSON.stringify({
+        permissions: [{ action: "read", resource: "*.env", effect: "deny" }],
+      }),
+    );
+    const reversedDirectory = mkdtempSync(join(tmpdir(), "skills-config-setup-test-"));
+    try {
+      const runReversed = async (fragments) => {
+        const preview = await previewConfigSetup(
+          selection(fragments),
+          "global",
+          reversedDirectory,
+          reversedHome,
+        );
+        await applyConfigSetup(selection(fragments), "global", reversedDirectory, reversedHome, {
+          dependencyRunner: async () => ({ stdout: "", stderr: "" }),
+          receipt: preview.receipt,
+        });
+      };
+      await runReversed(["secrets-guard"]);
+      await runReversed(["secrets-guard", "skills-state-permissions"]);
+      const reversed = parseJsonc(readFileSync(reversedFile, "utf8"));
+      assert.equal(
+        evaluate(reversed, "read", "/repo/project.worktrees/reviewmatic/mr-1/.env"),
+        "deny",
+      );
+      assert.equal(
+        evaluate(reversed, "read", "/repo/project.worktrees/reviewmatic/mr-1/src/file.ts"),
+        "allow",
+      );
+      assert.equal(
+        evaluate(reversed, "external_directory", "/repo/project.worktrees/reviewmatic/mr-1/*"),
+        "allow",
+      );
+    } finally {
+      await rm(reversedDirectory, { recursive: true, force: true });
+    }
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -242,8 +528,13 @@ test("config setup preserves user entries, comments, and scalar permissions", as
       "utf8",
     );
     await writeFile(
-      join(root, ".config", "opencode", "tui.json"),
-      ["{", '  "theme": "user-theme",', '  "keybinds": { "app_exit": "ctrl+q" }', "}"].join("\n"),
+      join(root, ".config", "opencode", "cli.json"),
+      [
+        "{",
+        '  "theme": { "name": "user-theme" },',
+        '  "keybinds": { "app.exit": "ctrl+q" }',
+        "}",
+      ].join("\n"),
       "utf8",
     );
     await previewConfigSetup(FULL_SELECTION, "global", directory, root);
@@ -252,17 +543,18 @@ test("config setup preserves user entries, comments, and scalar permissions", as
     });
     assert.equal(applied.operations.filter((item) => item.operation === "conflict").length, 0);
     const preservedTui = parseJsonc(
-      readFileSync(join(root, ".config", "opencode", "tui.json"), "utf8"),
+      readFileSync(join(root, ".config", "opencode", "cli.json"), "utf8"),
     );
-    assert.equal(preservedTui.theme, "user-theme");
-    assert.equal(preservedTui.keybinds.app_exit, "ctrl+q");
-    assert.equal(preservedTui.keybinds.command_list, "alt+p");
+    assert.equal(preservedTui.theme.name, "user-theme");
+    assert.equal(preservedTui.keybinds["app.exit"], "ctrl+q");
+    assert.equal(preservedTui.keybinds["command.palette.show"], "alt+p");
 
     const raw = readFileSync(join(root, ".config", "opencode", "opencode.jsonc"), "utf8");
     assert.match(raw, /\/\/ model choice stays/);
     const opencode = parseJsonc(raw);
     assert.equal(opencode.model, "openai/gpt-5.6-luna");
-    assert.deepEqual(opencode.plugin, ["user-plugin", "@kisev/agentomatic"]);
+    assert.deepEqual(opencode.plugins, ["user-plugin", PINNED]);
+    assert.equal(opencode.plugin, undefined);
     assert.deepEqual(opencode.lsp.python.command, ["pyright-langserver", "--stdio"]);
     assert.equal(opencode.lsp.python.extensions, undefined);
 
@@ -317,17 +609,58 @@ test("config setup selection validation and project scope behavior", async () =>
   }
 });
 
-test("cli exposes the config command and install hints at it", () => {
-  const help = spawnSync(process.execPath, [join(PACKAGE, "dist", "cli.js"), "config", "--help"], {
-    encoding: "utf8",
-  });
+test("cli exposes application integration configuration", () => {
+  const help = spawnSync(
+    process.execPath,
+    [join(PACKAGE, "dist", "cli.js"), "configure", "integration", "--help"],
+    {
+      encoding: "utf8",
+    },
+  );
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /Connect the package and recommended fragments/);
+  assert.match(help.stdout, /Connect or disconnect the plugin and merge application presets/);
   assert.match(help.stdout, /--targets/);
   assert.match(help.stdout, /--fragments/);
 
-  const source = readFileSync(join(PACKAGE, "src", "cli.ts"), "utf8");
-  assert.match(source, /"config", \.\.\.scopeArguments\(options\.scope\), "--dry-run"/);
+  const source = readFileSync(join(PACKAGE, "src", "command-cli.ts"), "utf8");
+  assert.match(source, /configure integration/);
+});
+
+test("config --no-dependency applies the core fragment without provisioning npm", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const project = join(directory, "project");
+  const manifest = join(home, ".config", "opencode", "package.json");
+  try {
+    await mkdir(project);
+    await writeFile(manifest, '{"name":"opencode","private":true}\n');
+    const result = spawnSync(
+      process.execPath,
+      [
+        join(PACKAGE, "dist", "cli.js"),
+        "configure",
+        "integration",
+        "--global",
+        "--targets",
+        "opencode",
+        "--fragments",
+        "core-plugin",
+        "--no-dependency",
+        "--yes",
+      ],
+      { cwd: project, env: { ...process.env, HOME: home }, encoding: "utf8" },
+    );
+    assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+    assert.equal(await readFile(manifest, "utf8"), '{"name":"opencode","private":true}\n');
+    assert.equal(existsSync(join(home, ".config", "opencode", "node_modules")), false);
+    assert.deepEqual(
+      parseJsonc(await readFile(join(home, ".config", "opencode", "opencode.jsonc"), "utf8"))
+        .plugins,
+      [PINNED],
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test("applying the core-plugin fragment provisions the npm dependency", async () => {
@@ -469,4 +802,210 @@ test("config preview preserves an interrupted transaction for explicit recovery"
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test("permission migration preserves legacy rule order, scalar defaults, aliases, and comments", () => {
+  const source = `{
+    "model": "user/model",
+    "providers": { "custom": { "settings": { "apiKey": "{env:USER_KEY}" } } },
+    "permission": {
+      // keep shell restrictions
+      "bash": { "*": "ask", "git push *": "deny" },
+      "task": "deny",
+      "edit": "ask",
+      "read": { "*": "allow", "secrets/*": "deny" }
+    }
+  }`;
+  const addition = { action: "read", resource: "~/state/*", effect: "allow" };
+  const edits = permissionEdits(parseJsonc(source), [addition]);
+  const migrated = applyJsoncEdits(source, edits);
+  const config = parseJsonc(migrated.text);
+  assert.deepEqual(config.permissions, [
+    { action: "shell", resource: "*", effect: "ask" },
+    { action: "shell", resource: "git push *", effect: "deny" },
+    { action: "subagent", resource: "*", effect: "deny" },
+    { action: "edit", resource: "*", effect: "ask" },
+    { action: "read", resource: "*", effect: "allow" },
+    { action: "read", resource: "secrets/*", effect: "deny" },
+    addition,
+  ]);
+  assert.equal(config.permission, undefined);
+  assert.match(migrated.text, /\/\/ keep shell restrictions/);
+  assert.equal(config.model, "user/model");
+  assert.deepEqual(config.providers, parseJsonc(source).providers);
+  assert.equal(applyJsoncEdits(migrated.text, permissionEdits(config, [addition])).changed, false);
+  const scalar = applyJsoncEdits(
+    '{"permission":"ask"}',
+    permissionEdits({ permission: "ask" }, [addition]),
+  );
+  assert.deepEqual(parseJsonc(scalar.text).permissions, [
+    { action: "*", resource: "*", effect: "ask" },
+    addition,
+  ]);
+});
+
+test("native permission edits preserve existing comments and ordered user exceptions", () => {
+  const source = `{
+    "permissions": [
+      { "action": "*", "resource": "*", "effect": "ask" }, // broad default
+      { "action": "shell", "resource": "git push *", "effect": "deny" }, // never push
+    ],
+    "mcp": { "servers": {} },
+  }`;
+  const original = parseJsonc(source);
+  const addition = { action: "read", resource: "~/state/*", effect: "allow" };
+  const migrated = applyJsoncEdits(source, permissionEdits(original, [addition]));
+  const config = parseJsonc(migrated.text);
+  assert.deepEqual(config.permissions, [...original.permissions, addition]);
+  assert.match(migrated.text, /\/\/ broad default/);
+  assert.match(migrated.text, /\/\/ never push/);
+  assert.deepEqual(config.mcp, original.mcp);
+});
+
+test("ambiguous or malformed permission sections conflict rather than weaken user rules", () => {
+  const allow = { action: "read", resource: "~/state/*", effect: "allow" };
+  for (const config of [
+    { permissions: "allow" },
+    { permissions: [{ action: "read", effect: "allow" }] },
+    { permission: { read: true } },
+    { permission: { lsp: "allow" } },
+    { tools: { read: "ask" } },
+    { permissions: [{ ...allow, effect: "deny" }] },
+    { permissions: [allow, { action: "*", resource: "*", effect: "ask" }] },
+  ])
+    assert.throws(() => permissionEdits(config, [allow]), JsoncError);
+  const source =
+    '{"permission":{"read":"allow"},/*keep*/"permissions":[{"action":"read","resource":"*","effect":"allow"}],"model":"user/model"}';
+  const migrated = applyJsoncEdits(source, permissionEdits(parseJsonc(source), []));
+  assert.equal(parseJsonc(migrated.text).permission, undefined);
+  assert.match(migrated.text, /\/\*keep\*\//);
+  assert.equal(parseJsonc(migrated.text).model, "user/model");
+});
+
+test("legacy tools migrate once and plugin options are not duplicated or discarded", () => {
+  const source = '{"tools":{"websearch":false,"bash":true,"patch":false},"model":"user/model"}';
+  const migrated = applyJsoncEdits(source, permissionEdits(parseJsonc(source), []));
+  assert.deepEqual(parseJsonc(migrated.text).permissions, [
+    { action: "websearch", resource: "*", effect: "deny" },
+    { action: "shell", resource: "*", effect: "allow" },
+    { action: "edit", resource: "*", effect: "deny" },
+  ]);
+  assert.equal(parseJsonc(migrated.text).tools, undefined);
+  const plugins =
+    '{"plugin":[["@kisev/skills-opencode",{"enabled":false}],"user-plugin"],"model":"user/model"}';
+  const config = applyJsoncEdits(plugins, corePluginEdits(parseJsonc(plugins)));
+  assert.deepEqual(parseJsonc(config.text).plugins, [
+    { package: PINNED, options: { enabled: false } },
+    "user-plugin",
+  ]);
+  assert.equal(parseJsonc(config.text).plugin, undefined);
+  assert.equal(
+    applyJsoncEdits(config.text, corePluginEdits(parseJsonc(config.text))).changed,
+    false,
+  );
+  assert.throws(() => corePluginEdits({ plugin: ["old"], plugins: ["new"] }), JsoncError);
+});
+
+test("JSONC key edits preserve comments, first/last properties, and unrelated bytes", () => {
+  for (const source of [
+    '{"old":1,/*note*/"keep":2}',
+    '{"keep":2,/*note*/"old":1}',
+    '{"old":{/*note*/"nested":1}}',
+    '{"keep":2,"old":1,/*note*/}',
+  ]) {
+    const migrated = applyJsoncEdits(source, [{ kind: "remove-key", path: ["old"] }]);
+    const config = parseJsonc(migrated.text);
+    assert.equal(config.old, undefined);
+    assert.equal(config.keep, parseJsonc(source).keep);
+    assert.match(migrated.text, /\/\*note\*\//);
+  }
+});
+
+test("terminal setup leaves legacy TUI migration to V2 and never writes an inactive file", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  try {
+    const original = '{"theme":"user-theme","keybinds":{"app_exit":"ctrl+q"}}\n';
+    const file = join(home, ".config/opencode/tui.json");
+    await writeFile(file, original);
+    const selection = { targets: ["opencode"], fragments: ["tui-schema"] };
+    const preview = await previewConfigSetup(selection, "global", directory, home, false);
+    assert.equal(preview.confirmable, false);
+    assert.equal(preview.operations[0].operation, "conflict");
+    assert.match(preview.operations[0].reason, /Start OpenCode V2 once/);
+    assert.equal(readFileSync(file, "utf8"), original);
+    await assert.rejects(
+      applyConfigSetup(selection, "global", directory, home, {
+        receipt: preview.receipt,
+        provisionDependency: false,
+      }),
+      { code: "invalid_state" },
+    );
+    assert.equal(readFileSync(file, "utf8"), original);
+    assert.throws(
+      () =>
+        normalizeConfigSelection("global", { targets: ["opencode"], fragments: ["lsp-preset"] }),
+      ConfigSetupError,
+    );
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a permission conflict leaves its whole section unchanged while unrelated fragments apply", async () => {
+  const directory = temporary();
+  const home = await homeWithConfigs(directory);
+  const file = join(home, ".config/opencode/opencode.jsonc");
+  try {
+    const original = {
+      permissions: [{ action: "read", resource: "~/.local/state/agent-skills/**", effect: "deny" }],
+      model: "user/model",
+    };
+    await writeFile(file, JSON.stringify(original));
+    const selection = {
+      targets: ["opencode"],
+      fragments: ["core-plugin", "skills-state-permissions"],
+    };
+    const preview = await previewConfigSetup(selection, "global", directory, home, false);
+    assert.ok(
+      preview.operations.some(
+        (item) => item.fragment === "skills-state-permissions" && item.operation === "conflict",
+      ),
+    );
+    await applyConfigSetup(selection, "global", directory, home, {
+      receipt: preview.receipt,
+      provisionDependency: false,
+    });
+    const config = parseJsonc(readFileSync(file, "utf8"));
+    assert.deepEqual(config.permissions, original.permissions);
+    assert.equal(config.model, original.model);
+    assert.deepEqual(config.plugins, [PINNED]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("mixed permission sections preserve the exact V2 normalization precedence", () => {
+  const source =
+    '{"tools":{"bash":false},"permission":{"bash":{"*":"ask","git push *":"deny"}},"permissions":[{"action":"shell","resource":"git status *","effect":"allow"}]}';
+  const result = applyJsoncEdits(source, permissionEdits(parseJsonc(source), []));
+  const config = parseJsonc(result.text);
+  assert.deepEqual(config.permissions, [
+    { action: "shell", resource: "*", effect: "deny" },
+    { action: "shell", resource: "*", effect: "ask" },
+    { action: "shell", resource: "git push *", effect: "deny" },
+    { action: "shell", resource: "git status *", effect: "allow" },
+  ]);
+  assert.equal(config.tools, undefined);
+  assert.equal(config.permission, undefined);
+  assert.equal(applyJsoncEdits(result.text, permissionEdits(config, [])).changed, false);
+});
+
+test("JSONC validation rejects missing separators and preserves prototype-named user fields", () => {
+  for (const source of ['{"permissions":[]"model":"user/model"}', '["a" "b"]'])
+    assert.throws(() => parseJsonc(source), JsoncError);
+  const config = parseJsonc('{"__proto__":{"permissions":"allow"},"model":"user/model"}');
+  assert.equal(Object.hasOwn(config, "__proto__"), true);
+  assert.equal(Object.getPrototypeOf(config), Object.prototype);
+  assert.equal(config.permissions, undefined);
 });

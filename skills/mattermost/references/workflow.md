@@ -40,7 +40,8 @@ post's message. If a single message exceeds the host output limit, inspect its
 saved output instead of interpreting a truncated excerpt as the complete text.
 
 Reactions are fetched by default through separate GET requests and returned as
-exact `{emoji, user}` pairs. Use `--no-reactions` only when the user asks to omit
+exact `{emoji, user}` pairs. A JSON `null` reactions response means an empty list.
+Use `--no-reactions` only when the user asks to omit
 them, or on Band origins: Band, a Mattermost fork, does not serve the reactions
 API, so reads there run with `--no-reactions` instead of collecting per-post
 failures. Never interpret a reaction as approval or moderation.
@@ -155,8 +156,8 @@ python '/path/to/mattermost/scripts/mattermost.py' publication prepare <<'JSON'
 JSON
 ```
 
-The object contains only a non-empty `messages` array. Each item contains exactly
-`target`, `message`, and `files`. Every target is an exact supported HTTPS
+The object contains only a non-empty `messages` array. Each ordinary item contains
+exactly `target`, `message`, and `files`. Every target is an exact supported HTTPS
 Mattermost URL, and all targets in one plan use one origin and authenticated
 identity. `files` contains zero to five normalized absolute source paths. Each
 source must remain an owner-owned, singly-linked regular file of at most 100 MiB
@@ -183,6 +184,31 @@ upload because Mattermost may retain an unattached server file. After an
 ambiguous post, the user may manually run that message's Inspect command; it
 checks for the hidden publication ID and exact post content. The skill never runs
 Apply or Inspect and never claims an unknown outcome succeeded.
+
+### Opt-in Issue and MR cards
+
+Use card mode only when the user explicitly requests it or an applicable trusted
+project/process instruction (such as `AGENTS.md`) selects it. A GitLab link alone
+never selects card mode. Follow [the card guide](cards.md) for standard Issue/MR
+templates, custom layouts, English/Russian examples, and compactness limits.
+
+Add `card` to an item with `message: ""` and `files: []`. One card creates one
+new thread root in the exact channel or chat, never a reply to an existing post.
+The agent fills the card from supplied evidence; the runner does not fetch GitLab.
+Use the requested language, otherwise the conversation language, with English
+as the ambiguous-language fallback. Preserve source names and distinguish unknown
+data from absent values. Do not infer Mattermost mentions from GitLab usernames.
+
+Card validation failures stop preparation with localized, field-specific errors.
+Revise the text or select fewer labels with an accurate omitted count and retry;
+never bypass a budget error by switching to an ordinary message automatically.
+Preparation stores card inputs and the rendered attachment in a version-2 action
+covered by its confirmation digest; renderer drift requires a new plan;
+ordinary actions remain version 1. Present the full rendered attachment from the
+plan as well as the target, digest, expiry, and manual commands. The helper checks
+card content during recovery, allowing only empty server-added attachment defaults.
+It never invokes a generated command on the agent's behalf. Cron, subscriptions,
+post edits, and automatic publication remain outside this workflow.
 
 ## Result Contract
 

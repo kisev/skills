@@ -168,7 +168,7 @@ def test_creation_command_preserves_literal_markdown_and_pins_target(
         "gitlab.example.org",
         "--method",
         "POST",
-        "../graphql",
+        "graphql",
     ]
     assert "--silent" not in args
     payload_path = Path(args[-1])
@@ -218,7 +218,8 @@ def test_ready_issue_requires_milestone_and_existing_issue_gets_assignment(
     files, complete = render(validate(plan), tmp_path)
     assert complete
     (command,) = commands(files)
-    assert "../graphql" in command
+    assert "graphql" in mutation_args(command)
+    assert "../graphql" not in command
     query, variables = graphql_request(files, "contract-milestone.json")
     assert query.startswith("mutation UpdateIssue(")
     assert variables["input"] == {
@@ -278,7 +279,7 @@ def test_batch_requires_agreement_and_defers_unknown_iids(tmp_path: Path) -> Non
     files, complete = render(validate(plan), tmp_path)
     assert not complete
     assert len(commands(files)) == 2
-    assert all("../graphql" in command for command in commands(files))
+    assert all("graphql" in mutation_args(command) for command in commands(files))
     assert not any(path.endswith("/link-1.json") for path in files)
     assert "реальные IID" in files["task-publication.md"].decode()
 
@@ -291,7 +292,7 @@ def test_resume_uses_real_iids_without_recreating_issues(tmp_path: Path) -> None
     assert not complete
     generated = commands(files)
     assert len(generated) == 2
-    assert all(command.count("../graphql") == 1 for command in generated)
+    assert all(mutation_args(command).count("graphql") == 1 for command in generated)
     assert "work item ID" in files["task-publication.md"].decode()
 
     plan["items"][0]["work_item_id"] = "gid://gitlab/WorkItem/1010"

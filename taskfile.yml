@@ -3,7 +3,160 @@ version: "3"
 
 set: [pipefail, errexit, nounset]
 
+vars:
+  COMPOSE: docker-compose
+  ENV_COMPOSE: "{{.COMPOSE}} -p skills-dev --env-file .build/env/compose.env -f docker-compose.yml"
+
 tasks:
+  env:up:
+    desc: Start both development services and initialize test fixtures
+    deps: [env:gitlab:up, env:mattermost:up]
+  env:stop:
+    desc: Stop both services without removing containers or data
+    deps: [env:gitlab:stop, env:mattermost:stop]
+  env:down:
+    desc: Remove both services' containers and networks, retaining data
+    deps: [env:gitlab:down, env:mattermost:down]
+  env:restart:
+    desc: Restart both development services
+    deps: [env:gitlab:restart, env:mattermost:restart]
+  env:recreate:
+    desc: Recreate both services' containers, retaining data
+    deps: [env:gitlab:recreate, env:mattermost:recreate]
+  env:clean:
+    desc: Delete both services' data, including manual experiments, without prompting
+    deps: [env:gitlab:clean, env:mattermost:clean]
+  env:status:
+    desc: Show both development services
+    deps: [env:gitlab:status, env:mattermost:status]
+  env:logs:
+    desc: Show recent logs for both development services
+    deps: [env:gitlab:logs, env:mattermost:logs]
+
+  env:gitlab:up:
+    desc: Start GitLab and Runner and initialize fixtures
+    cmds:
+      - mise exec -- python -m dev.env prepare gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --wait --wait-timeout 1200 gitlab gitlab-proxy gitlab-runner'
+      - mise exec -- python -m dev.env init gitlab --compose '{{.COMPOSE}}'
+  env:mattermost:up:
+    desc: Start Mattermost and initialize fixtures
+    cmds:
+      - mise exec -- python -m dev.env prepare mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --wait --wait-timeout 240 mattermost-db mattermost mattermost-proxy'
+      - mise exec -- python -m dev.env init mattermost --compose '{{.COMPOSE}}'
+
+  env:gitlab:stop:
+    desc: Stop GitLab and Runner without deleting data
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} stop gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:stop:
+    desc: Stop Mattermost without deleting data
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} stop mattermost-db mattermost mattermost-proxy'
+  env:gitlab:down:
+    desc: Remove GitLab containers and networks, retaining volumes
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:down:
+    desc: Remove Mattermost containers and networks, retaining volumes
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down mattermost-db mattermost mattermost-proxy'
+  env:gitlab:restart:
+    desc: Restart GitLab and Runner and wait for readiness
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} restart gitlab gitlab-proxy gitlab-runner'
+      - task: env:gitlab:up
+  env:mattermost:restart:
+    desc: Restart Mattermost and wait for readiness
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} restart mattermost-db mattermost mattermost-proxy'
+      - task: env:mattermost:up
+  env:gitlab:recreate:
+    desc: Recreate GitLab containers without deleting data
+    cmds:
+      - mise exec -- python -m dev.env prepare gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --force-recreate --wait --wait-timeout 1200 gitlab gitlab-proxy gitlab-runner'
+      - mise exec -- python -m dev.env init gitlab --compose '{{.COMPOSE}}'
+  env:mattermost:recreate:
+    desc: Recreate Mattermost containers without deleting data
+    cmds:
+      - mise exec -- python -m dev.env prepare mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} up -d --force-recreate --wait --wait-timeout 240 mattermost-db mattermost mattermost-proxy'
+      - mise exec -- python -m dev.env init mattermost --compose '{{.COMPOSE}}'
+  env:gitlab:clean:
+    desc: Delete GitLab data including manual projects, without prompting
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down gitlab gitlab-proxy gitlab-runner'
+      - mise exec -- python -m dev.env clean gitlab --compose '{{.COMPOSE}}'
+  env:mattermost:clean:
+    desc: Delete Mattermost data including manual messages, without prompting
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} down mattermost-db mattermost mattermost-proxy'
+      - mise exec -- python -m dev.env clean mattermost --compose '{{.COMPOSE}}'
+  env:gitlab:status:
+    desc: Show GitLab and Runner status
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} ps -a gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:status:
+    desc: Show Mattermost status
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} ps -a mattermost-db mattermost mattermost-proxy'
+  env:gitlab:logs:
+    desc: Show recent GitLab and Runner logs
+    cmds:
+      - mise exec -- python -m dev.env guard gitlab --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} logs --tail=100 gitlab gitlab-proxy gitlab-runner'
+  env:mattermost:logs:
+    desc: Show recent Mattermost logs
+    cmds:
+      - mise exec -- python -m dev.env guard mattermost --compose '{{.COMPOSE}}'
+      - '{{.ENV_COMPOSE}} logs --tail=100 mattermost-db mattermost mattermost-proxy'
+
+  test:integration:gitlab:
+    desc: Run implemented GitLab workflows against the ready dev environment
+    cmds:
+      - task: build:skills
+      - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand test --compose '{{.COMPOSE}}'
+  test:integration:mattermost:
+    desc: Run Mattermost workflows against the ready dev environment
+    cmds:
+      - task: build:skills
+      - mise exec -- python -m tests.integration.mattermost.scripts.stand test --compose '{{.COMPOSE}}'
+  test:integration:gitlab:preflight:
+    desc: Record GitLab test prerequisites without starting services
+    cmds:
+      - mise exec -- python -m tests.integration.gitlab.scripts.stand preflight --compose '{{.COMPOSE}}'
+  test:integration:gitlab:browser:
+    desc: Run deferred GitLab browser scenarios explicitly (not blocking API/backend acceptance)
+    cmds:
+      - task: build:skills
+      - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand browser --compose '{{.COMPOSE}}'
+  test:integration:gitlab:live:
+    desc: Run explicitly configured optional GitLab agent evaluation
+    cmds:
+      - task: build:skills
+      - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand live --compose '{{.COMPOSE}}'
+  test:integration:mattermost:live:
+    desc: Run explicitly configured optional Mattermost agent evaluation
+    cmds:
+      - task: build:skills
+      - mise exec -- python -m tests.integration.mattermost.scripts.stand live --compose '{{.COMPOSE}}'
+  test:integration:lifecycle:
+    desc: Explicitly verify dev down/up and recreate retention without cleanup
+    cmds:
+      - mise exec -- python -m tests.integration.lifecycle --compose '{{.COMPOSE}}'
+
   default:
     desc: Show all tasks
     cmds:
@@ -151,6 +304,8 @@ tasks:
     desc: Check types in python
     cmds:
       - mise exec -- uv run --locked mypy
+      - task: reviewmatic:mypy
+      - task: shopmatic:mypy
 
   version:check:
     desc: Validate release, installer, compatibility, and documentation version authorities
@@ -159,22 +314,34 @@ tasks:
 
   release:check:
     desc: Validate aligned release versions and built Pages provenance
+    deps: [distribution:build]
     cmds:
-      - task: distribution:build
       - mise exec -- uv run --locked python scripts/check_release.py {{.CLI_ARGS}}
+
+  release:verify:
+    internal: true
+    deps: [distribution:build]
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_release.py --require-clean
+
+  release:verify:published:
+    internal: true
+    deps: [distribution:build]
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_release.py --published --require-clean
 
   release:preflight:
     desc: Verify a release commit before creating its tag
+    deps: [pre-push]
     cmds:
-      - task release:check -- --require-clean
-      - task: pre-push
+      - task: release:verify
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:prepare:
     desc: Verify the published tag and build immutable release artifacts
+    deps: [pre-push]
     cmds:
-      - task release:check -- --published --require-clean
-      - task: pre-push
+      - task: release:verify:published
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:npm:
@@ -202,11 +369,13 @@ tasks:
 
   pages:compose:stable:
     desc: Compose the stable Pages distribution with the current dev channel
+    deps: [site:build]
     cmds:
       - >-
         mise exec -- uv run --locked python scripts/compose_pages_site.py
         --stable-dir .build/packages/skills
         --dev-url https://kisev.github.io/skills/dev
+        --site-dir apps/docs-site/dist
         --output .build/pages
 
   dev:version:
@@ -226,12 +395,19 @@ tasks:
         mise exec -- uv run --locked python scripts/build_distribution.py
         --version "$DEV_VERSION"
       - task: package:build
+      - task: site:build
       - mise exec -- uv run --locked python scripts/build_dev_artifacts.py
       - >-
         mise exec -- uv run --locked python scripts/compose_pages_site.py
         --stable-url https://kisev.github.io/skills
         --dev-dir .build/packages/skills
+        --site-dir apps/docs-site/dist
         --output .build/pages
+
+  dev:await-ci:
+    desc: Wait for the terminal CI success of the current revision
+    cmds:
+      - mise exec -- uv run --locked python scripts/await_ci_success.py
 
   dev:npm:
     desc: Publish or accept and verify the exact npm dev artifact
@@ -266,6 +442,7 @@ tasks:
       - task: build:skills
       - task: test:python
       - task: package:test
+      - task: site:test
 
   test:python:
     desc: Run Python tests against materialized skills
@@ -282,8 +459,19 @@ tasks:
     desc: Check the generated portable distribution without changing authored sources
     cmds:
       - mise exec -- node scripts/materialize_cli_runtime.mjs --check
+      - task: reviewmatic:fixtures:check
       - task: build:skills
       - task: distribution:check
+
+  gates:write:
+    desc: Render CI matrix blocks and pre-push globs from the gate registry
+    cmds:
+      - mise exec -- uv run --locked python scripts/generate_gates.py
+
+  gates:check:
+    desc: Fail when a rendered gate copy drifts from the gate registry
+    cmds:
+      - mise exec -- uv run --locked python scripts/generate_gates.py --check
 
   build:skills:
     desc: Materialize portable skills
@@ -294,6 +482,7 @@ tasks:
   distribution:build:
     desc: Build the GitHub Pages portable distribution
     deps: [build:skills]
+    run: once
     cmds:
       - mise exec -- uv run --locked python scripts/build_distribution.py
 
@@ -352,21 +541,25 @@ tasks:
     desc: Scan the repository for committed secrets
     cmds:
       - mise exec -- gitleaks git --config .gitleaks.toml --redact --no-banner
-      - mise exec -- gitleaks dir . --config .gitleaks.toml --redact --no-banner
+      - mise exec -- uv run --locked python scripts/check_worktree_secrets.py
 
   check:core:
     desc: Run the always-on core shared by every push gate
     cmds:
+      - task: gates:check
       - task: build:skills
       - task: version:check
       - task: lint
       - task: typecheck
       - task: locale:check
       - task: docs:check
-      - task: distribution:check
+      - task: site:build
+      - task: site:test
+      - task: distribution:build
       - task: skills:validate
       - task: eval:check
       - task: security
+      - task: dependency:audit
 
   check:
     desc: Run the complete local and CI quality gate
@@ -374,21 +567,68 @@ tasks:
       - task: check:core
       - task: test:python
       - task: package:check
+      - task: package:consumer-smoke
+      - task: reviewmatic:check
+      - task: reviewmatic:install-smoke
+      - task: shopmatic:check
 
   pre-push:
     desc: Run the single complete local gate before push
-    deps: [check, dependency:audit]
+    deps: [check]
+
+  reviewmatic:fixtures:check:
+    desc: Check the retained reviewmatic goldens against the Python contract
+    internal: true
+    dir: apps/reviewmatic
+    cmds:
+      - mise exec -- uv run --locked pytest tests/test_golden_parity.py
+
+  reviewmatic:mypy:
+    desc: Check types in the reviewmatic Python package
+    dir: apps/reviewmatic
+    cmds:
+      - mise exec -- uv run --locked mypy
+
+  reviewmatic:check:
+    desc: "[group] Reviewmatic Python package gate"
+    dir: apps/reviewmatic
+    cmds:
+      - mise exec -- uv lock --check
+      - mise exec -- uv run --locked pytest
+      - mise exec -- uv run --locked mypy
+      - mise exec -- uv build
+      - mise exec -- uv run --locked reviewmatic --version
+
+  reviewmatic:install-smoke:
+    desc: Verify Git, wheel, sdist, continuation, and marker-run via isolated uvx
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_reviewmatic_install.py
+
+  shopmatic:mypy:
+    desc: Check types in the shopmatic package
+    dir: apps/shopmatic
+    cmds:
+      - mise exec -- uv run --locked mypy
+
+  shopmatic:check:
+    desc: "[group] Shopmatic package gate"
+    dir: apps/shopmatic
+    cmds:
+      - mise exec -- uv lock --check
+      - mise exec -- uv run --locked pytest
+      - mise exec -- uv run --locked mypy
+      - mise exec -- uv run --locked ruff check .
+      - mise exec -- uv build
+      - mise exec -- uv run --locked shopmatic --version
 
   package:check:
     desc: Verify the complete npm package lifecycle and tarballs
     deps: [package:test]
     dir: packages/agentomatic
     cmds:
-      - mise exec -- npm run smoke
+      - mise exec -- uv run --locked python ../../scripts/check_opencode_compatibility.py
       - mise exec -- npm run pack:check
       - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
-      - mise exec -- npm test
-      - mise exec -- npm --prefix ../../apps/memomatic test
 
   package:test:
     internal: true
@@ -421,8 +661,33 @@ tasks:
     cmds:
       - mise exec -- npm ci
 
+  package:consumer-smoke:
+    desc: Install the packed workspace tarballs into a throwaway consumer and typecheck them
+    deps: [package:build]
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_consumer_smoke.py
+
   package:audit:
     internal: true
     dir: .
     cmds:
-      - mise exec -- npm audit --package-lock-only
+      - mise exec -- uv run --locked python scripts/check_npm_audit.py
+      - mise exec -- uv run --locked python scripts/check_npm_audit.py --prefix apps/docs-site
+
+  site:install:
+    internal: true
+    run: once
+    cmds:
+      - mise exec -- npm ci --prefix apps/docs-site
+
+  site:build:
+    desc: Build the documentation site into apps/docs-site/dist
+    deps: [site:install]
+    cmds:
+      - mise exec -- npm run build --prefix apps/docs-site
+
+  site:test:
+    desc: Run documentation site content contracts
+    deps: [site:install]
+    cmds:
+      - mise exec -- npm test --prefix apps/docs-site

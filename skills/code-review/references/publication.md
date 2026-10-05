@@ -1,59 +1,59 @@
-# Guarded publication
+# Manual publication
 
-Review preparation never publishes. It creates one immutable action per remote
-mutation and prints the exact `review_publication.py apply --action <path> --confirm <sha256>` command beside its body preview. Only the user's separate
-invocation starts publication. Do not execute these commands during review.
+Review preparation never publishes. The supported publication interface is to
+copy and run the direct `glab` commands from `<artifact-root>/runbook.md`.
+Runbook creation requires the selected Python reviewmatic runtime; publication
+does not. Reviewmatic has no terminal UI or in-app send interface.
 
-Each action belongs to the current finalized review plan, expires after 24 hours,
-and binds the GitLab user, MR identity and refs, conversation, labels, request
-payload, and any body file. The helper accepts only the generated operation set:
-new general or line discussions, replies, recommended issues, thread state, and
-label updates. It invokes `glab api` without a shell and prints a compact JSON
-result instead of the remote response.
+The runbook keeps the exact body preview beside its command. Generated body
+files are private and immutable; a repair writes a new body and updates the
+runbook. Commands name the exact GitLab host, project, MR, and position. Raw
+refs may appear in executable position arguments, not in prose or chat.
 
-A thread state action requires the successful receipt for its preceding
-explanation. Freshness checks are scoped to what the action itself changes:
-earlier verified actions from the same evidence snapshot are credited, label
-updates compare observed labels with the planned snapshot and the intended set,
-thread replies and state changes revalidate only their target thread, and new
-notes, discussions, and issues require no conversation match. Drift outside
-that scope never blocks the action. An intended effect already visible in
-GitLab, such as labels applied by hand or the exact reply posted manually,
-completes as `already_applied` without another write and records its receipt.
-Effect matching compares note bodies and issue descriptions with trailing
-whitespace normalized, matching how GitLab stores posted text. Success requires
-a separate GitLab read proving the exact effect.
-Repeated successful actions return `already_applied` without another write.
+Every shell block that creates a comment or discussion or changes thread state
+starts with a manual head check. It uses `glab api --hostname` for the exact MR
+host. The GET runs as a command substitution, so a nonzero `glab` exit stops the
+block even when it prints a matching SHA. `jq -e` rejects malformed JSON and a
+missing or invalid `sha`; the digest comparison rejects a moved head. No write
+runs after a failed request, invalid response, or mismatch. This check does not
+depend on `set -o pipefail`. It runs only when the user executes the block, never
+during runbook preparation. The check and every write in the block target the
+same MR hostname.
 
-## Failure and inspection
+A reply and planned `resolve` or `reopen` appear in one annotated `shell` block
+with `&&` between commands. State changes follow a successful reply only. For
+an ordinary comment, the POST returns a discussion: inspect its actual ID and
+resolvability, then resolve it only for a completed assessment. Unresolved
+problems and questions stay open. The direct block uses `jq`; the backend parses
+JSON. Agents do not execute these commands.
 
-The helper persists an in-progress reservation before starting the mutation.
-Only a proven process-start failure removes it without a remote postcondition.
-Timeout, nonzero exit, oversized output, or an unverified postcondition leaves the
-result `unknown` and suspends only that action; unrelated actions from the same
-plan stay applicable, while actions depending on its receipt remain blocked by
-the dependency check. Before reporting
-that result, the helper performs bounded read-only polling. Its redacted JSON
-diagnostic names the pending action and includes exact `inspect` and `retry`
-commands.
+## Failure and repetition
 
-Replace `apply` with `inspect` in the exact action command to perform a read-only
-GitLab check. A unique matching effect completes the receipt. Insufficient
-evidence leaves the reservation blocked and never causes an automatic retry.
-When attached to a terminal, `apply` and `inspect` offer read-only inspection and
-then warn before an explicit retry. Without a terminal, run the returned exact
-`retry` command. A retry first repeats the read-only check, warns that a delayed
-effect could be duplicated, and writes only after the user selects or invokes that
-mode. It must still pass current freshness and confirmation checks. Inspection may
-update the local receipt but never writes to GitLab.
+One manual send performs the selected operation and any explicitly planned
+state change after successful publication. Show the exit code, output, and
+bounded redacted error. Exit zero means the command completed, not that the
+remote effect was independently verified. The user checks GitLab in the
+browser and decides whether to repeat. There are no publication reservations,
+persistent locks, expiry, automatic freshness checks, polling, or automatic
+retries. A network failure, timeout, or interruption must not block another
+manual send.
 
-Exit codes are `0` for a completed observation/action, `1` for an unknown outcome,
-and `2` for invalid, stale, expired, or otherwise blocked input. The JSON result
-separates `status`, `mutation_outcome`, and whether this invocation may have
-mutated GitLab. POSIX locking and process groups are required.
+A repeat after an uncertain outcome can duplicate a comment; explain this
+without preventing the user's choice. Never erase or rewrite live legacy
+publication state during review or upgrade. Old guarded action files remain
+historical and are not executed by the new runtime; prepare a new runbook.
 
-Old direct-command plans remain historical review material. Regenerate against
-fresh evidence to obtain guarded commands; advisory markers are not migrated to
-publication receipts. Local `git apply` commands retain their separate exact-head
-precondition and advisory markers. Portable patch blocks posted to GitLab contain
-no local helper or checkout paths.
+## Local fixes
+
+Local patch application is separate from GitLab publication. A generated patch
+is bound to the managed review worktree and exact reviewed head. Show the
+read-only `git apply --check` command first. A marked `git apply` mutation must
+stop before changing files when the worktree head no longer matches. Run a
+returned `reviewmatic marker-run` action through the same selected `uvx --from`
+source as every other reviewmatic command. Commit and push remain separate
+user decisions.
+
+Patch blocks embedded in GitLab publication prose remain checkout-independent
+and contain no local paths or runtime helpers; only local application commands
+carry the post-success marker. Read `references/repair.md` for targeted local
+repair and `references/local-review.md` for the local WIP lifecycle.

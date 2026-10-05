@@ -6,7 +6,9 @@ Use this guide to add, rename, or remove an npm workspace package. Every
 package name participates in a complete publication graph: workspace wiring,
 task graph, dev and release packaging, publish order, smoke tests, and
 per-name npm trusted-publisher bindings. A name that misses any surface breaks
-CI or the Publish workflow.
+CI or the Publish workflow. Removing a workspace package does not deprecate,
+unpublish, or move its historical registry versions or tags. Any registry
+deprecation needs separate explicit confirmation.
 
 The contract test `test_every_workspace_package_is_wired_into_the_publication_graph`
 in `tests/test_tooling_contracts.py` fails with a pointer to this page whenever

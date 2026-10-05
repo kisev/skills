@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "6f6b45f2974dd13ecc0596d8ab5c6fef39337ed60066f262738c536f8a6b719f",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:tdd"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.tdd.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Just run the existing test suite and tell me the totals; no new behavior is being developed here."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.tdd.near-miss.source",
+      "path": ".build/skills/tdd/SKILL.md"
+    },
+    {
+      "contains": "command: \"false\"",
+      "id": "tdd-no-command-adapter",
+      "path": "skills/tdd/SKILL.source.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.tdd.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

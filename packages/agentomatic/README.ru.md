@@ -11,10 +11,10 @@
 - Адаптеры слеш-команд OpenCode для установленных переносимых навыков.
 - Шесть агентов с фиксированными ролями: `manager`, `architect`, `mapper`, `worker`,
   `review` и `critic`.
-- Маршрутизация по возможностям и прямой CLI для `doctor`, `reconcile` и
+- Маршрутизация по возможностям и прямой CLI для `status`, `doctor`, обслуживания и
   управления профилями агентов.
-- Команда `config` с подтверждением: подключает пакет и рекомендованные
-  фрагменты в `opencode.json(c)`, `tui.json`, `kilo.json(c)` и
+- Команда `configure integration` с подтверждением: подключает пакет и рекомендованные
+  фрагменты в OpenCode `opencode.json(c)`/`cli.json`, `kilo.json(c)` и
   `mimocode.json(c)`, сохраняя существующие записи и комментарии.
 - Необязательные обертки плагинов `rules-injector` и `zed-bell`;
   обертка сжатия `rtk` развертывается по умолчанию
@@ -63,7 +63,8 @@ Agentomatic не зависит от memomatic. См. [настройку MCP и
 ## Требования
 
 - Node.js 22 или новее.
-- OpenCode `>=1.18.29 <1.19.0`.
+- OpenCode `>=2.0.0 <2.1.0`. Для V1 оставайтесь на последнем
+  [релизе `11.0.x`](https://github.com/kisev/skills/releases), а не на `dev`.
 - Постоянный npm-проект, которому принадлежит зависимость.
 
 ## Установка в проект
@@ -72,10 +73,21 @@ Agentomatic не зависит от memomatic. См. [настройку MCP и
 области); подтверждённая установка также пропишет постоянную npm-зависимость:
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/agentomatic@latest version
+
+# Preview, then confirm the install
 npx --yes @kisev/agentomatic@latest install --dry-run
+npx --yes @kisev/agentomatic@latest install
+
+# Installed dependency in the owning npm project
+npm list @kisev/agentomatic --depth=0
 ```
 
-Укажите `@kisev/agentomatic@dev`, чтобы запустить dev-снимок.
+Для dev-снимка укажите `@kisev/agentomatic@dev` и в просмотре, и в командах npx.
+Теги могут сдвинуться между просмотром и установкой. npx не устанавливает CLI
+глобально, а dry run не прописывает зависимость. После подтверждённой глобальной
+установки проверьте `npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0`.
 
 Подтверждённая установка закрепляет исполняемую версию в ближайшем npm-проекте;
 глобальная установка владеет `~/.config/opencode` и при необходимости создаёт
@@ -83,28 +95,33 @@ npx --yes @kisev/agentomatic@latest install --dry-run
 `npm install --save-exact @kisev/agentomatic`, затем запустить
 `npx agentomatic install --dry-run` из этого проекта, чтобы версия исполнения
 совпадала с установленным пакетом.
-Примените изменение, повторив команду установки без `--dry-run` и подтвердив
-напечатанную сводку плана, а вне терминала добавьте `--yes`.
+Подтвердите напечатанную сводку плана на шаге установки; вне терминала передайте
+явный выбор компонентов вместе с `--yes`.
 Если выбрана основная интеграция, та же подтверждённая установка добавляет
-`plugin` в пользовательскую конфигурацию OpenCode с сохранением существующих
-записей. Отдельная команда `config` применяет дополнительные фрагменты
+`plugins` в пользовательскую конфигурацию OpenCode с сохранением существующих
+записей. Отдельная команда `configure integration` применяет дополнительные фрагменты
 или повторяет неудавшийся шаг настройки:
 
 ```shell
-npx agentomatic config --global --dry-run
+npx agentomatic configure integration --global --dry-run
 ```
 
 ```json
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["@kisev/agentomatic"]
+  "plugins": ["@kisev/agentomatic"]
 }
 ```
 
-Перезапустите OpenCode после активации или изменения файлов. Команды `install` и
-`uninstall` не редактируют `opencode.json`; `config` - единственный
-подтвержденный путь для фрагментов конфигурации, а выбор адаптеров команд не
-устанавливает переносимые навыки.
+Перезапустите OpenCode после активации или изменения файлов. Подтверждённый
+`install` настраивает core и предлагает модели и дополнительных критиков.
+`configure` открывает единое меню настроек, `status` показывает состав и модели.
+`uninstall` предлагает отключение плагина, сохраняет модели и удаляет npm-зависимость
+только при явном выборе (`--remove-dependency`). Другие фрагменты применяет
+`configure integration`, а выбор адаптеров команд не
+устанавливает переносимые навыки. Конфиг OpenCode использует нативные `plugins`
+и `permissions` V2; переводятся только затронутые старые разделы,
+неоднозначные случаи показываются как конфликты.
 
 ## Документация
 
@@ -115,5 +132,5 @@ npx agentomatic config --global --dry-run
 - [Индекс документации](https://github.com/kisev/skills/blob/main/docs/ru/README.md)
 
 Полная инструкция описывает глобальную установку, выбор файлов, подтверждение,
-активацию, фрагменты `config`, `doctor`, обновление, `reconcile`, профили
+активацию, фрагменты `configure integration`, `status`, `doctor`, обновление, обслуживание, профили
 агентов, владение файлами и удаление.

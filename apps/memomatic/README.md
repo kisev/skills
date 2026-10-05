@@ -4,14 +4,26 @@
 
 `@kisev/memomatic` is a personal learning memory for agents following the OpenClaw
 memory architecture: a tiered Markdown corpus you can read as plain files, a
-rebuildable SQLite index with FTS5 and optional local embeddings, a `sessions`
-extraction pass, and a nightly `dream` consolidation sweep.
+rebuildable SQLite index with FTS5, optional local embeddings and an optional
+reranker, a `sessions` extraction pass, and a nightly `dream` consolidation sweep.
 
 ## Install
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/memomatic@latest version
+
+# Install
 npm install --global @kisev/memomatic
+
+# Installed package and active CLI
+npm list --global @kisev/memomatic --depth=0
+memomatic --version
 ```
+
+Tags can move between preview and installation; the last commands show the
+installed package and the CLI resolved from PATH. Use `@dev` in both the view
+and install commands for the development channel.
 
 The corpus lives under `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`,
 daily notes, `DREAMS.md`); rules live in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.
@@ -30,8 +42,9 @@ Nightly runs are scheduled by the systemd user units in `assets/systemd/`
 `memomatic-dream.service`/`.timer` for consolidation).
 
 Configure `sessions.model` (or keep a legacy `dream.model`) and an OpenCode
-provider before expecting session extraction; without a model, the session
-watermark is preserved. Follow the
+V2 provider before expecting session extraction; without a model, the session
+watermark is preserved. Session extraction and its model server require
+OpenCode `2.x`; a pre-V2 session database is not parsed. Follow the
 [setup, first-entry, and scheduling guide](../../docs/how-to/memomatic.md).
 
 ## CLI, Sessions, and Dream
@@ -65,7 +78,7 @@ when memomatic is absent.
 
 Every entry can carry a `source` annotation. Visibility derives from it:
 `team-*`, `gitlab`, and `spec-manage` entries may be quoted in team-facing
-artifacts; every other source (`people-journal`, `stopit`,
+artifacts; every other source (`people-journal`, `handoff`,
 `mattermost-triage`, `task-*`, `docs-*`, `user`) is personal-only. The label
 is exposed in search responses.
 

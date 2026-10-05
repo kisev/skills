@@ -10,8 +10,18 @@
 ## Установка
 
 ```bash
+# Registry version
+npm view --prefer-online @kisev/safe-fs@latest version
+
+# Install in this npm project
 npm install @kisev/safe-fs
+
+# Installed dependency
+npm list @kisev/safe-fs --depth=0
 ```
+
+Тег может сдвинуться между просмотром и установкой; `npm list` показывает
+зависимость, реально установленную в этом проекте. У библиотеки нет CLI.
 
 Каждая запись идёт через эксклюзивный временный файл с `fsync`, ограничением
 прав и синхронизацией каталога; симлинки, файлы с несколькими ссылками и

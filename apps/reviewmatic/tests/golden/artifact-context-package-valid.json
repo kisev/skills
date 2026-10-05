@@ -1,0 +1,46 @@
+{
+  "name": "artifact-context-package-valid",
+  "kind": "artifact_validation_v2",
+  "input": {
+    "kind": "context_package",
+    "artifact": {
+      "schema": "portable-gitlab/context_package/v2",
+      "schema_version": 2,
+      "kind": "context_package",
+      "created_at": "2026-10-05T00:00:00+00:00",
+      "payload": {
+        "schema": "portable-gitlab/context-package/v2",
+        "mode": "mr",
+        "binding": {
+          "evidence_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "artifact_root": "/tmp/reviewmatic-artifacts",
+          "repo_root": "/tmp/reviewmatic-checkout",
+          "base_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "head_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "start_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "goal": {
+          "status": "known",
+          "text": "Review the merge request delta."
+        },
+        "acceptance_criteria": {
+          "status": "known",
+          "items": ["No blocking findings remain."]
+        },
+        "background": "The MR fixes the recorded regression.",
+        "claims": [],
+        "constraints": [],
+        "prior_decisions": [],
+        "questions": [],
+        "thread_registry": [],
+        "supersedes": null,
+        "external_mutations": false
+      }
+    }
+  },
+  "expected": {
+    "digest": "7da9eee209ea046474db14815379878e6e5cb987be66843881511d2af95ae178",
+    "valid": true,
+    "python_valid": true
+  }
+}

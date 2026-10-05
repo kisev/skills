@@ -6,7 +6,21 @@
 CLI, MCP, Markdown-экспорта и живой веб-доски только для чтения. Нужен Node.js 22.13+.
 
 ```shell
+# Registry version
+npm view --prefer-online @kisev/taskmatic@dev version
+
+# Install
 npm install --global @kisev/taskmatic@dev
+
+# Installed package and active CLI
+npm list --global @kisev/taskmatic --depth=0
+taskmatic --version
+```
+
+Тег может сдвинуться между просмотром и установкой. Последние команды показывают
+установленный пакет и CLI из PATH. Затем создайте и используйте доску:
+
+```shell
 taskmatic add "Check the first board"
 taskmatic list
 taskmatic mcp

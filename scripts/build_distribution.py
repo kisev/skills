@@ -83,6 +83,31 @@ def archive(skill: Path) -> bytes:
     return payload.getvalue()
 
 
+def stored_provenance(
+    output: Path, check: bool, version_override: str | None
+) -> tuple[str | None, str | None]:
+    """Read the stored artifact provenance that check comparisons pin to.
+
+    Git state is ambient, not a distribution input: a newer commit that changes
+    nothing in the built skills must still reproduce the stored artifact byte
+    for byte, so check mode reuses the stored version and source revision.
+    """
+    if not check or version_override is not None:
+        return (None, None)
+    lock_path = output / "skills-lock.json"
+    try:
+        lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return (None, None)
+    except (OSError, json.JSONDecodeError) as error:
+        raise DistributionError(f"stored distribution lock is unreadable: {lock_path}") from error
+    version = lock.get("version")
+    source_revision = lock.get("source_revision")
+    if not isinstance(version, str) or not isinstance(source_revision, str):
+        raise DistributionError(f"stored distribution lock is invalid: {lock_path}")
+    return (version, source_revision)
+
+
 def build(output: Path, check: bool, version_override: str | None = None) -> int:
     if not BUILT_SKILLS.is_dir():
         raise DistributionError("built skills are missing; run task build:skills first")
@@ -90,7 +115,8 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
     package_version = manifest.get("version")
     if not isinstance(package_version, str) or not SEMVER.fullmatch(package_version):
         raise DistributionError("distribution package version is invalid")
-    version = version_override or package_version
+    stored_version, stored_revision = stored_provenance(output, check, version_override)
+    version = version_override or stored_version or package_version
     if version_override is not None and not DEV_SEMVER.fullmatch(version_override):
         raise DistributionError("development distribution version is invalid")
     inventory = json.loads(INVENTORY.read_text(encoding="utf-8"))
@@ -125,7 +151,7 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
             "schema": "@kisev/skills/index/v1",
             "package": "@kisev/skills",
             "version": version,
-            "source_revision": revision(),
+            "source_revision": stored_revision or revision(),
             "skills": entries,
         }
         lock = {

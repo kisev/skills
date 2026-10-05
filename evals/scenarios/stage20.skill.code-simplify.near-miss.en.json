@@ -1,0 +1,44 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "1cb3902865d7e9e497e7cd707a9832791a33242d872ccea1472868e1345fd222",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": ["skill:code-simplify"],
+    "selected": [],
+    "structured_outcome": "safe-escalation"
+  },
+  "host": "any",
+  "id": "stage20.skill.code-simplify.near-miss.en",
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Simplify the wording of this README paragraph; text simplification belongs to asd-ste100, humanize, and eli5, not to a code audit."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.code-simplify.near-miss.source",
+      "path": ".build/skills/code-simplify/SKILL.md"
+    },
+    {
+      "contains": "asd-ste100, humanize, and eli5",
+      "id": "code-simplify-text-boundary",
+      "path": "skills/code-simplify/SKILL.source.md"
+    }
+  ],
+  "kind": "near-miss",
+  "locale": "en",
+  "pair_id": "stage20.skill.code-simplify.near-miss",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

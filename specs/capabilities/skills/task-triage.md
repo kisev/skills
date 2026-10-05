@@ -78,31 +78,42 @@ remain unchanged. Metadata proposals apply independently of planning acceptance.
 Issue relationships use the issue-link API; MR relationships without a safe link
 API use contextual messages. Information requests are derived only from actual
 GitLab discussions by the authenticated user and advance strictly through a
-question, two pings, and a final message plus separate closure proposal. Replies
+question, two pings, and one final message-then-close block. Replies
 are reassessed before advancing, and an insufficient reply begins a new cycle.
-Generated information-message helpers revalidate the authenticated user and
-fresh discussion, serialize the lifecycle with a bounded POSIX lock, and durably
-reserve every POST. They distinguish a proven pre-start failure from an unknown
-post-start outcome and an applied mutation; an unknown outcome blocks replay.
-Guard v4 binds a new standalone note to the complete observed non-system
-conversation and a new existing-discussion reply to the complete selected
-discussion. It rejects any fresh addition, removal, or change before POST.
-Persisted guard v1, v2, and v3 commands fail closed and require regeneration.
+The runner generates direct `glab api` commands with inline JSON heredoc bodies,
+`#` explanations, and `&&` fail-fast blocks depending only on `glab`, `jq`, and
+`sha256sum`; it never executes them. Every writing block starts with an
+authenticated-user guard comparing `glab api ... user` with the collected
+`current_user` snapshot. The first writing block of a task also compares the
+target `updated_at` with the snapshot; every later block re-reads its target and
+checks semantic preconditions: unchanged title, description, or labels, expected
+status and milestone, a conversation whose non-system note digests still match
+the snapshot without the prepared body, and absent links for a new relation.
+A stage whose precondition cannot be precomputed is emitted as a regeneration
+instruction instead of a command. Repeating a block stops on its own
+preconditions because the first execution changed the observed state.
 Equal-timestamp notes use numeric note-ID ordering; nonnumeric IDs
 retain their API order.
-Issue closure uses the same durable transition before PUT, restores the message
-receipt only for a proven pre-start failure, retains ambiguous reservations, and
-records an irreversible local terminal receipt only after a fresh exact-issue GET
-confirms the closed state. Lifecycle lock descriptors are validated as private,
-owned, regular, singly linked files before permission repair or locking.
+Obsolete and duplicate issues receive one explanation-and-close block with
+`state_event=close`. A missing milestone is one block that finds or creates the
+milestone, extracts its ID with `jq`, and attaches the task. The stale closure
+publishes the final message and closes the issue in one `&&` chain. A new
+relation is created only after a links GET proves the target absent; a
+conflicting relation type is replaced by one delete-then-create block that
+re-verifies the observed link ID before deleting.
 Every assessment explicitly supplies one structured `issue_relations` list,
 including an empty list; legacy free-form relation fields are invalid. Every
 relation is bound to an observed issue on the same GitLab host, including targets
 returned by collected issue-link evidence. Missing relations and relation-type
 replacements correspond exactly to proposed links; extra, duplicate, self,
 existing, or unobserved proposals are invalid. A replacement uses guarded delete
-and receipt-dependent create commands with fresh evidence checks. Unknown deletion
-is reconciled only when fresh evidence proves absence or the exact original link;
+and receipt-dependent create commands with fresh evidence checks.
+In REST issue-link listings, the relationship identity is `issue_link_id`, not
+the linked issue's `id`; an invalid explicit relationship ID fails closed.
+Listing issue links returns one complete collection, not pages. Collection must
+retain all links at CE's 100-link boundary without requesting a repeated second page;
+this does not relax completeness checks for paged resources.
+Unknown deletion is reconciled only when fresh evidence proves absence or the exact original link;
 missing or unsupported observed link types fail closed. A relation also
 produces a contextual comment only when a concrete
 decision, constraint, or research result should be transferred. New information
@@ -147,27 +158,22 @@ relevant observed discussion and require an explicit reason for a standalone not
 Every item shall contain one primary recommendation with rationale, assumptions,
 confidence, alternatives, and reconsideration evidence. Every structured issue
 relation shall bind observed evidence, correspond exactly to any proposed link,
-use receipt-dependent replacement commands for a conflicting existing type, and
+use one delete-then-create block that re-verifies the observed link for a
+conflicting existing type, and
 add a contextual comment only to transfer a concrete useful result. Every proposed title, description,
-label set, milestone, issue link, message, and stale closure shall have a separate
-manual command beside its preview, independent of the issue's planning decision
-except for milestone assignment. Each mutation command shall record an advisory
-post-success XDG marker and require target revalidation before retry. Information-request actions shall be derived
+label set, milestone, issue link, message, and stale closure shall have one
+guarded direct-command block beside its preview, independent of the issue's
+planning decision except for milestone assignment. No generated command shall
+record a local marker, reservation, or receipt; guards and their fresh reads
+provide the replay protection, and the summary shall list every action without
+a command together with its reason, leaving none after a complete analysis.
+Information-request actions shall be derived
 from actual GitLab notes and advance without skipped stages through a question,
-two pings, and a final message plus separate issue-close command; any reply shall
-be reassessed, and an insufficient reply shall start a new cycle. Each generated
-information POST shall have a durable pre-POST reservation removed only when the
-process provably did not start. The mutation helper shall use one bounded
-deadline, bounded stdout and stderr, POSIX process-group cleanup and reap, and
-shall report `none`, `unknown`, or `applied` mutation outcomes without treating
-an ambiguous post-start failure, including selector or stream cleanup failure, as
-mutation-free. Before an issue-close PUT, the
-helper shall durably replace the exact message receipt with a close reservation,
-restore that receipt only for a proven pre-start failure, preserve the blocker
-for an ambiguous outcome, and write an exact terminal closed receipt only after a
-fresh GET verifies the exact project ID, issue IID, and closed state. GET failure,
-identity mismatch, or an open issue shall remain ambiguous. A replay shall fail
-even if the issue was reopened. Source-layout
+two pings, and one final message-then-close block; any reply shall
+be reassessed, and an insufficient reply shall start a new cycle. Every
+generated writing block shall stop before any write when the authenticated user
+differs from the snapshot, when the first block observes a changed
+`updated_at`, or when a later block's semantic precondition fails.
 commands shall run under `python -I -S -B` before materialization while built
 archives remain self-contained. The stable summary shall separate analysis
 completeness from pending follow-up, group report links by planning decision,
@@ -181,13 +187,16 @@ URLs, any backslash, or reference-like syntax shall remain unchanged. Reference
 numbers followed by a word character shall remain plain, and conflicting
 `references.full` and `web_url` identities shall remain unresolved. Partial or stale evidence shall remain
 explicit and shall not be reported as complete. The workflow shall never execute
-generated commands or mutate GitLab.
+generated commands or mutate GitLab. Source-layout commands shall run under
+`python -I -S -B` before materialization while built archives remain
+self-contained.
 
 #### Verification
 
 Triage tests cover collection completeness, retained item decisions, scoped
-release planning, stale evidence, and ambiguous mutation outcomes. Final plans
-account for each selected issue and never publish automatically.
+release planning, stale evidence, direct-command guards, block coverage, and
+summary honesty. Final plans account for each selected issue and never publish
+automatically.
 
 ## Example
 

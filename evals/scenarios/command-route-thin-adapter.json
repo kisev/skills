@@ -1,7 +1,7 @@
 {
   "schema": "eval-scenario/v1",
   "id": "command.route.thin-adapter",
-  "revision": 2,
+  "revision": 3,
   "kind": "deterministic",
   "surface": "command",
   "host": "opencode",
@@ -19,7 +19,7 @@
     {
       "id": "route-package-tool",
       "path": "packages/agentomatic/src/index.ts",
-      "contains": "tool: { route }"
+      "contains": "name: \"route\""
     }
   ],
   "sandbox": {
@@ -32,7 +32,7 @@
     "max_tokens": 1000,
     "max_cost": 1
   },
-  "digest": "ccb5bec9b0c86048ff0a679b887157527b598f6d81673c4a7a72bfa524c25bfd",
+  "digest": "1d712ab105fc5627e7fbee904afe36a94e11eb8a1ddb3de73815a7ab100b61d6",
   "locale": "neutral",
   "pair_id": null
 }
