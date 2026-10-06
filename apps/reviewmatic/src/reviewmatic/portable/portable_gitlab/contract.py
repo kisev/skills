@@ -3473,39 +3473,47 @@ def collect_pipeline_jobs(
             *cast("list[str]", bridges["errors"]),
         ]
         normalized_jobs: list[dict[str, object]] = []
-        for raw in [*cast("list[object]", jobs["items"]), *cast("list[object]", bridges["items"])]:
-            if not isinstance(raw, dict) or not isinstance(raw.get("id"), int):
-                pipeline_errors.append("GitLab returned invalid CI job metadata")
-                continue
-            normalized = pipeline_job(
-                cast("dict[str, Any]", raw), current_project, current_pipeline
-            )
-            if raw.get("status") in {"failed", "canceled"}:
-                if traces >= MAX_CI_TRACES:
-                    traces += 1
-                    normalized["trace"] = {
-                        "complete": False,
-                        "truncated": True,
-                        "excerpt": "",
-                        "sha256": None,
-                    }
-                    truncated = True
-                else:
-                    traces += 1
-                    try:
-                        trace, trace_complete = glab_text(
-                            hostname, f"projects/{current_project}/jobs/{raw['id']}/trace"
-                        )
-                        normalized["trace"] = trace_excerpt(trace, trace_complete)
-                    except WorkflowError as exc:
+        for source, is_bridge in ((jobs, False), (bridges, True)):
+            for raw in cast("list[object]", source["items"]):
+                if not isinstance(raw, dict) or not isinstance(raw.get("id"), int):
+                    pipeline_errors.append("GitLab returned invalid CI job metadata")
+                    continue
+                normalized = pipeline_job(
+                    cast("dict[str, Any]", raw), current_project, current_pipeline
+                )
+                # A bridge job has no trace endpoint: its failure is classified
+                # through its downstream pipeline, which the traversal below
+                # collects with its own jobs and traces, so a bridge never
+                # fetches a trace and never fails the evidence.
+                if is_bridge:
+                    normalized_jobs.append(normalized)
+                    continue
+                if raw.get("status") in {"failed", "canceled"}:
+                    if traces >= MAX_CI_TRACES:
+                        traces += 1
                         normalized["trace"] = {
                             "complete": False,
                             "truncated": True,
                             "excerpt": "",
                             "sha256": None,
                         }
-                        pipeline_errors.append(str(exc))
-            normalized_jobs.append(normalized)
+                        truncated = True
+                    else:
+                        traces += 1
+                        try:
+                            trace, trace_complete = glab_text(
+                                hostname, f"projects/{current_project}/jobs/{raw['id']}/trace"
+                            )
+                            normalized["trace"] = trace_excerpt(trace, trace_complete)
+                        except WorkflowError as exc:
+                            normalized["trace"] = {
+                                "complete": False,
+                                "truncated": True,
+                                "excerpt": "",
+                                "sha256": None,
+                            }
+                            pipeline_errors.append(str(exc))
+                normalized_jobs.append(normalized)
         for raw in cast("list[object]", bridges["items"]):
             if not isinstance(raw, dict) or not isinstance(raw.get("downstream_pipeline"), dict):
                 continue

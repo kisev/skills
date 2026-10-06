@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -102,6 +103,7 @@ def test_the_python_command_surface_is_explicit_and_contains_no_terminal_ui() ->
         "record-package",
         "record-input",
         "record-critic",
+        "runtime-info",
         "record-run-critic",
         "record-participants",
         "record-ocr-critic",
@@ -395,3 +397,43 @@ def test_collected_options_keep_every_occurrence() -> None:
         "https://gitlab.example/a/-/merge_requests/1",
         "https://gitlab.example/b/-/merge_requests/2",
     ]
+
+
+def test_resolve_install_source_recovers_the_commit_defensively() -> None:
+    from reviewmatic.cli import resolve_install_source
+
+    uv_git = (
+        '{"url": "git+https://github.com/kisev/skills.git@dev#subdirectory=apps/reviewmatic",'
+        ' "vcs": "git", "commit": "3e409c217e94d643f77eb543caab9a2ed4b7288d"}'
+    )
+    assert resolve_install_source(uv_git) == {
+        "url": "git+https://github.com/kisev/skills.git@dev#subdirectory=apps/reviewmatic",
+        "vcs": "git",
+        "commit": "3e409c217e94d643f77eb543caab9a2ed4b7288d",
+    }
+    pinned_in_url = (
+        '{"url": "git+https://github.com/kisev/skills.git'
+        '@df46265aabbccdd00112233445566778899aabbb#subdirectory=apps/reviewmatic"}'
+    )
+    assert (
+        resolve_install_source(pinned_in_url)["commit"]
+        == "df46265aabbccdd00112233445566778899aabbb"
+    )
+    registry = '{"url": "https://files.pythonhosted.org/packages/reviewmatic-1.0.0.tar.gz"}'
+    assert resolve_install_source(registry) == {
+        "url": "https://files.pythonhosted.org/packages/reviewmatic-1.0.0.tar.gz",
+        "vcs": None,
+        "commit": "unknown",
+    }
+    for honest_unknown in (None, "not json", "[1, 2]", '{"url": 7}'):
+        assert resolve_install_source(honest_unknown)["commit"] == "unknown"
+
+
+def test_runtime_info_reports_the_version_and_install_commit() -> None:
+    result = run_cli("runtime-info")
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "ok"
+    assert payload["version"] == __version__
+    assert payload["external_mutations"] is False
+    assert payload["commit"] == "unknown" or re.fullmatch(r"[0-9a-f]{40}", payload["commit"])

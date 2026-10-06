@@ -19,7 +19,7 @@ import json
 import re
 import stat
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from helpers.contract_support import (
@@ -723,6 +723,71 @@ def test_glab_text_reports_a_failed_trace_request(
     install_glab(monkeypatch, tmp_path, "import sys\nsys.stderr.write('boom')\nsys.exit(3)\n")
     with workflow_error("failed with status 3"):
         contract.glab_text("gitlab.example", "projects/5/jobs/9/trace")
+
+
+def test_pipeline_evidence_skips_bridge_traces_and_classifies_via_downstream(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A failed bridge has no trace endpoint; the evidence stays complete.
+
+    The bridge's failure is classified through its downstream pipeline, whose
+    jobs carry real traces. A bridge trace request 404s and used to poison the
+    evidence with permanent pipeline errors, so the fake glab fails loudly on
+    any endpoint except the legitimate ones.
+    """
+    requests = tmp_path / "ci-requests.txt"
+    bridge = {
+        "id": 9001,
+        "name": "security",
+        "stage": "test",
+        "status": "failed",
+        "downstream_pipeline": {"id": 200, "project_id": 42},
+    }
+    downstream_job = {"id": 9002, "name": "scanner", "stage": "scan", "status": "failed"}
+    body = (
+        "import json, sys\n"
+        "argv = sys.argv[1:]\n"
+        "rest = argv[argv.index('api') + 1:]\n"
+        "clean = next(token for token in rest if token.startswith('projects/')).split('?')[0]\n"
+        f"open({str(requests)!r}, 'a').write(clean + '\\n')\n"
+        "pages = {\n"
+        "    'projects/42/pipelines/100/jobs': [],\n"
+        f"    'projects/42/pipelines/100/bridges': [{json.dumps(bridge)}],\n"
+        f"    'projects/42/pipelines/200/jobs': [{json.dumps(downstream_job)}],\n"
+        "    'projects/42/pipelines/200/bridges': [],\n"
+        "}\n"
+        "if clean in pages:\n"
+        "    print(json.dumps(pages[clean]))\n"
+        "elif clean == 'projects/42/jobs/9002/trace':\n"
+        "    sys.stdout.write('HTTP/1.1 200 OK\\r\\nContent-Type: text/plain\\r\\n\\r\\n"
+        "scanner failed: policy denied\\n')\n"
+        "    sys.exit(0)\n"
+        "else:\n"
+        "    sys.stderr.write('unexpected GET ' + clean + '\\n')\n"
+        "    sys.exit(1)\n"
+    )
+    install_glab(monkeypatch, tmp_path, body)
+
+    evidence = contract.collect_pipeline_jobs("gitlab.example", 42, {"id": 100})
+
+    assert evidence["complete"] is True
+    assert evidence["errors"] == []
+    assert evidence["truncated"] is False
+    pipelines = cast("list[dict[str, Any]]", evidence["pipelines"])
+    assert [pipeline["pipeline_id"] for pipeline in pipelines] == [100, 200]
+    parent, downstream = pipelines
+    assert parent["complete"] is True
+    bridge_job = cast("dict[str, Any]", parent["jobs"][0])
+    assert bridge_job["name"] == "security"
+    assert bridge_job["status"] == "failed"
+    assert "trace" not in bridge_job
+    assert downstream["complete"] is True
+    inner_job = cast("dict[str, Any]", downstream["jobs"][0])
+    assert inner_job["trace"]["complete"] is True
+    assert "scanner failed: policy denied" in str(inner_job["trace"]["excerpt"])
+    requested = requests.read_text(encoding="utf-8").splitlines()
+    assert "projects/42/jobs/9001/trace" not in requested
+    assert "projects/42/jobs/9002/trace" in requested
 
 
 def test_collect_gathers_evidence_and_finalize_confirms_freshness(

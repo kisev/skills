@@ -16,12 +16,20 @@ Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `ref
 
 Select the runtime Git ref before starting: use the exact release tag that
 matches a stable skill, or `dev` for a development skill. If the channel is not
-clear, ask the user; do not silently choose a source. Keep
-`REVIEWMATIC_FROM='git+https://github.com/kisev/skills.git@<ref>#subdirectory=apps/reviewmatic'`
-for the whole review. Invoke every runtime command, including each returned
-continuation action, as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`; never
-depend on a globally installed binary. If the user requests a fresh checkout of
-the moving `dev` ref, add `--refresh-package reviewmatic` to the `uvx` command.
+clear, ask the user; do not silently choose a source. On the moving `dev`
+channel resolve the tip first — `git ls-remote https://github.com/kisev/skills.git refs/heads/dev`
+prints the current commit — and pin it:
+`REVIEWMATIC_FROM='git+https://github.com/kisev/skills.git@<sha>#subdirectory=apps/reviewmatic'`.
+Keep that exact pinned value for the whole review. Invoke every runtime
+command, including each returned continuation action, as
+`uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`; never depend on a globally
+installed binary. Immediately after the first invocation, run
+`reviewmatic runtime-info` once and check the printed `commit` against the
+pinned SHA: a mismatch or `unknown` means a stale uvx cache or an unpinned
+install — re-pin with the exact `@<sha>` (adding
+`--refresh-package reviewmatic` to the `uvx` invocation when the cache is
+stale) before continuing the review. If the user requests a fresh checkout of
+the moving `dev` ref, resolve a new tip and repeat the same pin.
 
 `/code-review` distinguishes a remote-MR target from local-WIP input by the explicit request. One exact MR URL selects the remote-MR mode. An explicit local review request selects the local-WIP mode and uses the current checkout exactly as it is, including when that checkout is itself an existing Git worktree; never search for an MR by branch name for it. When the request does not clearly name one of these targets, stop and ask which one to review instead of assuming.
 

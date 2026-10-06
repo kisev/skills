@@ -33,6 +33,8 @@ REQUIRED_DOCUMENTED = (
     # Primary path: the one-process run with the panel poll.
     "run",
     "record-run-critic",
+    # Runtime identity: SHA pinning and the self report.
+    "runtime-info",
     # Marked repair path: the step-by-step panel flow.
     "start-review",
     "resume-review",
@@ -153,6 +155,19 @@ def test_repair_paths_are_tiered_by_cost() -> None:
     assert "record-arbitration" in repair
     assert "--kind critic_receipt" in repair
     assert "refresh-review" in repair
+
+
+def test_runtime_pin_and_self_report_are_documented() -> None:
+    """The skill pins the channel SHA and verifies it with runtime-info."""
+    entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    for text in (entry, workflow):
+        assert "git ls-remote" in text
+        assert "@<sha>" in text
+        assert "runtime-info" in text
+    assert any(command == "runtime-info" for _file, command, _flags, _doc in parse_invocations()), (
+        "the skill must invoke reviewmatic runtime-info"
+    )
 
 
 def test_the_contract_test_reads_the_authored_sources() -> None:

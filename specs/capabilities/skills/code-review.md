@@ -56,7 +56,16 @@ commit and push confirmations.
 
 Missing or incomplete evidence, unavailable required traces or critics, and
 invalid bindings block review completion. Failed/canceled jobs require exact-head
-trace-supported classification, including child/downstream pipelines. Only proven
+trace-supported classification, including child/downstream pipelines. A bridge
+job has no trace endpoint: bridges stay in the job inventory without a trace
+fetch, their failure is classified through the collected downstream pipeline,
+and a missing bridge trace never marks the evidence incomplete. The
+one-process run bounds every stage — a stage repeating without progress more
+than three times stops loudly with the collected evidence errors and preserves
+the state for resume. The runtime identifies itself: `runtime-info` prints the
+package version and the resolved installation commit (`unknown` for non-git
+installs), and the agent pins the moving channel to an exact SHA before
+starting and verifies the pin with that single call. Only proven
 manual process gates can be non-blocking. Trace collection bounds bytes, retains
 an explicit truncated tail, and cleans up its process group under deadlines.
 Schema diagnostics identify invalid fields; an invalid SemVer object is not
@@ -542,7 +551,14 @@ through the public CLI: a mixed OCR and model panel completes from `run --partic
 its recorded provider and model, the model receipt imports through
 `record-run-critic`, the aggregate receipt carries both contributors, the
 unanswered poll prints the selection template, and unknown, OCR, and reused
-participants are refused. Malformed-shape regressions feed
+participants are refused. CI-evidence regressions run a pipeline with a
+failed bridge whose trace endpoint is unavailable and assert complete
+evidence, a collected downstream pipeline, empty pipeline errors, and no
+bridge trace request; run-loop regressions keep the evidence permanently
+incomplete and assert the bounded loud stop with the collected errors and a
+surviving resume state; runtime-identity regressions cover the defensive
+commit resolution from install metadata and the self report. Malformed-shape
+regressions feed
 `null`, non-array, and `null`-entry lists to MR and local `record-input` and
 `record-critic` and assert addressed diagnostics with an untouched draft.
 Publication-skeleton regressions render the variant catalog, substitute the

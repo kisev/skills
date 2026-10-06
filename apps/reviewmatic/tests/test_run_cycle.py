@@ -454,6 +454,43 @@ def test_run_failure_writes_a_state_dump(fixture: ReviewFixture, capsys: Any) ->
     assert written["resume_command"].startswith("reviewmatic run --resume")
 
 
+def test_run_stops_after_bounded_attempts_on_permanently_incomplete_evidence(
+    fixture: ReviewFixture, capsys: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Permanently incomplete evidence stops the run loudly, never loops."""
+    calls: list[str] = []
+
+    def incomplete(
+        evidence_path: str,
+        repo_root: str,
+        incremental: str = "auto",
+        review_mode: str = "normal",
+        locale: str = "en",
+    ) -> dict[str, Any]:
+        calls.append(evidence_path)
+        return {
+            "status": "incomplete",
+            "summary": {
+                "tldr": "The evidence did not complete.",
+                "scope": [],
+                "risks": ["GitLab pagination failed for discussions"],
+                "checks": [],
+            },
+        }
+
+    monkeypatch.setattr(review_context, "prepare_context", incomplete)
+    code = cli_main(["run", "--url", fixture.url, "--repo-root", str(fixture.repo), "--json"])
+    assert code == 1
+    result = _stdout_json(capsys)
+    assert result["status"] == "error"
+    assert "evidence stays incomplete after 3 attempts" in result["error"]
+    assert "GitLab pagination failed for discussions" in result["error"]
+    assert len(calls) == 3
+    # The state survives for --resume instead of looping without progress.
+    dump = Path(str(result["artifact_root"])) / "run-failure.json"
+    assert dump.exists()
+
+
 def test_run_resume_requires_existing_state(fixture: ReviewFixture, capsys: Any) -> None:
     code = cli_main(
         ["run", "--resume", "--url", fixture.url, "--repo-root", str(fixture.repo), "--json"]

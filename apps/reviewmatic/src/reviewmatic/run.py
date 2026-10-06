@@ -50,6 +50,11 @@ CALLBACK_LABELS: dict[str, str] = {
     "content": "plan content",
 }
 
+# A stage may repeat only while it makes progress: evidence collection that
+# stays incomplete after this many attempts at the same stage stops the run
+# loudly instead of looping forever. The state survives for --resume.
+STAGE_ATTEMPT_LIMIT = 3
+
 
 def artifact_root_for_url(url: str) -> Path:
     """Derive the deterministic artifact root for one MR without collecting it."""
@@ -106,6 +111,7 @@ class ReviewRun:
         self.root: Path | None = None
         self.stage: str | None = None
         self.timings: list[dict[str, Any]] = []
+        self.incomplete_evidence: list[str] = []
         self._started = time.monotonic()
 
     def log(self, message: str) -> None:
@@ -156,11 +162,23 @@ class ReviewRun:
                     bundle,
                 ),
             )
+        attempts = 0
+        previous_stage: str | None = None
         while True:
             status = context.review_status(str(self.root))
             stage = str(status.get("resume_stage") or status.get("stage"))
             self.stage = stage
             self.log(f"stage {stage}")
+            if stage == previous_stage:
+                attempts += 1
+            else:
+                attempts = 1
+                previous_stage = stage
+            if attempts > STAGE_ATTEMPT_LIMIT:
+                raise contract.WorkflowError(
+                    f"evidence stays incomplete after {STAGE_ATTEMPT_LIMIT} attempts: "
+                    + "; ".join(self.incomplete_evidence or [str(status.get("reason"))])
+                )
             if status.get("status") == "ok" and stage == "plan_ready":
                 assert self.root is not None
                 if self.participants is not None and run_panel.load(self.root) is None:
@@ -210,12 +228,20 @@ class ReviewRun:
         repo_root = progress.get("repo_root") or self.repo_root
         if not isinstance(evidence_path, str) or not isinstance(repo_root, str):
             raise contract.WorkflowError("the context step requires --repo-root")
-        self.step(
-            "context",
-            lambda: context.prepare_context(
-                evidence_path, repo_root, self.incremental, self.mode, self.locale
+        result = cast(
+            "dict[str, Any]",
+            self.step(
+                "context",
+                lambda: context.prepare_context(
+                    evidence_path, repo_root, self.incremental, self.mode, self.locale
+                ),
             ),
         )
+        if result.get("status") == "incomplete":
+            summary = cast("dict[str, Any]", result.get("summary") or {})
+            self.incomplete_evidence = [
+                str(item) for item in cast("list[object]", summary.get("risks") or [])
+            ]
 
     def _callback_stage(self, kind: str) -> None:
         assert self.root is not None

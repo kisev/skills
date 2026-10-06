@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib.metadata
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -225,6 +227,10 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
             OptionSpec("input", "critic receipt response file", required=True),
             OptionSpec("participant", "selected critic participant name this receipt binds to"),
         ),
+    ),
+    CommandSpec(
+        "runtime-info",
+        "Print the runtime version and the resolved installation commit",
     ),
     CommandSpec(
         "record-run-critic",
@@ -686,8 +692,54 @@ def fail(message: str) -> int:
     return EXIT_ERROR
 
 
+COMMIT_RE = re.compile(r"[0-9a-f]{40}")
+
+
+def resolve_install_source(direct_url_text: str | None) -> dict[str, Any]:
+    """Resolve the installation source from PEP 610 ``direct_url.json`` text.
+
+    The structure uv writes floats between versions, so the commit is read
+    defensively: the recorded ``commit`` wins, a commit pinned in the URL is
+    recovered next, and anything else — including non-git installs and missing
+    metadata — reports an honest ``unknown``.
+    """
+    unknown: dict[str, Any] = {"url": None, "vcs": None, "commit": "unknown"}
+    if direct_url_text is None:
+        return unknown
+    try:
+        value: Any = json.loads(direct_url_text)
+    except json.JSONDecodeError:
+        return unknown
+    if not isinstance(value, dict):
+        return unknown
+    url = value.get("url") if isinstance(value.get("url"), str) else None
+    vcs = value.get("vcs") if isinstance(value.get("vcs"), str) else None
+    commit = value.get("commit")
+    if not (isinstance(commit, str) and COMMIT_RE.fullmatch(commit)):
+        pinned = re.search(r"@([0-9a-f]{40})", url or "")
+        commit = pinned.group(1) if pinned else None
+    return {
+        "url": url,
+        "vcs": vcs,
+        "commit": commit if isinstance(commit, str) else "unknown",
+    }
+
+
+def runtime_info() -> dict[str, Any]:
+    """The runtime's self report: package version and resolved install commit."""
+    try:
+        text = importlib.metadata.distribution("reviewmatic").read_text("direct_url.json")
+    except importlib.metadata.PackageNotFoundError:
+        text = None
+    return {
+        "status": "ok",
+        "version": __version__,
+        **resolve_install_source(text),
+        "external_mutations": False,
+    }
+
+
 def run_assess_mode(namespace: argparse.Namespace) -> int:
-    """Check whether a review mode is supported (contract operation)."""
     mode: str = namespace.mode
     if mode in ("normal", "deep") and namespace.criticAvailable is not True:
         contract.emit(
@@ -787,6 +839,9 @@ def dispatch(namespace: argparse.Namespace, tokens: Sequence[str]) -> int:
         return run_publication()
     if name == "assess-mode":
         return run_assess_mode(namespace)
+    if name == "runtime-info":
+        contract.emit(runtime_info())
+        return EXIT_OK
     if name == "worktree":
         if getattr(namespace, "list", None) == "list":
             contract.emit(
