@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -369,6 +370,156 @@ def test_record_run_critic_rejects_unknown_engines_and_reuse(
 
     assert cli_main(arguments) == 2
     assert "already has a bound receipt" in capsys.readouterr().out
+
+
+def test_record_selection_rejects_ocr_critics_for_incremental_reviews(tmp_path: Path) -> None:
+    root = tmp_path / "panel-root"
+    root.mkdir()
+    selection = tmp_path / "selection.json"
+    contract.write_json(selection, SELECTION)
+    with pytest.raises(contract.WorkflowError, match="delta-scoped incremental receipts"):
+        run_panel.record_selection(root, str(selection), None, None, "incremental")
+    # The loud refusal records nothing.
+    assert run_panel.load(root) is None
+    panel = run_panel.record_selection(root, str(selection), None, None, "normal")
+    assert [str(item["name"]) for item in run_panel.selected_critics(panel)] == [
+        "ocr-critic",
+        "model-critic",
+    ]
+
+
+def test_run_refuses_unused_participants_when_the_review_selects_unchanged(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    callbacks = _write_callbacks(fixture)
+    participants = fixture.tmp / "participants.json"
+    contract.write_json(participants, ONE_MODEL_CRITIC)
+    base = [
+        "run",
+        "--url",
+        fixture.url,
+        "--repo-root",
+        str(fixture.repo),
+        "--participants",
+        str(participants),
+    ]
+    # First cycle: the panel review completes and writes the plan baseline.
+    assert (
+        cli_main(
+            [
+                *base,
+                "--critic-cmd",
+                callbacks["critic"],
+                "--arbitrator-cmd",
+                callbacks["decision"],
+                "--content-cmd",
+                callbacks["content"],
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["stage"] == "plan_ready"
+
+    # Second cycle over the same unchanged head selects the unchanged mode: no
+    # critic stage exists, so the provided poll answer can never be used.
+    assert (
+        cli_main(
+            [
+                *base,
+                "--arbitrator-cmd",
+                callbacks["decision"],
+                "--content-cmd",
+                callbacks["content"],
+                "--json",
+            ]
+        )
+        == 1
+    )
+    failure = _stdout_json(capsys)
+    assert failure["status"] == "error"
+    assert "unchanged mode without a panel" in failure["error"]
+
+
+ONE_MODEL_CRITIC: dict[str, Any] = {
+    "critics": [{"name": "critic-1", "engine": "model"}],
+    "arbitrator": {"name": "arbitrator-1"},
+}
+
+
+def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
+    scripts = fixture.tmp / "callbacks"
+    scripts.mkdir(exist_ok=True)
+    (scripts / "critic.py").write_text(
+        "import json, sys\n"
+        "value = json.load(open(sys.argv[1]))\n"
+        'value["run_id"] = "critic-run"\n'
+        'value["session_id"] = "critic-session"\n'
+        "json.dump(value, open(sys.argv[2], 'w'))\n"
+    )
+    (scripts / "decision.py").write_text(
+        "import json, sys\n"
+        "value = json.load(open(sys.argv[1]))\n"
+        'value["run_id"] = "primary-run"\n'
+        'value["session_id"] = "primary-session"\n'
+        'value["responses"] = [\n'
+        "    {**item, 'decision': 'accept', 'reason': 'Confirmed on the exact reviewed head.'}\n"
+        "    for item in value['responses']\n"
+        "]\n"
+        "json.dump(value, open(sys.argv[2], 'w'))\n"
+    )
+    (scripts / "content.py").write_text(
+        "import json, sys\n"
+        "value = json.load(open(sys.argv[1]))\n"
+        "value.update({\n"
+        "    'chat_assessment': {\n"
+        "        'necessity': {'status': 'supported', 'rationale': 'The change is complete.'},\n"
+        "        'relevance': {'status': 'current', 'rationale': 'The exact head is current.'},\n"
+        "        'change': 'The change keeps the reviewed contract intact.',\n"
+        "    },\n"
+        "    'summary': 'The change is small and preserves the reviewed contract.',\n"
+        "    'architecture_assessment': 'The responsibility remains with its owner.',\n"
+        "    'semver_impact': 'patch',\n"
+        "    'semver_rationale': 'Backward-compatible correction.',\n"
+        "    'semver_assessment': {\n"
+        "        **value['semver_assessment'],\n"
+        "        'policy': 'No release policy was found in the fixture.',\n"
+        "        'sources': ['Fixture repository and empty release catalog'],\n"
+        "        'fallback_reason': 'No confirmed release is available.',\n"
+        "    },\n"
+        "    'mr_metadata_assessment': {\n"
+        "        field: {'status': 'ok', 'rationale': 'The observed metadata is sufficient.',\n"
+        "                'recommendation': None}\n"
+        "        for field in ('title', 'description', 'labels', 'workflow_state', 'overall')\n"
+        "    },\n"
+        "    'label_assessments': [\n"
+        "        {'name': item['name'],\n"
+        "         'status': 'applicable' if item['name'] == 'semver::patch' "
+        "else 'inapplicable',\n"
+        "         'rationale': 'Matches the assessed patch contribution.'}\n"
+        "        for item in value['label_assessments']\n"
+        "    ],\n"
+        "    'checks': ['Compared the exact base and head revisions.'],\n"
+        "})\n"
+        "for thread in value['thread_decisions']:\n"
+        "    thread.update({\n"
+        "        'assessment': 'fixed',\n"
+        "        'rationale': 'The exact reviewed code addresses the remark.',\n"
+        "        'outcome': 'resolve' if thread['state'] == 'open' else thread['outcome'],\n"
+        "        'proposed_response': 'The exact reviewed code handles this path.',\n"
+        "    })\n"
+        "for candidate in value['rejected_candidates']:\n"
+        "    candidate['reason'] = 'Not observable in the exact reviewed head.'\n"
+        "for item in value['rejected_candidate_assessments']:\n"
+        "    item['reason'] = 'The exact head does not contain the reported gap.'\n"
+        "json.dump(value, open(sys.argv[2], 'w'))\n"
+    )
+    executable = sys.executable
+    return {
+        "critic": f'{executable} {scripts / "critic.py"} "$1" "$2"',
+        "decision": f'{executable} {scripts / "decision.py"} "$1" "$2"',
+        "content": f'{executable} {scripts / "content.py"} "$1" "$2"',
+    }
 
 
 def test_run_panel_aggregate_carries_merged_findings(fixture: ReviewFixture) -> None:

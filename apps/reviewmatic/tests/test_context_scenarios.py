@@ -104,7 +104,8 @@ def test_line_finding_publications_require_exactly_one_suggestion_block() -> Non
         "patch": None,
     }
     with pytest.raises(
-        contract.WorkflowError, match=r"suggestion fix requires one suggestion and no patch"
+        contract.WorkflowError,
+        match=r"fix_mode=suggestion without suggestions\[\] requires exactly one suggestion",
     ):
         review_context.validate_finding_publications([invalid], {"finding-1"})
     valid = {

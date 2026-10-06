@@ -40,6 +40,7 @@ REPLACEMENT_KINDS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
 
 
 def prepared(args: argparse.Namespace, bundle: dict[str, Any]) -> dict[str, Any]:
+    root = portable.artifact_root(Path(str(bundle["artifact_root"])))
     context.begin_review(
         bundle["preview_artifact_path"],
         bundle["preview_digest"],
@@ -49,6 +50,10 @@ def prepared(args: argparse.Namespace, bundle: dict[str, Any]) -> dict[str, Any]
         args.locale,
         args.incremental,
     )
+    # A fresh run starts a new review cycle: the per-cycle run panel from any
+    # previous cycle is invalidated, so the poll is asked and answered anew
+    # and no older receipt is silently rebound.
+    run_panel.panel_path(root).unlink(missing_ok=True)
     return {
         "stage": "prepared",
         "next_action": context.runner_action(

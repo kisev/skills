@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import context, fixes, ocr_critic, review_worktree, scope
+from reviewmatic import context, fixes, ocr_critic, publication_skeletons, review_worktree, scope
 from reviewmatic.context_package import (
     ExpectedPackage,
     bind_question_contexts,
@@ -1129,10 +1129,28 @@ def _panel_critic_tasks(
     return tasks
 
 
-def _arbitration_receipt_template(draft: dict[str, Any]) -> dict[str, Any]:
+def _arbitration_receipt_template(draft: dict[str, Any], role: str) -> dict[str, Any]:
     arbitrator = cast(
         "dict[str, Any] | None", cast("dict[str, Any]", draft["participants"]).get("arbitrator")
     )
+    # Every candidate finding (primary plus every critic receipt) starts with
+    # its formally complete publication variants: the arbitrator keeps one
+    # variant per accepted finding, fills the judgment placeholders, deletes
+    # the rest, and records the merged findings; unfilled variants fail
+    # validation with fill-or-delete guidance instead of passing silently.
+    candidates = [
+        *[
+            {"id": str(item["id"])}
+            for item in _records(draft.get("findings"))
+            if isinstance(item.get("id"), str)
+        ],
+        *[
+            {"id": str(finding["id"])}
+            for receipt in _records(draft.get("critics"))
+            for finding in _records(receipt.get("findings"))
+            if isinstance(finding.get("id"), str)
+        ],
+    ]
     return {
         "schema": "code-review/arbitration/v1",
         "evidence_digest": draft["evidence_digest"],
@@ -1149,7 +1167,9 @@ def _arbitration_receipt_template(draft: dict[str, Any]) -> dict[str, Any]:
         ),
         "owner_decision_reasons": [],
         "question_verifications": [],
-        "content": {},
+        "content": {
+            "finding_publications": publication_skeletons.publication_skeletons(candidates, role)
+        },
     }
 
 
@@ -1198,7 +1218,7 @@ def _sync_arbitration_input(
             "contradictions": contradictions,
             "response_contract": {
                 "receipt_schema": "code-review/arbitration/v1",
-                "template": _arbitration_receipt_template(draft),
+                "template": _arbitration_receipt_template(draft, str(review_context.get("role"))),
                 "import_command": context.runner_action(
                     "record-arbitration",
                     "--draft",
@@ -1218,7 +1238,11 @@ def _sync_arbitration_input(
                     "question record the conditional verdict in the rationale (for example, "
                     "push_back if the feature is needed, decline if not). A decline keeps the "
                     "salvaged pain: name the follow-up issue that preserves the problem the "
-                    "MR attempted to solve. Findings discipline: a finding enters the runbook "
+                    "MR attempted to solve. The receipt template pre-renders one formally "
+                    "complete publication block per variant for every candidate finding: keep "
+                    "one variant per accepted finding, fill its judgment placeholders, delete "
+                    "the unused rows, and never leave a placeholder in the receipt. Findings "
+                    "discipline: a finding enters the runbook "
                     "findings and action list only when it moves the merge verdict or readiness "
                     "or joins the action list; everything else stays a refuted or duplicate "
                     "ledger entry with its reason. OCR critic receipts carry findings only; "
@@ -1244,6 +1268,27 @@ def _sync_arbitration_input(
             "support. Import its receipt verbatim with record-arbitration."
         ),
     }
+
+
+# The decision sections of an arbitration receipt. A fresh import may change
+# only the content texts (publications, prose) while every decision stays
+# identical: that is the atomic, rewind-free text repair path.
+_ARBITRATION_DECISION_KEYS = (
+    "merge_verdict",
+    "merge_verdict_rationale",
+    "findings",
+    "dispositions",
+    "ci_job_assessments",
+    "owner_decision_reasons",
+    "question_verifications",
+)
+
+
+def _arbitration_decisions_unchanged(previous: dict[str, Any], incoming: dict[str, Any]) -> bool:
+    return all(
+        contract.digest(previous.get(key)) == contract.digest(incoming.get(key))
+        for key in _ARBITRATION_DECISION_KEYS
+    )
 
 
 # Records the one-time panel selection. The runtime never chooses participants
@@ -1517,16 +1562,22 @@ def record_draft_arbitration(path: str, input_path: str) -> dict[str, Any]:
         )
     previous = draft.get("arbitration")
     replacement = isinstance(draft.get("repair"), dict) and draft["repair"]["kind"] == "decision"
-    if previous is not None and not replacement:
-        raise contract.WorkflowError(
-            "An arbitration receipt is already recorded; changing decisions requires decision "
-            "repair or refresh-review"
-        )
     user_input = contract.read_json(
         contract.regular_file(Path(input_path), "arbitration receipt input"),
         "arbitration receipt input",
     )
     contract.reject_envelope_wrapper(user_input, "arbitration receipt input")
+    if (
+        previous is not None
+        and not replacement
+        and not _arbitration_decisions_unchanged(cast("dict[str, Any]", previous), user_input)
+    ):
+        raise contract.WorkflowError(
+            "An arbitration receipt is already recorded; changing decisions requires decision "
+            "repair or refresh-review. A fresh receipt from a new arbitrator session that "
+            "changes only publication or prose texts is the atomic text repair: it keeps every "
+            "decision identical and needs no rewind"
+        )
     errors: list[dict[str, str]] = list(schema_issues(_ARBITRATION_RECEIPT, user_input))
     resolved_draft = str(Path(path).resolve())
     if not errors:
@@ -3517,6 +3568,22 @@ def _apply_content(
         if field_issues:
             continue
         identity = _CONTENT_IDENTITY.get(key)
+        if identity is not None and isinstance(value, list):
+            identities = [identity(item) for item in cast("list[dict[str, Any]]", value)]
+            duplicates = sorted({name for name in identities if identities.count(name) > 1})
+            if duplicates:
+                issues.append(
+                    {
+                        "path": field,
+                        "message": (
+                            "Each list entry needs a unique identity; "
+                            f"{', '.join(duplicates)} repeat. Keep exactly one entry per "
+                            "identity: for finding publications keep one variant per finding "
+                            "and delete the unused skeleton rows."
+                        ),
+                    }
+                )
+                continue
         merged[key] = (
             upsert_by_identity(
                 cast("list[dict[str, Any]]", merged.get(key) or []),

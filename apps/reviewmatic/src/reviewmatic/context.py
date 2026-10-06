@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import __version__, fixes, publication
+from reviewmatic import __version__, fixes, publication, publication_skeletons
 from reviewmatic.portable.portable_gitlab import contract as portable
 from reviewmatic.portable.portable_gitlab import review_semver
 from reviewmatic.portable.portable_gitlab.label_assessment import (
@@ -2144,10 +2144,20 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
         finding_id = item.get("finding_id")
         publication_type = item.get("type")
         path, line, old_line = item.get("path"), item.get("line"), item.get("old_line")
+        # A template variant answers with fill-or-delete guidance, never with
+        # the rule errors its placeholders would trip over.
+        placeholders = publication_skeletons.placeholder_fields(item)
+        if placeholders:
+            raise portable.WorkflowError(
+                f"finding publication for {finding_id} "
+                f"({publication_type}/{item.get('fix_mode')}) is an unfilled template "
+                f"variant: fill the judgment fields {', '.join(placeholders)} or delete the "
+                "unused variant rows, keeping exactly one publication per accepted finding"
+            )
         if publication_type != "existing_thread" and "thread_id" in item:
             raise portable.WorkflowError(
-                "thread_id is valid only with type=existing_thread; other finding fixes must "
-                "omit it"
+                "thread_id is valid only with type=existing_thread, where the existing thread "
+                "owns the fix; every other type must omit it"
             )
         if publication_type == "existing_thread":
             if (
@@ -2164,8 +2174,9 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
                 or "suggestions" in item
             ):
                 raise portable.WorkflowError(
-                    "existing_thread requires thread_id, prose body, not_required, and null "
-                    "patch/positions; the thread owns the fix"
+                    "existing_thread requires the thread_id of a prepared thread, non-empty "
+                    "prose body, fix_mode=not_required, null patch, and null positions: the "
+                    "existing thread owns the fix, so the publication adds no new position"
                 )
             seen.add(cast("str", finding_id))
             result.append(cast("dict[str, Any]", item))
@@ -2178,7 +2189,11 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             or not portable.nonempty_string(item.get("body"))
             or item.get("fix_mode") not in {"suggestion", "patch"}
         ):
-            raise portable.WorkflowError("finding publication identity or body is invalid")
+            raise portable.WorkflowError(
+                "each finding publication requires one known finding_id used exactly once, "
+                "type general, line, local_fix, or existing_thread, non-empty prose body, and "
+                "fix_mode suggestion or patch (not_required only with existing_thread)"
+            )
         fix_mode = cast("str", item["fix_mode"])
         patch = item.get("patch")
         suggestion_count = len(suggestion_blocks(cast("str", item["body"])))
@@ -2187,25 +2202,41 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             fixes.suggestion_parts(cast("dict[str, Any]", item))
             if fix_mode != "suggestion" or suggestion_count != 0:
                 raise portable.WorkflowError(
-                    "Grouped suggestion body must be prose; parts own their blocks"
+                    "grouped suggestions: the parent body is prose only, each suggestions[] "
+                    "part owns exactly one suggestion block, fix_mode=suggestion, and "
+                    "split_rationale explains why applying the parts separately is safe"
                 )
         if fix_mode == "patch":
             if not portable.nonempty_string(patch) or suggestion_count:
-                raise portable.WorkflowError("patch fix requires a patch and forbids suggestion")
+                raise portable.WorkflowError(
+                    "fix_mode=patch requires the unified diff in patch and no suggestion "
+                    "blocks anywhere; the renderer adds the portable apply block itself"
+                )
             patch_paths(cast("str", patch))
             if re.search(
                 r"^diff --git |git\s+apply\s*(?:<<|--)", cast("str", item["body"]), re.MULTILINE
             ):
                 raise portable.WorkflowError(
-                    "Patch body must be prose only; put the unified diff in patch"
+                    "body must be prose only: no diff headers and no git apply commands; the "
+                    "unified diff belongs in patch"
                 )
         elif patch is not None or (not grouped and suggestion_count != 1):
-            raise portable.WorkflowError("suggestion fix requires one suggestion and no patch")
+            raise portable.WorkflowError(
+                "fix_mode=suggestion without suggestions[] requires exactly one suggestion "
+                "block in body and patch=null; split a multi-position fix into suggestions[] "
+                "parts with split_rationale instead"
+            )
         if publication_type in {"general", "local_fix"}:
             if path is not None or line is not None or old_line is not None:
-                raise portable.WorkflowError("non-line finding fix cannot have a line")
+                raise portable.WorkflowError(
+                    "type general and local_fix publish a general comment: path, line, and "
+                    "old_line must be null"
+                )
             if fix_mode != "patch" and not grouped:
-                raise portable.WorkflowError("general and local finding fixes require a Git patch")
+                raise portable.WorkflowError(
+                    "type general and local_fix require a Git patch (fix_mode=patch) or "
+                    "grouped suggestions: a single suggestion block has no general anchor"
+                )
         elif (
             not portable.nonempty_string(path)
             or (line is None) == (old_line is None)
@@ -2215,9 +2246,16 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
                 if number is not None
             )
         ):
-            raise portable.WorkflowError("line finding publication position is invalid")
+            raise portable.WorkflowError(
+                "type line requires the changed file path and exactly one anchor: line (the "
+                "new line >= 1) or old_line (the deleted line); fill the anchor fields of the "
+                "variant you keep"
+            )
         elif old_line is not None and fix_mode != "patch":
-            raise portable.WorkflowError("deleted-line finding fixes require a Git patch")
+            raise portable.WorkflowError(
+                "a deleted-line anchor (old_line) requires fix_mode=patch: GitLab cannot "
+                "anchor a suggestion block on a deleted line"
+            )
         elif fix_mode == "suggestion" and not grouped:
             validate_suggestion(cast("str", item["body"]))
         seen.add(cast("str", finding_id))
@@ -4962,19 +5000,13 @@ def content_template(
         ],
         "checks": [],
         "findings": accepted,
-        "finding_publications": [
-            {
-                "finding_id": item["id"],
-                "type": "local_fix" if context["role"] == "author" else "general",
-                "path": None,
-                "line": None,
-                "old_line": None,
-                "body": "",
-                "fix_mode": "patch",
-                "patch": "",
-            }
-            for item in accepted
-        ],
+        # One formally complete variant block per valid (type, fix_mode): the
+        # agent keeps one variant per accepted finding, fills its judgment
+        # placeholders, and deletes the rest; unfilled variants fail validation
+        # with fill-or-delete guidance instead of passing silently.
+        "finding_publications": publication_skeletons.publication_skeletons(
+            accepted, str(context["role"])
+        ),
         "previous_finding_assessments": previous_assessments,
         "issue_templates": context["issue_templates"],
         "recommended_issues": [],

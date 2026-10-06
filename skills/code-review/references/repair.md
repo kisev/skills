@@ -1,5 +1,32 @@
 # Targeted repair and refresh
 
+Choose the repair path by cost: the cheapest path that honestly covers the
+change is the right one, and a more expensive path never runs first.
+
+1. **Publication or arbitration texts (the cheapest honest path).** Wrong or
+   improved publication prose, thread replies, or arbitration wording with
+   unchanged decisions: launch a fresh arbitrator session, have it author a
+   fresh arbitration receipt that keeps every decision identical
+   (`merge_verdict`, findings, dispositions, CI assessments, owner reasons,
+   question verifications) and changes only the content texts, and import it
+   with `reviewmatic record-arbitration --draft DRAFT --input RECEIPT`. The
+   import is atomic, rewinds nothing, and the runtime rejects a receipt that
+   changes a decision under this path. In the run path the same texts are
+   re-authored at the decision or content stop and re-imported with the
+   printed commands.
+2. **Critic content checked before arbitration.** A critic receipt whose
+   content needs correction before the panel is arbitrated: in the run path
+   replace the aggregate receipt with `reviewmatic replace-artifact --artifact-root ROOT --kind critic_receipt --path FILE` and continue from
+   the finalize stage; in the draft path a recorded receipt is never edited in
+   place — run `reviewmatic refresh-review --draft DRAFT` and import fresh
+   receipts, because the panel selection is fixed once receipts exist.
+3. **Post-plan texts.** Wording, layout, commands, positions, or fix
+   representation of a finalized plan: `reviewmatic repair-review --artifact-root ROOT --kind presentation` (below). Changed decisions of a
+   finalized plan: `--kind decision`.
+4. **Changed evidence.** Only changed MR facts (head, discussions, metadata,
+   CI) take `reviewmatic refresh-review --draft DRAFT`; never use a refresh to
+   fix texts.
+
 Use `reviewmatic repair-review --artifact-root ROOT --kind presentation|fix|decision`
 for a finalized new guided plan. This returns one editable draft copied from the
 actual finalized source, not an empty review template. Older plans are historical

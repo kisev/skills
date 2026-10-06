@@ -373,7 +373,14 @@ Accepted risks and deferred requirements are not reopened without changed facts
 or an explicit decision. Completion checks agreed requirements and affected
 regressions, not all hypothetical defects or an automatic final broad audit.
 
-Suggestions shall be the default. One finding may own multiple positioned
+Suggestions shall be the default. The materializable templates — the run
+content template and the arbitrator receipt template — shall pre-render one
+formally complete publication block per valid variant for every accepted or
+candidate finding, with mechanical fields filled and judgment placeholders
+structurally detectable: an unfilled variant shall refuse with fill-or-delete
+guidance naming the missing judgment fields, never pass silently, and the
+rule refusals shall name their rules (positions, the patch-prose split, the
+single-block suggestion rule). One finding may own multiple positioned
 `suggestions` records, with `split_rationale` for safe partial application. Each
 part and the combined result shall be checked against the exact head; overlapping
 ranges are invalid. Visible context positions are supported. Partial application
@@ -392,7 +399,15 @@ including suggestion bounds and raw SHA in receipt prose.
 Patch fallback is checked by common scaffolding, not only by the guided validator;
 author local fixes retain their validated-patch exception.
 
-`repair-review` shall support only new guided plans. Presentation repair includes
+`repair-review` shall support only new guided plans. Repair routes by cost:
+publication or arbitration texts with unchanged decisions repair through a
+fresh arbitration receipt from a new arbitrator session whose decision sections
+are identical — the import is atomic, rewinds nothing, and a receipt that
+changes a decision under this path is rejected; critic content checked before
+arbitration replaces the aggregate receipt in the run path
+(`replace-artifact --kind critic_receipt`) and takes `refresh-review` in the
+draft path; post-plan texts take plan repair; changed evidence alone takes
+`refresh-review`. Presentation repair includes
 unchanged-meaning wording, layout, command/position correction, and equivalent fix
 representation; equivalence includes the complete resulting tree and file modes.
 The agent compares meaning and records rationale/checks, not a purported machine
@@ -530,7 +545,13 @@ unanswered poll prints the selection template, and unknown, OCR, and reused
 participants are refused. Malformed-shape regressions feed
 `null`, non-array, and `null`-entry lists to MR and local `record-input` and
 `record-critic` and assert addressed diagnostics with an untouched draft.
-Local merge regressions run two sequential critic imports, a repeated
+Publication-skeleton regressions render the variant catalog, substitute the
+judgment of chosen variants (general patch, positioned suggestion, existing
+thread, a rejected finding), materialize the patches exactly as the runtime
+does, and assert both validators accept on the first pass; unfilled variants
+and every documented rule refusal assert their named messages, and duplicate
+list identities in one arbitration receipt are rejected with addressed
+guidance. Local merge regressions run two sequential critic imports, a repeated
 identical result, a conflicting same-identity result, and a finalization that
 stays blocked until a verification preserves the original `not_verified`
 answer. Local lifecycle regressions run the documented command order through

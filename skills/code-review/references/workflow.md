@@ -41,7 +41,7 @@ The run stops once for the panel poll. Ask the user one question: the critic com
 
 After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the background from the collected context, invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
 
-The remaining stops are the decision and the content. At the decision stop, launch the selected arbitrator as a separate subagent: it arbitrates every critic finding (including the OCR findings) with a concrete reason per response, selects exactly one verdict, and fills the decision template, which you then import with the printed `reviewmatic finalize-review` command. At the content stop, complete the plan content template and run the printed `reviewmatic scaffold-review` command. The final run response prints the review report with the `runbook.md` path; follow `references/output-format.md` from there. Apply the discussion-audit, findings-discipline, suggestion, SemVer, and metadata doctrine of the stages below to the templates exactly as written — the templates carry the same contracts; the run changes only who assembles them.
+The remaining stops are the decision and the content. At the decision stop, launch the selected arbitrator as a separate subagent: it arbitrates every critic finding (including the OCR findings) with a concrete reason per response, selects exactly one verdict, and fills the decision template, which you then import with the printed `reviewmatic finalize-review` command. At the content stop, complete the plan content template and run the printed `reviewmatic scaffold-review` command. The templates pre-render every valid publication variant per accepted finding: keep one variant per finding, fill its judgment placeholders, and delete the unused rows. The final run response prints the review report with the `runbook.md` path; follow `references/output-format.md` from there. Apply the discussion-audit, findings-discipline, suggestion, SemVer, and metadata doctrine of the stages below to the templates exactly as written — the templates carry the same contracts; the run changes only who assembles them.
 
 ## Necessity and completion
 
@@ -268,7 +268,18 @@ MR contribution separately from the accumulated next-release impact in required
 `semver_assessment`. When the release basis cannot be established, report the
 reason and use explicit target-branch fallback, with no next-release estimate.
 
-GitLab suggestions are the default. First find an applicable current position,
+GitLab suggestions are the default. The materializable templates pre-render the
+complete publication contract for you: every accepted finding starts with one
+formally complete block per valid variant (`general`+`patch`,
+`line`+`suggestion`, `line`+`patch`, `existing_thread`+`not_required`, and
+`local_fix`+`patch` for an author; the arbitrator receipt template carries the
+same catalog over every candidate finding). Keep one variant per finding, fill
+its judgment placeholders — prose, the unified diff, the anchor, the thread id,
+`patch_reason` — and delete the unused rows before importing. A placeholder
+never passes: the runtime answers an unfilled variant by naming the missing
+judgment fields, and every rule refusal names its rule — the position rules,
+the patch-prose split, the single-block suggestion rule — so no publication
+contract is learned by trial and error. First find an applicable current position,
 including visible context lines; do not choose a general comment merely to justify
 a patch. Use a `suggestion:-N+M` fence opener for a bounded contiguous replacement.
 For separate positions supply `suggestions` records with `path`, `line`, and `body`,

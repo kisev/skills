@@ -138,6 +138,23 @@ def test_run_panel_poll_contract_is_documented() -> None:
         ), "the skill must invoke reviewmatic run --participants"
 
 
+def test_publication_skeletons_and_self_documenting_refusals_are_documented() -> None:
+    """The pre-rendered publication variants and their refusal contract are wired."""
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    assert "formally complete block per valid variant" in workflow
+    assert "fill its judgment placeholders" in workflow
+    assert "never passes" in workflow
+
+
+def test_repair_paths_are_tiered_by_cost() -> None:
+    """repair.md routes each repair kind to its cheapest honest path."""
+    repair = (SKILL_DIR / "references" / "repair.md").read_text(encoding="utf-8")
+    assert "Choose the repair path by cost" in repair
+    assert "record-arbitration" in repair
+    assert "--kind critic_receipt" in repair
+    assert "refresh-review" in repair
+
+
 def test_the_contract_test_reads_the_authored_sources() -> None:
     sources: dict[str, Any] = {"SKILL.source.md": SKILL_DIR / "SKILL.source.md"}
     assert sources["SKILL.source.md"].is_file()
