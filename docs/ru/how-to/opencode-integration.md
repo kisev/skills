@@ -449,15 +449,20 @@ CLI напрямую управляет моделями агентов с фи�
 npx --yes @kisev/agentomatic@latest agent list --global
 npx agentomatic configure agent manager --global --dry-run
 npx agentomatic configure agent worker --global --model openai/gpt-5 --variant high --dry-run
+npx agentomatic configure agent critic-security --global --model anthropic/claude-sonnet-4-6 --dry-run
 npx agentomatic configure critics --global
-npx agentomatic agent add-critic security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx agentomatic agent remove critic-security --global --dry-run
 ```
 
+`configure agent` — единственная точка мутаций моделей агентов и критиков:
+без имени (или через алиас `configure critics`) открывается один промежуточный
+редактор по всем агентам; с именем — задаётся модель существующего профиля, а
+новое имя `critic-<safe-suffix>` добавляет этого критика. `agent` и
+`agent list` доступны только для чтения: профили, модели, ownership,
+коллизии, дрейф.
 Фиксированные роли сохраняют имена и инструкции; списки разрешённого делегирования
 отражают выбранные роли и пул критиков. Сохранение модели неустановленной роли
-не устанавливает её. Дополнительные критики используют
-`critic-<safe-suffix>`; `agent remove` не удаляет фиксированные роли. Для каждого изменения действует тот же контракт
+не устанавливает её. Удаление дополнительного критика происходит в промежуточном
+редакторе. Для каждого изменения действует тот же контракт
 предварительного просмотра и подтверждения.
 
 `configure agent` без имени (и алиас `configure critics`) открывает один

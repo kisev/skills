@@ -122,20 +122,14 @@ const commands: Record<string, { description: string; options: string[]; name?: 
       "Remove owned components; disconnect the plugin by default; retain models and npm dependency unless selected.",
     options: ["disconnect", "removeDependency"],
   },
-  agent: { description: "List agents or manage additional critics.", options: [] },
+  agent: {
+    description:
+      "Read-only agent overview: profiles, models, ownership, collisions, and drift (mutations: configure agent).",
+    options: [],
+  },
   "agent list": {
     description: "Show installed and saved profiles, models, ownership, collisions, and drift.",
     options: [],
-  },
-  "agent add-critic": {
-    description: "Add critic-<name> interactively or with an explicit model.",
-    options: ["provider", "model", "variant"],
-    name: true,
-  },
-  "agent remove": {
-    description: "Remove an additional critic; fixed roles cannot be removed here.",
-    options: [],
-    name: true,
   },
   maintenance: {
     description:
@@ -162,6 +156,18 @@ const commands: Record<string, { description: string; options: string[]; name?: 
 };
 const mutationOptions = new Set(["dryRun", "yes"]);
 const observations = new Set(["status", "doctor", "agent list", "catalog"]);
+// Mutations were unified into configure agent; removed commands answer with a
+// one-line pointer to it.
+const removedCommands: Record<string, string> = {
+  "agent add-critic":
+    "Removed command; agentomatic configure agent is the single mutation point for agent models and critics",
+  "agent remove":
+    "Removed command; agentomatic configure agent is the single mutation point for agent models and critics",
+};
+
+function failRemoved(topic: string): never {
+  return fail("invalid_input", removedCommands[topic]);
+}
 
 function fail(code: string, message: string): never {
   throw new InstallerError(code, message);
@@ -203,6 +209,7 @@ async function promptCriticName(): Promise<string> {
 }
 
 function help(topic = ""): string {
+  if (topic && removedCommands[topic]) failRemoved(topic);
   if (topic && !commands[topic]) fail("invalid_input", `Unknown command: ${topic}`);
   const visible = topic
     ? Object.entries(commands).filter(([key]) => key === topic || key.startsWith(`${topic} `))
@@ -254,7 +261,7 @@ function help(topic = ""): string {
     "Use status to inspect the installation, doctor to diagnose problems, and maintenance for explicit recovery.",
     "",
     "Examples:",
-    `  ${shellCommand([...(topic ? topic.split(" ") : ["install"]), ...(commands[topic]?.name ? [topic === "agent remove" ? "critic-security" : "critic"] : []), ...(observations.has(topic) || ["agent", "maintenance"].includes(topic) ? [] : ["--dry-run"])])}`,
+    `  ${shellCommand([...(topic ? topic.split(" ") : ["install"]), ...(commands[topic]?.name ? ["critic"] : []), ...(observations.has(topic) || ["agent", "maintenance"].includes(topic) ? [] : ["--dry-run"])])}`,
     "Documentation: https://github.com/kisev/skills/blob/main/docs/how-to/opencode-integration.md",
     "",
   ].join("\n");
@@ -925,20 +932,18 @@ async function profileChange(options: Options, request: AgentProfileRequest): Pr
   if (!options.json) {
     const args = request.changes
       ? ["configure", "critics"]
-      : request.action === "critic-remove"
-        ? ["agent", "remove", request.name!]
-        : [
-            request.action === "critic-add" ? "agent" : "configure",
-            request.action === "critic-add" ? "add-critic" : "agent",
-            request.name!,
-            "--model",
-            request.model!,
-            ...(request.variant
-              ? ["--variant", request.variant]
-              : request.action === "model-set"
-                ? ["--clear-variant"]
-                : []),
-          ];
+      : [
+          "configure",
+          "agent",
+          request.name!,
+          "--model",
+          request.model!,
+          ...(request.variant
+            ? ["--variant", request.variant]
+            : request.action === "model-set"
+              ? ["--clear-variant"]
+              : []),
+        ];
     process.stdout.write(
       renderPlan(plan, {
         applied: false,
@@ -1084,6 +1089,7 @@ async function run(args: string[]): Promise<void> {
     return;
   }
   if (args.includes("--help") || args.includes("-h")) {
+    if (removedCommands[topic]) failRemoved(topic);
     if (!commands[topic]) fail("invalid_input", `Unknown command: ${topic}`);
     parse(
       topic,
@@ -1092,6 +1098,7 @@ async function run(args: string[]): Promise<void> {
     process.stdout.write(help(topic));
     return;
   }
+  if (removedCommands[topic]) failRemoved(topic);
   if (!commands[topic]) {
     const match = [...new Set(Object.keys(commands).map((key) => key.split(" ", 1)[0]))].find(
       (root) => root.startsWith(topic) || topic.startsWith(root),
@@ -1164,14 +1171,11 @@ async function run(args: string[]): Promise<void> {
     process.exitCode = doctorExitCode(report);
     return;
   }
-  if (
-    topic === "configure critics" ||
-    topic === "configure agent" ||
-    topic === "agent add-critic"
-  ) {
+  if (topic === "configure critics" || topic === "configure agent") {
     const inventory = await listAgentProfiles(options.scope);
-    // configure critics is an alias; a nameless configure agent opens the same staged editor.
-    if (topic === "configure critics" || (topic === "configure agent" && !options.name)) {
+    // configure critics is an alias; a nameless configure agent opens the staged
+    // editor - the single mutation point for models, additions, and removals.
+    if (!options.name) {
       requireApply(options);
       if (!options.json) process.stdout.write(renderCriticsTable(inventory));
       const changes = await profileDraft(
@@ -1188,31 +1192,20 @@ async function run(args: string[]): Promise<void> {
       await profileChange(options, { action: "model-set", changes });
       return;
     }
-    let name = options.name;
-    if (!name) {
-      if (topic === "agent add-critic") name = await promptCriticName();
-      else {
-        const names = inventory.profiles
-          .filter((profile) => profile.ownership !== "user-owned")
-          .map((profile) => profile.name);
-        name = names[value(await selectOption("Agent", names))];
-      }
+    const name = options.name;
+    const existing = inventory.profiles.find((profile) => profile.name === name);
+    if (!existing && !name.startsWith("critic-")) {
+      fail("invalid_input", `Unknown agent profile: ${name}`);
     }
-    if (topic === "agent add-critic" && !name.startsWith("critic-")) name = `critic-${name}`;
-    const request = await modelSelection(
-      options,
-      name,
-      inventory.profiles.find((profile) => profile.name === name),
-    );
-    await profileChange(options, {
-      ...request,
-      action: topic === "agent add-critic" ? "critic-add" : "model-set",
-    });
-    return;
-  }
-  if (topic === "agent remove") {
-    if (!options.name) fail("invalid_input", "agent remove requires an additional critic name");
-    await profileChange(options, { action: "critic-remove", name: options.name });
+    if (!existing) {
+      // configure agent on a fresh critic-<name> adds the critic: one command
+      // covers model-set for existing profiles and critic-add for new critics.
+      const request = await modelSelection(options, name, undefined);
+      await profileChange(options, { ...request, action: "critic-add" });
+      return;
+    }
+    const request = await modelSelection(options, name, existing);
+    await profileChange(options, { ...request, action: "model-set" });
     return;
   }
   if (topic === "maintenance recover") {

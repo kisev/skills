@@ -193,7 +193,7 @@ test("configure integration saves disconnection for repair and uninstall preserv
   assert.equal(ok(["status"]).selection.core_activation, false);
   ok(["maintenance", "repair", "--no-dependency", "--yes"]);
   assert.equal(ok(["status"]).connection.connected, false);
-  ok(["agent", "add-critic", "security", "--model", "openai/security", "--yes"]);
+  ok(["configure", "agent", "critic-security", "--model", "openai/security", "--yes"]);
   const preview = ok(["uninstall", "--dry-run"]);
   assert.equal(preview.models, "retained");
   ok(["uninstall", "--yes"]);
@@ -549,9 +549,9 @@ test("staged critic editing converts unsafe names and applies from the catalog",
   const context = await sandbox(t);
   context.ok(["install", ...subset, "--yes"]);
   context.ok([
+    "configure",
     "agent",
-    "add-critic",
-    "security",
+    "critic-security",
     "--model",
     "anthropic/claude",
     "--variant",

@@ -129,8 +129,24 @@ try {
     ]).requires_restart,
     true,
   );
-  cli(["agent", "add-critic", "smoke", "--global", "--model", "opencode/gpt-5-nano", "--dry-run"]);
-  cli(["agent", "add-critic", "smoke", "--global", "--model", "opencode/gpt-5-nano", "--yes"]);
+  cli([
+    "configure",
+    "agent",
+    "critic-smoke",
+    "--global",
+    "--model",
+    "opencode/gpt-5-nano",
+    "--dry-run",
+  ]);
+  cli([
+    "configure",
+    "agent",
+    "critic-smoke",
+    "--global",
+    "--model",
+    "opencode/gpt-5-nano",
+    "--yes",
+  ]);
   const inventory = cli(["agent", "list", "--global"]).inventory;
   assert.equal(inventory.profiles.find((item) => item.name === "manager").variant, "high");
   assert.equal(

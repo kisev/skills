@@ -434,15 +434,19 @@ call:
 npx --yes @kisev/agentomatic@latest agent list --global
 npx agentomatic configure agent manager --global --dry-run
 npx agentomatic configure agent worker --global --model openai/gpt-5 --variant high --dry-run
+npx agentomatic configure agent critic-security --global --model anthropic/claude-sonnet-4-6 --dry-run
 npx agentomatic configure critics --global
-npx agentomatic agent add-critic security --global --model anthropic/claude-sonnet-4-6 --dry-run
-npx agentomatic agent remove critic-security --global --dry-run
 ```
 
+`configure agent` is the single mutation point for agent models and critics:
+nameless (or through the `configure critics` alias) it opens one staged editor
+over every agent; with a name it sets the model of an existing profile, and a
+fresh `critic-<safe-suffix>` name adds that critic. `agent` and `agent list`
+are read-only over profiles, models, ownership, collisions, and drift.
 Fixed roles keep their names, prompts, and permissions; only model and variant
 change; generated delegation allowlists reflect the selected roles and critic pool.
-Saving a model for an uninstalled fixed role does not install it. Additional critics
-use `critic-<safe-suffix>`; `agent remove` cannot remove a fixed role. Every mutation uses the
+Saving a model for an uninstalled fixed role does not install it. Removing an
+additional critic happens in the staged editor. Every mutation uses the
 same preview and confirmation contract.
 
 Nameless `configure agent` (and its alias `configure critics`) opens one staged

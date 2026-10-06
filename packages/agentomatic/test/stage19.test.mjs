@@ -401,16 +401,6 @@ test("CLI exposes contextual help for every command and group", () => {
       usage: "agentomatic configure",
       group: true,
     },
-    {
-      args: ["agent", "add-critic", "security", "--help"],
-      topic: "agent add-critic",
-      usage: "agentomatic agent add-critic",
-    },
-    {
-      args: ["agent", "remove", "critic-security", "--help"],
-      topic: "agent remove",
-      usage: "agentomatic agent remove",
-    },
   ];
   const outputs = new Map();
   for (const item of topics) {
@@ -439,7 +429,23 @@ test("CLI exposes contextual help for every command and group", () => {
   assert.match(outputs.get("install"), /--plugins <list\|none>/);
   assert.doesNotMatch(outputs.get("doctor"), /--confirm/);
   assert.match(outputs.get("configure agent"), /--model <value>[\s\S]*--variant <value>/);
-  assert.match(outputs.get("agent"), /agent list[\s\S]*agent add-critic[\s\S]*agent remove/);
+  assert.match(outputs.get("agent"), /agent list/);
+  assert.doesNotMatch(outputs.get("agent"), /add-critic|agent remove/);
+  // Removed mutation commands answer with a one-line pointer to configure agent.
+  for (const removed of [
+    ["agent", "add-critic"],
+    ["agent", "remove", "critic-security"],
+  ]) {
+    const result = spawnSync("node", [join(PACKAGE, "dist", "cli.js"), ...removed], {
+      encoding: "utf8",
+    });
+    assert.notEqual(result.status, 0, removed.join(" "));
+    assert.match(
+      result.stderr,
+      /Removed command; agentomatic configure agent is the single mutation point/,
+      removed.join(" "),
+    );
+  }
   assert.match(
     outputs.get("configure"),
     /configure components[\s\S]*configure agent[\s\S]*configure critics/,
