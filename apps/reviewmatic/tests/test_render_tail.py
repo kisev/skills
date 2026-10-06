@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from helpers.review_fixture import ReviewFixture, make_review_fixture
 
+from reviewmatic import context as review_context
 from reviewmatic import draft as draft_module
 from reviewmatic import publication_skeletons, render
 from reviewmatic.portable.portable_gitlab import contract
@@ -372,7 +373,7 @@ def test_line_intent_anchor_comes_from_changed_lines(fixture: ReviewFixture) -> 
     row = draft["content"]["finding_publications"][0]
     assert row["type"] == "line"
     assert row["path"] == "review.txt"
-    assert row["line"] == 1  # the first changed new-side line of the fixture diff
+    assert row["line"] == 2  # the added line, not an unchanged context line
     assert publication_skeletons.placeholder_fields(row)  # prose stays placeholder
 
 
@@ -427,7 +428,15 @@ def test_re_anchor_preserves_decision_and_remaps_anchors(fixture: ReviewFixture)
         Path(str(started["artifact_root"])), str(rendered["context_digest"])
     )
     prose = contract.read_json(prose_path, "prose")
-    contract.write_json(prose_path, _prose_fill(prose))
+    filled = _prose_fill(prose)
+    filled["finding_publications"] = [
+        {
+            "finding_id": "docs-1",
+            "body": "Keep the key.\n\n```suggestion:-0+0\nkeyed retry\n```",
+            "patch": None,
+        }
+    ]
+    contract.write_json(prose_path, filled)
     assert draft_module.record_prose(draft_path, str(prose_path))["status"] == "ok"
 
     # Drift: a new commit inserts one line above the reviewed one.
@@ -440,13 +449,10 @@ def test_re_anchor_preserves_decision_and_remaps_anchors(fixture: ReviewFixture)
     fixture.config_path.write_text(json.dumps({**fixture.read_config(), "headSha": new_head}))
 
     re_anchored = draft_module.re_anchor_review(draft_path)
-    assert re_anchored["status"] == "ok", re_anchored
+    assert re_anchored["status"] == "needs_reassessment", re_anchored
     assert re_anchored["re_anchored"] is True
     next_draft = contract.read_json(Path(str(re_anchored["draft_path"])), "draft")
-    assert (
-        next_draft["re_anchor"]["from_head"] == fixture.base_sha
-        or "from_head" in next_draft["re_anchor"]
-    )
+    assert next_draft["re_anchor"]["from_head"] == fixture.head_sha
     row = next_draft["content"]["finding_publications"][0]
     # The anchor shifted by exactly the one inserted line: 2 -> 3.
     assert row["line"] == 3
@@ -510,7 +516,7 @@ def test_re_anchor_refuses_anchors_inside_changed_hunks(fixture: ReviewFixture) 
     assert draft_module.render_content_review(draft_path)["status"] == "ok"
 
     # The drift rewrites the anchored line itself: no unique image exists.
-    (fixture.repo / "review.txt").write_text("rewritten base\nreviewed change\n")
+    (fixture.repo / "review.txt").write_text("base\nrewritten line\n")
     fixture.git("add", "review.txt")
     fixture.git("commit", "-m", "rewrites the anchor")
     new_head = fixture.head()
@@ -520,3 +526,159 @@ def test_re_anchor_refuses_anchors_inside_changed_hunks(fixture: ReviewFixture) 
 
     with pytest.raises(contract.WorkflowError, match="no unique image"):
         draft_module.re_anchor_review(draft_path)
+
+
+def test_prose_round_trips_previous_assessment_handles() -> None:
+    content = {
+        "previous_finding_assessments": [
+            {
+                "id": "prior-1",
+                "kind": "finding",
+                "critic_required": False,
+                "previous_status": "active",
+                "status": "fixed",
+                "rationale": "Verified on the exact head.",
+            }
+        ]
+    }
+    prose = render.prose_projection(content)
+    assert prose["previous_finding_assessments"][0]["id"] == "prior-1"
+    assert render.apply_prose(content, prose) == content
+
+
+def test_prose_rejects_runtime_publication_stamps() -> None:
+    content = {"finding_publications": [{"finding_id": "prior-1", "body": "Explanation."}]}
+    for field, value in (("revision", 2), ("patch_path", "/forged"), ("patch_sha256", "a" * 64)):
+        with pytest.raises(contract.WorkflowError, match="machine-rendered"):
+            render.apply_prose(
+                content, {"finding_publications": [{"finding_id": "prior-1", field: value}]}
+            )
+
+
+def test_re_anchor_maps_insertions_without_guessing(fixture: ReviewFixture) -> None:
+    old_head = fixture.head_sha
+    (fixture.repo / "review.txt").write_text("base\nintro\nreviewed change\n")
+    fixture.git("add", "review.txt")
+    fixture.git("commit", "-m", "insert before the anchor")
+    new_head = fixture.head()
+    rows = render.re_anchor_line(
+        fixture.repo, old_head, new_head, [{"type": "line", "path": "review.txt", "line": 2}]
+    )
+    assert rows[0]["line"] == 3
+    unchanged = render.re_anchor_line(
+        fixture.repo, old_head, new_head, [{"type": "line", "path": "review.txt", "line": 1}]
+    )
+    assert unchanged[0]["line"] == 1
+
+
+def _prepare_panel(fixture: ReviewFixture) -> str:
+    started = draft_module.start_review(url=fixture.url, repo_root=str(fixture.repo))
+    path = str(started["draft_path"])
+    package_path = Path(str(started["context_package"]["template_path"]))
+    package = contract.read_json(package_path, "package")
+    package["questions"] = []
+    for thread in package["thread_registry"]:
+        thread["summary"] = "Retry discussion."
+        thread["review_relevance"] = "The change affects this path."
+    contract.write_json(package_path, package)
+    draft_module.record_draft_package(path, str(package_path))
+    selection = {"critics": [{"name": "critic-1"}], "arbitrator": {"name": "arb-1"}}
+    draft_module.record_draft_participants(path, str(_write(fixture, "panel.json", selection)))
+    receipt = {
+        **started["critic_receipt_template"],
+        "run_id": "critic-run",
+        "session_id": "critic-session",
+        "findings": [FINDING],
+    }
+    draft_module.record_draft_critic(path, str(_write(fixture, "critic.json", receipt)), "critic-1")
+    arbitration = {
+        "schema": "code-review/arbitration/v1",
+        "evidence_digest": receipt["evidence_digest"],
+        "run_id": "arb-run",
+        "session_id": "arb-session",
+        "external_mutations": False,
+        "merge_verdict": "merge_then_fix",
+        "merge_verdict_rationale": "The fix is local.",
+        "findings": [],
+        "dispositions": [
+            {
+                "id": "docs-1",
+                "decision": "accept",
+                "reason": "Confirmed on the exact head.",
+                "dependencies": {
+                    "paths": ["review.txt"],
+                    "thread_ids": [],
+                    "metadata_fields": [],
+                    "ci": False,
+                },
+                "publication": {"kind": "general", "fix_mode": "patch"},
+            }
+        ],
+        "ci_job_assessments": [],
+        "owner_decision_reasons": [],
+        "question_verifications": [],
+        "content": {},
+    }
+    imported = draft_module.record_draft_arbitration(
+        path, str(_write(fixture, "panel-arbitration.json", arbitration))
+    )
+    assert imported["status"] == "ok", imported
+    draft_module.render_content_review(path)
+    return path
+
+
+def test_renderer_keeps_an_accepted_critic_finding(fixture: ReviewFixture) -> None:
+    path = _prepare_panel(fixture)
+    draft = contract.read_json(Path(path), "draft")
+    assert draft["content"]["findings"] == [FINDING]
+    assert draft["content"]["finding_publications"][0]["finding_id"] == "docs-1"
+
+
+def test_panel_record_prose_passes_ownership_and_validation(fixture: ReviewFixture) -> None:
+    path = _prepare_panel(fixture)
+    draft = contract.read_json(Path(path), "draft")
+    decision_before = draft["arbitration"]["dispositions"]
+    identity = {"run_id": "orchestrator-run", "session_id": "orchestrator-session"}
+    assert (
+        draft_module.record_draft_input(path, str(_write(fixture, "identity.json", identity)))[
+            "status"
+        ]
+        == "ok"
+    )
+    prose_path = render.prose_file(Path(path).parent.parent, draft["context_digest"])
+    prose = contract.read_json(prose_path, "prose")
+    contract.write_json(prose_path, _prose_fill(prose))
+    draft_module.record_prose(path, str(prose_path))
+    after = contract.read_json(Path(path), "draft")
+    assert after["arbitration"]["dispositions"] == decision_before
+    checked = draft_module.check_review(path)
+    assert checked["status"] == "ok", checked["errors"]
+
+
+def test_no_drift_re_anchor_preserves_the_recorded_panel(fixture: ReviewFixture) -> None:
+    path = _prepare_panel(fixture)
+    before = Path(path).read_bytes()
+    root = Path(path).parent.parent
+    progress_before = (root / review_context.PROGRESS_NAME).read_bytes()
+    result = draft_module.re_anchor_review(path)
+    assert result["re_anchored"] is False
+    assert Path(path).read_bytes() == before
+    assert (root / review_context.PROGRESS_NAME).read_bytes() == progress_before
+
+
+def test_drifted_panel_re_anchor_refuses_without_destroying_authorship(
+    fixture: ReviewFixture,
+) -> None:
+    path = _prepare_panel(fixture)
+    before = Path(path).read_bytes()
+    root = Path(path).parent.parent
+    progress_before = (root / review_context.PROGRESS_NAME).read_bytes()
+    (fixture.repo / "review.txt").write_text("base\nintro\nreviewed change\n")
+    fixture.git("add", "review.txt")
+    fixture.git("commit", "-m", "head drift")
+    head = fixture.head()
+    fixture.config_path.write_text(json.dumps({**fixture.read_config(), "headSha": head}))
+    with pytest.raises(contract.WorkflowError, match="v2 requires"):
+        draft_module.re_anchor_review(path)
+    assert Path(path).read_bytes() == before
+    assert (root / review_context.PROGRESS_NAME).read_bytes() == progress_before

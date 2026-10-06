@@ -229,25 +229,40 @@ answer verdicts, and the resume/refresh lifecycle, and
 
 ## The inverted tail: render, edit prose, finalize
 
-After the decision is recorded the tail is machine-first. Run
+For the draft path, after the decision is recorded, run
 `reviewmatic render-review --draft <draft-path>`: the runtime renders the
-complete content draft from the recorded decision - anchors from the changed
-lines, bindings, revisions, and stamps derived by the validators' own
-functions - and materializes `content-prose-<digest>.json` next to the draft,
+content draft from accepted primary and critic findings and their publication
+intents. A line intent needs one unambiguous added-line anchor in its path
+dependencies. An existing-thread intent needs one prepared thread in its
+thread dependencies. Multiple possible anchors require decision repair.
+The runtime materializes `content-prose-<digest>.json` next to the draft,
 carrying only the prose and semantic fields with structurally detectable
 placeholders. Edit that one file (fill the placeholders, keep the row ids) and
 apply it with `reviewmatic record-prose --draft <draft-path> --input <prose>`.
 Structural keys in the prose file are rejected loudly; after rendering,
 `record-input` over rendered fields requires a recorded repair kind, and a
 draft with unfilled placeholders is not finalizable - `check-review` answers
-with fill guidance instead of raw rule errors. When the reviewed head drifts,
-run `reviewmatic re-anchor-review --draft <draft-path>` instead of re-authoring:
-the decision and prose are preserved verbatim, machine bindings re-derive,
-receipts keep their original digest provenance, the drift (old/new head) is
-recorded in the draft, and positioned anchors remap deterministically - an
-anchor inside a changed hunk refuses loudly with the repair path, never a
-guess. This routing is the precedence: render, prose, finalize; the
+with fill guidance instead of raw rule errors. Check the result before
+finalizing. Patch companions and revisions are stamped during plan creation,
+not supplied in the prose file. This routing is the precedence: render, prose, finalize; the
 structural path is repair (`references/repair.md`).
+
+`reviewmatic re-anchor-review --draft <draft-path>` checks for drift before
+refreshing. Unchanged evidence leaves the draft and progress untouched.
+For a draft without critic receipts, it can remap surviving line anchors and
+returns `needs_reassessment`: verify the changed scope and re-record the
+refreshed context package before finalization. An anchor inside a changed
+hunk refuses before refresh instead of re-authoring or guessing it.
+For a panel or any draft with critic receipts, changed evidence refuses
+without modifying the draft, prose, receipts, or progress. The current v2
+contract requires each receipt to bind the selected evidence digest. Use
+explicit `refresh-review` with fresh targeted receipts, never edit the original
+digests. A provenance-preserving panel re-anchor is not yet supported.
+
+The one-process `run` path still uses its existing decision/content stops.
+It does not invoke this draft renderer or `record-prose`, and its evidence
+drift path still requires a new review cycle. Do not claim the draft tail's
+routing or re-anchor behavior for `run`.
 
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 

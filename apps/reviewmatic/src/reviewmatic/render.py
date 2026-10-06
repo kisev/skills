@@ -54,22 +54,34 @@ STRUCTURAL_PUBLICATION_KEYS = {
     "old_line",
     "fix_mode",
     "suggestions",
+    "patch_path",
+    "patch_sha256",
+    "revision",
 }
-STRUCTURAL_ASSESSMENT_KEYS = {"id", "kind", "critic_required", "previous_status"}
+STRUCTURAL_ASSESSMENT_KEYS = {"critic_required", "previous_status", "revision", "update_issue"}
+SEMVER_PROSE_KEYS = {"policy", "sources", "fallback_reason", "release_impact", "release_rationale"}
 
 
 def _accepted_findings(draft: dict[str, Any]) -> list[dict[str, Any]]:
-    arbitration = draft.get("arbitration")
-    if isinstance(arbitration, dict):
-        return cast("list[dict[str, Any]]", arbitration.get("findings") or [])
-    findings = _records_flat(draft.get("findings"))
+    findings = [
+        *_records_flat(draft.get("findings")),
+        *[
+            finding
+            for receipt in _records_flat(draft.get("critics"))
+            for finding in _records_flat(receipt.get("findings"))
+        ],
+    ]
     dispositions = {str(item.get("id")): item for item in _records_flat(draft.get("dispositions"))}
     accepted = []
     for finding in findings:
         disposition = dispositions.get(str(finding.get("id")))
         if disposition is not None and disposition.get("decision") == "accept":
-            accepted.append(finding)
-    return accepted
+            override = disposition.get("severity_override") or {}
+            accepted.append(
+                {**finding, "severity": override.get("severity") or finding["severity"]}
+            )
+    order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+    return sorted(accepted, key=lambda finding: order[finding["severity"]])
 
 
 def _records_flat(value: object) -> list[dict[str, Any]]:
@@ -93,11 +105,19 @@ def _publication_intents(draft: dict[str, Any]) -> dict[str, dict[str, Any]]:
 def _first_changed_line(
     repo_root: Path, base: str, head: str, paths: list[str]
 ) -> tuple[str, int] | None:
+    anchors: list[tuple[str, int]] = []
     for path in paths:
-        _, new_lines = context.changed_diff_lines(repo_root, base, head, path)
-        if new_lines:
-            return path, min(new_lines)
-    return None
+        _, visible = context.changed_diff_lines(repo_root, base, head, path)
+        diff = str(contract.git_read(repo_root, "diff", "--unified=0", base, head, "--", path))
+        for match in re.finditer(r"^@@ -[^ ]+ \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
+            start, count = int(match[1]), int(match[2]) if match[2] is not None else 1
+            anchors.extend((path, line) for line in range(start, start + count) if line in visible)
+    if len(anchors) > 1:
+        raise contract.WorkflowError(
+            "line intent has multiple possible anchors; use decision repair to supply a "
+            "verified publication instead of guessing a changed line"
+        )
+    return anchors[0] if anchors else None
 
 
 def render_content(
@@ -124,9 +144,26 @@ def render_content(
         finding_id = str(finding.get("id"))
         intent = intents.get(finding_id)
         if intent is None or intent.get("kind") == "none":
-            continue
+            raise contract.WorkflowError(
+                f"accepted finding {finding_id} requires a publication intent with a concrete "
+                "fix; none cannot hide an accepted finding - reject or merge it in arbitration"
+            )
         if intent.get("kind") == "existing_thread":
-            rows.append(publication_skeletons._variant_block(finding_id, "existing_thread"))
+            block = publication_skeletons._variant_block(finding_id, "existing_thread")
+            thread_ids = [
+                str(thread_id)
+                for row in _records_flat(draft.get("dispositions"))
+                if row.get("id") == finding_id
+                for thread_id in (row.get("dependencies") or {}).get("thread_ids", [])
+            ]
+            bindings = context.expected_thread_bindings(review_context)
+            if len(thread_ids) != 1 or thread_ids[0] not in bindings:
+                raise contract.WorkflowError(
+                    f"existing_thread intent for {finding_id} needs one prepared thread in "
+                    "dependencies.thread_ids; use decision repair rather than guessing a thread"
+                )
+            block["thread_id"] = thread_ids[0]
+            rows.append(block)
             continue
         if intent.get("kind") == "local_fix" and role == "author":
             rows.append(publication_skeletons._variant_block(finding_id, "local_fix+patch"))
@@ -140,6 +177,10 @@ def render_content(
             anchor = _first_changed_line(repo_root, base, head, dependencies)
             if anchor is not None:
                 block["path"], block["line"] = anchor[0], anchor[1]
+            else:
+                raise contract.WorkflowError(
+                    f"line intent for {finding_id} has no changed-line anchor; use decision repair"
+                )
             rows.append(block)
             continue
         rows.append(
@@ -174,18 +215,6 @@ def _dependencies_of(draft: dict[str, Any], finding_id: str) -> list[str]:
 
 
 def _decision_for_content(draft: dict[str, Any]) -> dict[str, Any]:
-    arbitration = draft.get("arbitration")
-    if isinstance(arbitration, dict):
-        findings = _records_flat(arbitration.get("findings"))
-        responses = [
-            {"id": str(item.get("id")), "decision": "accept", "reason": "arbitrated"}
-            for item in findings
-        ]
-        return {
-            "accepted_findings": findings,
-            "findings": findings,
-            "responses": responses,
-        }
     accepted = _accepted_findings(draft)
     return {
         "accepted_findings": accepted,
@@ -226,6 +255,8 @@ def prose_projection(content: dict[str, Any]) -> dict[str, Any]:
                 for item in value
                 if isinstance(item, dict)
             ]
+        elif key == "semver_assessment" and isinstance(value, dict):
+            projection[key] = {field: value[field] for field in SEMVER_PROSE_KEYS if field in value}
         else:
             projection[key] = value
     return projection
@@ -241,6 +272,20 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
                 f"the prose surface carries only prose and semantic fields; {key} is "
                 "machine-rendered - edit it only through a recorded repair kind"
             )
+        if key == "semver_assessment":
+            if not isinstance(value, dict) or set(value) - SEMVER_PROSE_KEYS:
+                raise contract.WorkflowError(
+                    "semver_assessment machine-rendered bindings cannot be set in record-prose; "
+                    "edit policy, sources, fallback_reason, release_impact, or release_rationale"
+                )
+            merged[key] = {**merged[key], **copy.deepcopy(value)}
+            continue
+        if key in {"thread_decisions", "finding_publications", "previous_finding_assessments"} and (
+            not isinstance(value, list) or any(not isinstance(row, dict) for row in value)
+        ):
+            raise contract.WorkflowError(
+                f"{key} requires an array of prose objects; draft unchanged"
+            )
         if key == "thread_decisions" and isinstance(value, list):
             rows: list[dict[str, Any]] = []
             current = {
@@ -251,7 +296,8 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
             for row in value:
                 if not isinstance(row, dict):
                     continue
-                leak = sorted(STRUCTURAL_THREAD_KEYS & set(row))
+                allowed = set(current.get(str(row.get("id"))) or {}) - STRUCTURAL_THREAD_KEYS
+                leak = sorted(set(row) - allowed)
                 if leak:
                     structural_rejections.append(f"thread_decisions[{row.get('id')}]: {leak}")
                     continue
@@ -274,7 +320,11 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
             for row in value:
                 if not isinstance(row, dict):
                     continue
-                leak = sorted(STRUCTURAL_PUBLICATION_KEYS & set(row))
+                allowed = (
+                    set(current.get(str(row.get("finding_id"))) or {})
+                    | {"body", "patch", "patch_reason", "split_rationale"}
+                ) - STRUCTURAL_PUBLICATION_KEYS
+                leak = sorted(set(row) - allowed)
                 if leak:
                     structural_rejections.append(
                         f"finding_publications[{row.get('finding_id')}]: {leak}"
@@ -370,35 +420,28 @@ def re_anchor_line(
         diff = str(
             contract.git_read(repo_root, "diff", "--unified=0", old_head, new_head, "--", path)
         )
-        ambiguous = False
-        mapping: dict[int, int] = {}
-        cursor = 1
-        image = 1
+        offset = 0
         for match in re.finditer(
             r"^@@ -(?P<old>[0-9]+)(?:,(?P<old_count>[0-9]+))? \+(?P<new>[0-9]+)(?:,(?P<new_count>[0-9]+))? @@",
             diff,
             re.MULTILINE,
         ):
             old_start = int(match.group("old"))
-            old_count = int(match.group("old_count") or 1)
-            new_start = int(match.group("new"))
-            while cursor < old_start:
-                mapping[cursor] = image
-                cursor += 1
-                image += 1
+            old_count = int(match.group("old_count")) if match.group("old_count") else 1
+            new_count = int(match.group("new_count")) if match.group("new_count") else 1
+            # An insertion (-N,0) occurs after N, not before N.
+            if old_count == 0:
+                if line > old_start:
+                    offset += new_count
+                continue
             if old_start <= line < old_start + old_count:
-                ambiguous = True
-            cursor = old_start + old_count
-            image = new_start + int(match.group("new_count") or 1)
-        if not ambiguous:
-            mapping[line] = mapping.get(line, line + (image - cursor))
-        if ambiguous:
-            raise contract.WorkflowError(
-                "the anchor is inside a changed hunk and has no unique image on the new "
-                f"head ({path}:{line}); re-author that publication through a recorded "
-                "repair kind, never a guess"
-            )
-        row["line"] = mapping.get(line, line)
+                raise contract.WorkflowError(
+                    "the anchor is inside a changed hunk and has no unique image on the new "
+                    f"head ({path}:{line}); use decision repair, never a guess"
+                )
+            if line >= old_start + old_count:
+                offset += new_count - old_count
+        row["line"] = line + offset
     return remapped
 
 

@@ -361,6 +361,29 @@ findings with complete fields, a pre-existing bloat candidate shall become a
 recommended issue instead of a finding, and in local reviews it shall keep
 `origin: pre_existing` and never block.
 
+The draft renderer shall derive the accepted set from both primary and critic
+findings with their recorded dispositions and effective severities. Accepted
+findings rendered through `render-review` shall carry a publication intent in
+the app-layer disposition. A line intent shall derive only an unambiguous
+added-line anchor, not choose an unchanged context line or guess among
+multiple positions. An existing-thread intent shall bind exactly one prepared
+thread named by the finding's dependencies. The generated prose surface shall
+retain row identity handles and reject structural publication stamps and
+SemVer bindings. Panel prose edits shall preserve arbitration decision keys
+and retain the semantic-only thread representation in `arbitration.content`.
+After rendering, direct `record-input` edits outside session identity shall
+require a recorded repair kind.
+
+Re-anchor shall check evidence before refresh. When evidence is unchanged, it
+shall preserve draft and progress bytes. Without critic receipts, surviving
+line anchors may map across head drift, but the changed scope and refreshed
+package shall require reassessment before completion. With a panel or critic
+receipts, changed evidence shall refuse without replacing authoring state:
+the current v2 receipt contract requires the selected evidence binding, so
+original receipts cannot certify a new snapshot by having their digests
+rewritten. The one-process `run` retains its existing authoring stops and
+does not use the draft prose surface or provenance-preserving re-anchor.
+
 Incremental analysis shall follow changed code, conversations, metadata, and CI,
 including affected unchanged consumers. Previous accepted findings and recommended
 issues retain stable IDs and explicit current dispositions; rejected candidates

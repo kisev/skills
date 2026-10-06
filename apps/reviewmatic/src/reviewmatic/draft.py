@@ -2414,19 +2414,7 @@ def _compile_draft(
                 f"$.dispositions[{dispositions.index(disposition)}].duplicate_of must name an "
                 "accepted canonical finding"
             )
-    accepted = [
-        {
-            **item,
-            "severity": (
-                ((by_id[str(item["id"])].get("severity_override") or {}).get("severity"))
-                or item["severity"]
-            ),
-        }
-        for item in candidates
-        if by_id[str(item["id"])]["decision"] == "accept"
-    ]
-    order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-    accepted.sort(key=lambda item: order[str(item["severity"])])
+    accepted = render._accepted_findings(draft)
     merged_content: dict[str, Any] = {
         **cast("dict[str, Any]", draft["content"]),
         "findings": accepted,
@@ -3877,7 +3865,7 @@ def record_draft_input(path: str, input_path: str) -> dict[str, Any]:
         repair_kind = (
             str(draft["repair"]["kind"]) if isinstance(draft.get("repair"), dict) else None
         )
-        if repair_kind is None and "content" in user_input:
+        if repair_kind is None and set(user_input) - {"run_id", "session_id", "low_risk"}:
             issues.append(
                 {
                     "path": "$.content",
@@ -4349,8 +4337,16 @@ def record_prose(path: str, input_path: str) -> dict[str, Any]:
         # Panel mode: the prose surface is the sanctioned editor of the
         # arbitration content prose; decision keys stay untouched, so the
         # ownership check keeps passing.
-        arbitration_content = cast("dict[str, Any]", arbitration.get("content") or {})
-        arbitration["content"] = render.apply_prose({**arbitration_content, **content}, user_input)
+        arbitration["content"] = {
+            key: copy.deepcopy(value)
+            for key, value in content.items()
+            if key in _ARBITRATION_CONTENT_PROPERTIES and key != "issue_templates"
+        }
+        thread_keys = set(cast("dict[str, Any]", _thread_semantic_schema()["properties"]))
+        arbitration["content"]["thread_decisions"] = [
+            {key: copy.deepcopy(value) for key, value in thread.items() if key in thread_keys}
+            for thread in _records(content.get("thread_decisions"))
+        ]
     contract.write_json(Path(path), draft)
     guidance = render.placeholder_guidance(content)
     return {
@@ -4368,8 +4364,33 @@ def re_anchor_review(path: str) -> dict[str, Any]:
     draft, root, _progress, evidence, review_context = _selected_draft(path)
     exact = cast("dict[str, Any]", review_context["exact_git"])
     repo_root = Path(str(exact["repo_root"]))
-    del draft
     old_head = str(evidence["head_sha"])
+    # Preflight before refresh, which intentionally drops panel receipts.
+    # Preserving old receipts as proof of a new snapshot would violate the v2
+    # evidence binding; do not claim success or mutate the panel in that case.
+    current = contract.collect(evidence["target"], "code-review", persist=False)
+    if current.get("retrieval_complete") is not True:
+        raise contract.WorkflowError(
+            "re-anchor requires complete current evidence; draft unchanged"
+        )
+    if contract.fingerprint(current) == contract.fingerprint(evidence):
+        return {
+            "status": "ok",
+            "draft_path": str(Path(path).resolve()),
+            "re_anchored": False,
+            "reason": "the review evidence has not changed",
+            "external_mutations": False,
+        }
+    if "participants" in draft or _records(draft.get("critics")):
+        raise contract.WorkflowError(
+            "re-anchor cannot certify new evidence with original critic receipts: v2 requires "
+            "each receipt's evidence_digest to match the selected snapshot. Draft, prose, "
+            "and receipts are unchanged. Use explicit refresh-review with targeted fresh "
+            "receipts; do not rebind the original digests"
+        )
+    preflight_head = str(current["head_sha"])
+    publications = _records(draft.get("content", {}).get("finding_publications"))
+    mapped_publications = render.re_anchor_line(repo_root, old_head, preflight_head, publications)
     refresh = refresh_review(path)
     if refresh.get("status") not in {"ok", "needs_reassessment"}:
         return refresh
@@ -4378,6 +4399,11 @@ def re_anchor_review(path: str) -> dict[str, Any]:
         Path(str(draft_next["evidence_path"])), "evidence_snapshot"
     )
     new_head = str(evidence_next["head_sha"])
+    if new_head != preflight_head:
+        raise contract.WorkflowError(
+            "the head moved during re-anchor; the previous draft is preserved but the new "
+            "snapshot needs explicit refresh and anchor verification"
+        )
     if new_head == old_head:
         return {
             "status": "ok",
@@ -4392,13 +4418,12 @@ def re_anchor_review(path: str) -> dict[str, Any]:
         "at": render.now_iso(),
         "receipts_bound_to": "original digests (provenance preserved)",
     }
-    publications = cast(
-        "list[dict[str, Any]]",
-        draft_next.get("content", {}).get("finding_publications") or [],
-    )
-    draft_next["content"]["finding_publications"] = render.re_anchor_line(
-        repo_root, old_head, new_head, publications
-    )
+    draft_next["content"]["finding_publications"] = mapped_publications
+    if "rendered" in draft:
+        draft_next["rendered"] = {
+            **draft["rendered"],
+            "context_digest": draft_next["context_digest"],
+        }
     if draft_next.get("rendered"):
         prose_path = render.prose_file(root, str(draft_next["context_digest"]))
         contract.write_json(
@@ -4407,17 +4432,17 @@ def re_anchor_review(path: str) -> dict[str, Any]:
         )
     contract.write_json(Path(str(refresh["draft_path"])), draft_next)
     return {
-        "status": "ok",
+        "status": "needs_reassessment",
         "draft_path": str(refresh["draft_path"]),
         "re_anchored": True,
         "from_head": old_head,
         "to_head": new_head,
-        "receipts_provenance": "original digests",
+        "receipts_provenance": "no critic receipts were carried to a new snapshot",
         "next_action": context.runner_action("check-review", "--draft", str(refresh["draft_path"])),
         "note": (
-            "Evidence re-anchored: decision and prose preserved verbatim, machine "
-            "bindings re-derived, receipts keep their original digest provenance. "
-            "Ambiguous anchors refuse loudly with a repair path."
+            "Anchors remapped without re-authoring; the refreshed context package and changed "
+            "scope still require verification before finalization. Panel provenance-preserving "
+            "re-anchor is blocked by the current v2 evidence binding."
         ),
         "external_mutations": False,
     }

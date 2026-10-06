@@ -196,10 +196,12 @@ def test_the_tail_routing_precedence_is_documented() -> None:
     """Render before prose before finalize; structural edits are repair."""
     workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
     tail = workflow.index("The inverted tail")
-    section = workflow[tail:]
+    section = " ".join(workflow[tail:].split())
     render_at = section.index("render-review")
     prose_at = section.index("record-prose")
     assert render_at < prose_at, "render-review precedes record-prose in the tail"
     assert "re-anchor-review" in section
-    assert "instead of re-authoring" in section
+    assert "before refreshing" in section
     assert "requires a recorded repair kind" in section
+    assert "panel re-anchor is not yet supported" in section
+    assert "does not invoke this draft renderer" in section
