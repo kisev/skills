@@ -2153,6 +2153,8 @@ def blocking_thread_ids(
 def validate_finding_publications(value: object, finding_ids: set[str]) -> list[dict[str, Any]]:
     keys = {"finding_id", "type", "path", "line", "old_line", "body", "fix_mode", "patch"}
     extensible = {"suggestions", "split_rationale", "patch_reason", "thread_id"}
+    # The runtime stamps these onto the stored artifact; the input never sets them.
+    runtime_stamped = {"patch_path", "patch_sha256", "revision"}
     if not isinstance(value, list):
         raise portable.WorkflowError("finding publications must be an array")
     result: list[dict[str, Any]] = []
@@ -2162,7 +2164,19 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             raise portable.WorkflowError("finding publication is invalid")
         item = entry
         if set(item) - extensible != keys:
-            raise portable.WorkflowError("finding publication is invalid")
+            unknown = sorted((set(item) - keys - extensible) | (runtime_stamped & set(item)))
+            missing = sorted(keys - set(item))
+            raise validation_record(
+                "a finding publication carries exactly the input keys",
+                f"$.finding_publications[finding_id={item.get('finding_id')}]",
+                "input keys: "
+                + ", ".join(sorted(keys))
+                + "; optional: "
+                + ", ".join(sorted(extensible)),
+                "runtime stamps: patch_path, patch_sha256, revision - do not set them"
+                + (f"; unexpected here: {', '.join(unknown)}" if unknown else "")
+                + (f"; missing: {', '.join(missing)}" if missing else ""),
+            )
         finding_id = item.get("finding_id")
         publication_type = item.get("type")
         path, line, old_line = item.get("path"), item.get("line"), item.get("old_line")
@@ -3898,47 +3912,111 @@ def publish_review_state(
     return markdown_path.resolve(), markdown_digest
 
 
-def reject_visible_raw_refs(
-    markdown: str, evidence: dict[str, Any], context: dict[str, Any] | None = None
-) -> None:
-    refs = [
-        value
-        for value in (evidence.get("base_sha"), evidence.get("start_sha"), evidence.get("head_sha"))
+def raw_ref_sources(
+    evidence: dict[str, Any], context: dict[str, Any] | None = None
+) -> list[tuple[str, str]]:
+    """Every watched SHA with the evidence field it came from."""
+    sources: list[tuple[str, str]] = [
+        (value, f"evidence {name}")
+        for name, value in (
+            ("base_sha", evidence.get("base_sha")),
+            ("start_sha", evidence.get("start_sha")),
+            ("head_sha", evidence.get("head_sha")),
+        )
         if isinstance(value, str) and len(value) >= 12
     ]
     if context is not None:
         release = context.get("release_evidence")
         if isinstance(release, dict):
-            candidates = [release.get("target_sha")]
+            candidates = [(release.get("target_sha"), "release target_sha")]
             for key in ("releases", "tags"):
                 for item in release[key]["items"]:
                     if isinstance(item, dict) and isinstance(item.get("commit"), dict):
-                        candidates.append(item["commit"].get("id"))
-            refs.extend(
-                value for value in candidates if isinstance(value, str) and len(value) >= 12
+                        candidates.append((item["commit"].get("id"), f"release catalog {key}"))
+            sources.extend(
+                (value, label)
+                for value, label in candidates
+                if isinstance(value, str) and len(value) >= 12
             )
         incremental = context.get("incremental")
         delta = incremental.get("incremental_delta") if isinstance(incremental, dict) else None
         if isinstance(delta, dict):
-            refs.extend(
-                value
-                for value in (delta.get("from_head"), delta.get("to_head"))
-                if isinstance(value, str) and len(value) >= 12 and value not in refs
+            sources.extend(
+                (value, f"incremental {name}")
+                for name, value in (
+                    ("from_head", delta.get("from_head")),
+                    ("to_head", delta.get("to_head")),
+                )
+                if isinstance(value, str) and len(value) >= 12
             )
-    for line in markdown.splitlines():
+    # One watched value reports one source: the first field it came from.
+    unique: dict[str, str] = {}
+    for value, label in sources:
+        unique.setdefault(value, label)
+    return list(unique.items())
+
+
+def visible_raw_ref_violations(
+    markdown: str, evidence: dict[str, Any], context: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """Every raw-SHA exposure in user-facing text: line, token, source.
+
+    Pure: nothing is written or raised. The glab-position lines keep their
+    exception - executable GitLab position arguments retain exact revisions.
+    """
+    refs = raw_ref_sources(evidence, context)
+    violations: list[dict[str, Any]] = []
+    for number, line in enumerate(markdown.splitlines(), start=1):
         if line.startswith("glab api ") and ("position[" in line or "-F 'position={" in line):
             continue
         visible = re.sub(r"\]\(https?://[^)]*\)", "](...)", line).casefold()
-        for value in refs:
+        for value, source in refs:
             normalized = value.casefold()
-            if normalized in visible or any(
-                re.search(
-                    rf"(?<![0-9a-f]){re.escape(normalized[:length])}(?![0-9a-f])",
-                    visible,
+            token = ""
+            if normalized in visible:
+                token = normalized
+            else:
+                for length in range(7, min(12, len(normalized)) + 1):
+                    if re.search(
+                        rf"(?<![0-9a-f]){re.escape(normalized[:length])}(?![0-9a-f])",
+                        visible,
+                    ):
+                        token = normalized[:length]
+                        break
+            if token:
+                violations.append(
+                    {
+                        "line": number,
+                        "token": token[:12],
+                        "token_length": len(token),
+                        "source": source,
+                    }
                 )
-                for length in range(7, min(12, len(normalized)) + 1)
-            ):
-                raise portable.WorkflowError("user-facing review Markdown exposes a raw commit SHA")
+    return violations
+
+
+def reject_visible_raw_refs(
+    markdown: str, evidence: dict[str, Any], context: dict[str, Any] | None = None
+) -> None:
+    violations = visible_raw_ref_violations(markdown, evidence, context)
+    if not violations:
+        return
+    first = violations[0]
+    rest = violations[1:]
+    detail = (
+        f"first at line {first['line']}: token {first['token']!r} (length {first['token_length']}) "
+        f"from {first['source']}"
+    )
+    if rest:
+        lines = ", ".join(str(item["line"]) for item in rest)
+        detail += f"; {len(rest)} more exposure(s) at line(s) {lines}"
+    raise validation_record(
+        "user-facing review Markdown exposes a raw commit SHA",
+        f"line {first['line']}",
+        "name the commit naturally and link its immutable GitLab revision; exact revisions "
+        "stay only in executable glab position arguments",
+        detail,
+    )
 
 
 def build_finding_ledger(
@@ -4048,6 +4126,23 @@ def build_rejected_candidate_ledger(
             ledger[item_id] = current[item_id]
     ledger.update({item_id: item for item_id, item in current.items() if item_id not in previous})
     return sorted(ledger.values(), key=lambda item: item["id"])
+
+
+def _plan_echo(
+    findings: list[dict[str, Any]],
+    publications: list[dict[str, Any]],
+    threads: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Echo what the plan actually read: counts, never silently empty lists."""
+    outcomes: dict[str, int] = {}
+    for thread in threads:
+        outcome = str(thread.get("outcome"))
+        outcomes[outcome] = outcomes.get(outcome, 0) + 1
+    return {
+        "findings": len(findings),
+        "publications": len(publications),
+        "thread_outcomes": outcomes,
+    }
 
 
 def scaffold_review(
@@ -4642,7 +4737,12 @@ def scaffold_review(
         "markdown": markdown,
     }
     if draft is not None and draft.get("dry_run") is True:
-        return {"status": "ok", "payload": payload, "external_mutations": False}
+        return {
+            "status": "ok",
+            "payload": payload,
+            "echo": _plan_echo(findings, enriched_publications, enriched_threads),
+            "external_mutations": False,
+        }
     path, plan_digest = portable.write_artifact(root, "review_plan", payload)
     markdown_path, markdown_digest = publish_review_state(
         root,
@@ -4672,6 +4772,7 @@ def scaffold_review(
     )
     return {
         "status": "ok" if payload["complete"] else "incomplete",
+        "echo": _plan_echo(findings, enriched_publications, enriched_threads),
         "summary": {
             "tldr": "Prepared an immutable role-aware code review plan.",
             "scope": [str(context["target"].get("url", ""))],

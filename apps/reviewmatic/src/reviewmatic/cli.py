@@ -229,6 +229,11 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        "scrub-preview",
+        "List every raw-SHA exposure of the draft's user-facing text and plan Markdown",
+        (OptionSpec("draft", "generated editable review draft", required=True),),
+    ),
+    CommandSpec(
         "runtime-info",
         "Print the runtime version and the resolved installation commit",
     ),
@@ -851,6 +856,10 @@ def dispatch(namespace: argparse.Namespace, tokens: Sequence[str]) -> int:
     if name == "runtime-info":
         contract.emit(runtime_info())
         return EXIT_OK
+    if name == "scrub-preview":
+        result = draft_module.scrub_preview(str(_field(namespace, "draft")))
+        contract.emit(result)
+        return EXIT_OK if result["status"] == "ok" else EXIT_ERROR
     if name == "worktree":
         if getattr(namespace, "list", None) == "list":
             contract.emit(

@@ -103,6 +103,7 @@ def test_the_python_command_surface_is_explicit_and_contains_no_terminal_ui() ->
         "record-package",
         "record-input",
         "record-critic",
+        "scrub-preview",
         "runtime-info",
         "record-run-critic",
         "record-participants",

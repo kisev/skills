@@ -456,7 +456,16 @@ templates and creation commands belong to a separate `task-prepare` invocation;
 mandatory MR fixes cannot be moved to follow-ups.
 
 The runbook shall omit empty sections and duplicated findings, patches, and
-commands. Previous findings receive one compact row with a short name, localized
+commands. Before finalization, `scrub-preview` shall run as a pure
+computation — the draft's user-facing fields plus the same-builder dry-run
+plan Markdown and chat — and list every raw-SHA exposure with its line,
+token, and source, writing nothing and exiting nonzero while any remain; the
+finalization refusal itself shall name the first exposure's line, token, and
+evidence source plus the count and lines of the rest. Publication input
+errors shall separate the allowed input keys from the runtime-stamped fields
+(`patch_path`, `patch_sha256`, `revision`) with an explicit do-not-set note,
+and check/finalize responses shall echo the finding, publication, and
+thread-outcome counts they read. Previous findings receive one compact row with a short name, localized
 result, and next action; detail and commands stay together, not under unrelated
 sections. Metadata and label delta stay compact; exhaustive applicability,
 unresolved labels, and removal reasons stay private. SemVer distinguishes MR

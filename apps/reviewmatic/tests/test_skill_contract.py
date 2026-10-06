@@ -35,6 +35,8 @@ REQUIRED_DOCUMENTED = (
     "record-run-critic",
     # Runtime identity: SHA pinning and the self report.
     "runtime-info",
+    # Finalization preview: the pure raw-SHA scrub.
+    "scrub-preview",
     # Marked repair path: the step-by-step panel flow.
     "start-review",
     "resume-review",

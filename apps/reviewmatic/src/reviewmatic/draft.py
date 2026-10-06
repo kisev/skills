@@ -2772,10 +2772,16 @@ def check_review(path: str) -> dict[str, Any]:
                 except contract.WorkflowError as error:
                     errors.append({"path": "$.content", "message": str(error)})
     resolved_draft = str(Path(path).resolve())
+    draft_content = cast("dict[str, Any]", draft["content"])
     return {
         "status": "ok" if not errors else "invalid",
         "draft_path": resolved_draft,
         "draft_digest": contract.digest(draft),
+        "echo": context._plan_echo(
+            _records(draft_content.get("findings")),
+            _records(draft_content.get("finding_publications")),
+            _records(draft_content.get("thread_decisions")),
+        ),
         "errors": errors,
         "question_status": question_status,
         "repair": (
@@ -2786,6 +2792,90 @@ def check_review(path: str) -> dict[str, Any]:
             "finish-review" if not errors else "check-review", "--draft", resolved_draft
         ),
         "timings": {"validation_ms": round((time.monotonic() - started) * 1000)},
+        "external_mutations": False,
+    }
+
+
+def scrub_preview(path: str) -> dict[str, Any]:
+    """List every raw-SHA exposure of a draft before finalization.
+
+    Pure computation: the draft's user-facing text fields are scanned with the
+    same scanner the finalization uses, and when the draft compiles, the plan
+    Markdown and chat are built with the same builder in its dry-run mode that
+    writes nothing. Nothing is finalized, written, or collected.
+    """
+    draft, _root, progress, evidence, review_context = _selected_draft(path)
+    violations: list[dict[str, Any]] = []
+    sha_fields = re.compile(
+        r"\.(?:evidence_digest|scope_digest|context_digest|thread_sha256|"
+        r"last_note_body_sha256|target_sha|head_sha|base_sha|start_sha|sha|url)$"
+    )
+
+    def visit(value: object, field: str) -> None:
+        if isinstance(value, str):
+            if sha_fields.search(field):
+                return
+            for violation in context.visible_raw_ref_violations(value, evidence, review_context):
+                violations.append({**violation, "field": field})
+        elif isinstance(value, list):
+            for index, item in enumerate(value):
+                visit(item, f"{field}[{index}]")
+        elif isinstance(value, dict):
+            for name, item in value.items():
+                visit(item, f"{field}.{name}")
+
+    for key, values in (
+        ("findings", draft.get("findings")),
+        ("critics", draft.get("critics")),
+        ("content", draft.get("content")),
+    ):
+        visit(values, f"$.{key}")
+
+    markdown_built = False
+    compile_note: str | None = None
+    try:
+        compiled = _compile_draft(draft, review_context, evidence, str(progress["mode"]))
+        result = context.scaffold_review(
+            str(draft["evidence_path"]),
+            str(draft["context_path"]),
+            "",
+            "",
+            {
+                "decision": compiled["decision"],
+                "content": compiled["content"],
+                "dry_run": True,
+                "freshness_checked": True,
+                "source": draft,
+            },
+        )
+        payload = cast("dict[str, Any]", result["payload"])
+        markdown_built = True
+        for violation in context.visible_raw_ref_violations(
+            str(payload.get("markdown") or ""), evidence, review_context
+        ):
+            violations.append({**violation, "field": "plan markdown"})
+        for violation in context.visible_raw_ref_violations(
+            context.review_chat(payload, review_context, "runbook.md"),
+            evidence,
+            review_context,
+        ):
+            violations.append({**violation, "field": "chat"})
+    except contract.WorkflowError as error:
+        compile_note = (
+            "the draft does not compile yet, so the assembled plan Markdown was not "
+            f"scrubbed; fix first: {error}"
+        )
+
+    return {
+        "status": "ok" if not violations else "violations",
+        "draft_path": str(Path(path).resolve()),
+        "violations": violations,
+        "markdown_scrubbed": markdown_built,
+        **({"compile_note": compile_note} if compile_note else {}),
+        "note": (
+            "Nothing was written, finalized, or collected; this is the same scanner and "
+            "builder the finalization uses."
+        ),
         "external_mutations": False,
     }
 

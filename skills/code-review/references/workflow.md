@@ -333,7 +333,15 @@ the existing incremental completion rules.
 
 Finalization is local: `finish-review` validates the draft, checks every fix
 against the exact reviewed head, and writes the plan without any GitLab
-request and without a further LLM pass. Freshness after preparation is owned
+request and without a further LLM pass. Before finalizing, one pure command
+previews the raw-SHA scrub: `reviewmatic scrub-preview --draft <draft-path>`
+builds the plan Markdown with the same builder in its write-nothing mode and
+lists every exposure — line, token, and the evidence field it came from —
+exiting 1 while any remain, so a SHA never surfaces as one opaque finalization
+error. Finalization refusal messages name the rule, the offending path, and
+the accepted form, and `check-review`/`finish-review` echo what they read
+(finding, publication, and thread-outcome counts), so an empty section is
+visible immediately instead of through bisection. Freshness after preparation is owned
 by an explicit `refresh-review` for a new run and by the head check that
 guards every manual publication block. Finalization writes body files and
 content-addressed `.patch` files, then atomically replaces
