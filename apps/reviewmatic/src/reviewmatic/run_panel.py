@@ -21,6 +21,126 @@ from reviewmatic.portable.portable_gitlab import contract
 PANEL_NAME = "review-panel.json"
 PANEL_SCHEMA = "code-review/run-panel/v1"
 
+# The verbatim poll text, keyed by locale (the precedent is
+# review_metadata_labels): the agent presents this text to the user word for
+# word instead of paraphrasing the template.
+_POLL_TEXT = {
+    "en": (
+        "One poll for this review.\n"
+        "- Critics: which critics review this change, and the engine of each - a model "
+        'subagent ("engine": "model") or the mechanical OpenCodeReview CLI '
+        '("engine": "ocr").\n'
+        "- Arbitrator: one separate participant that merges every critic finding into a "
+        "single verdict.\n"
+        "- Mode: {mode} review.{ocr_note}\n"
+        "Attach your recommendation if you have one; the choice is the user's. Answer in "
+        "the selection template and run the printed command."
+    ),
+    "ru": (
+        "Один опрос на это ревью.\n"
+        "- Критики: какие критики ревьюят это изменение и движок каждого - модельный "
+        'субагент ("engine": "model") или механический OpenCodeReview CLI '
+        '("engine": "ocr").\n'
+        "- Арбитр: отдельный участник, сводящий все находки критиков в один вердикт.\n"
+        "- Режим: ревью в режиме {mode}.{ocr_note}\n"
+        "Можешь приложить свою рекомендацию; выбор за пользователем. Ответь в шаблоне "
+        "выбора и выполни напечатанную команду."
+    ),
+}
+_OCR_NOTES = {
+    "incremental": {
+        "en": " OCR critics are not offered: an incremental review needs delta-scoped "
+        "receipts, and the OCR CLI reviews the complete base..head range.",
+        "ru": " OCR-критики не предлагаются: инкрементальному ревью нужны дельта-чеки, "
+        "а OCR CLI ревьюит полный диапазон base..head.",
+    },
+    "oversized": {
+        "en": " OCR critics are not offered: the background file is {bytes} bytes, above "
+        "the ocr CLI limit of {limit}.",
+        "ru": " OCR-критики не предлагаются: background-файл весит {bytes} байт, выше "
+        "лимита ocr CLI в {limit}.",
+    },
+}
+
+
+_POLL_RULES = {
+    "en": (
+        "Present the poll text verbatim - word for word, without paraphrasing or "
+        "summarizing it. Record the answer in the selection template exactly as the user "
+        "gave it, attach your recommendation only when the user asks for it or accepts it, "
+        "and run the printed command. When the engines note excludes the OCR engine, do "
+        "not offer it."
+    ),
+    "ru": (
+        "Предъяви текст опроса дословно - слово в слово, без пересказа и сокращений. "
+        "Запиши ответ в шаблон выбора в точности как дал пользователь, прикладывай свою "
+        "рекомендацию только если пользователь её принимает, и выполни напечатанную "
+        "команду. Если примечание движков исключает OCR - не предлагай его."
+    ),
+}
+
+
+def poll_rules(locale: str) -> str:
+    return _POLL_RULES[locale]
+
+
+def engine_offering(mode: str, background_bytes: int) -> dict[str, Any]:
+    """Which engines the poll may offer, derived from the resolved mode and
+    the offline-rendered background size."""
+    if mode == "incremental":
+        return {
+            "ocr": False,
+            "exclusion": "incremental",
+            "background_bytes": background_bytes,
+            "background_limit": ocr_critic.OCR_BACKGROUND_LIMIT,
+        }
+    if background_bytes > ocr_critic.OCR_BACKGROUND_LIMIT:
+        return {
+            "ocr": False,
+            "exclusion": "oversized",
+            "background_bytes": background_bytes,
+            "background_limit": ocr_critic.OCR_BACKGROUND_LIMIT,
+        }
+    return {
+        "ocr": True,
+        "exclusion": None,
+        "background_bytes": background_bytes,
+        "background_limit": ocr_critic.OCR_BACKGROUND_LIMIT,
+    }
+
+
+def poll(locale: str, mode: str, background_bytes: int) -> dict[str, Any]:
+    """The verbatim poll presentation: text, engines, and the mode note."""
+    offering = engine_offering(mode, background_bytes)
+    note = ""
+    if offering["exclusion"] == "incremental":
+        note = _OCR_NOTES["incremental"][locale]
+    elif offering["exclusion"] == "oversized":
+        note = _OCR_NOTES["oversized"][locale].format(
+            bytes=background_bytes, limit=ocr_critic.OCR_BACKGROUND_LIMIT
+        )
+    return {
+        "text": _POLL_TEXT[locale].format(mode=mode, ocr_note=note),
+        "locale": locale,
+        "mode": mode,
+        **offering,
+    }
+
+
+def render_run_background(
+    root: Path, review_context: dict[str, Any], context_digest: str
+) -> tuple[Path, int]:
+    """Render the OCR background offline with the same renderer the critic runs.
+
+    No GitLab request and no CLI spawn: this is the measurement the poll uses
+    to decide whether the OCR engine may be offered.
+    """
+    drafts = contract.private_directory(root / "review-drafts")
+    background = ocr_critic.render_ocr_background(
+        ocr_background(review_context), drafts, context_digest
+    )
+    return background, background.stat().st_size
+
 
 def panel_path(root: Path) -> Path:
     return root / PANEL_NAME

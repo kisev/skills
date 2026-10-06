@@ -176,7 +176,7 @@ def test_self_documenting_rule_refusals() -> None:
         # An existing_thread publication with a position.
         (
             {**fill_existing_thread("docs-1"), "path": "retry.txt"},
-            r"existing_thread requires the thread_id of a prepared thread",
+            r"an existing_thread publication binds the prepared thread",
         ),
     ]
     for invalid, message in rules:

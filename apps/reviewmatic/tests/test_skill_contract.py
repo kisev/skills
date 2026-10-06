@@ -173,3 +173,14 @@ def test_runtime_pin_and_self_report_are_documented() -> None:
 def test_the_contract_test_reads_the_authored_sources() -> None:
     sources: dict[str, Any] = {"SKILL.source.md": SKILL_DIR / "SKILL.source.md"}
     assert sources["SKILL.source.md"].is_file()
+
+
+def test_the_poll_is_presented_verbatim_with_a_fixed_glossary() -> None:
+    """The skill presents the runtime poll text word for word, with fixed terms."""
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    assert "word for word" in workflow
+    assert "poll.text" in workflow
+    assert "poll-glossary.md" in workflow
+    glossary = (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8")
+    for term in ("Poll", "Critic", "Engine", "OCR engine", "Arbitrator", "Panel"):
+        assert term in glossary

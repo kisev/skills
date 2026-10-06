@@ -693,3 +693,11 @@ def test_installed_ocr_cli_exposes_the_flags_the_invocation_uses() -> None:
         "--audience",
     ):
         assert flag in result.stdout, flag
+
+
+def test_invoke_ocr_critic_preflights_the_background_limit(tmp_path: Path) -> None:
+    """An oversized background refuses before the CLI spawns."""
+    bulky = tmp_path / "oversized-background.md"
+    bulky.write_text("x" * (ocr_critic.OCR_BACKGROUND_LIMIT + 1), encoding="utf-8")
+    with pytest.raises(contract.WorkflowError, match="above the ocr CLI limit"):
+        ocr_critic.invoke_ocr_critic(bulky, "a" * 40, "b" * 40, None, None, repo=str(tmp_path))

@@ -45,7 +45,18 @@ For local WIP, use only the current existing checkout and `prepare-local --incre
 
 Drive a remote-MR review with one process: `reviewmatic run --url <mr-url> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto --repo-root <checkout>`. The checkout must contain the exact base and head objects of the MR; the run verifies them during context collection and stops with a concrete error otherwise. The run owns every mechanical step — evidence collection, context, finalization, scaffolding, and the final report — and stops only where an agent must author an artifact. Every stop prints the ready template path and the exact next command; execute each returned command as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`.
 
-The run stops once for the panel poll. Ask the user one question: the critic composition and the engine of every critic — a model subagent (`"engine": "model"`) or the mechanical OpenCodeReview CLI (`"engine": "ocr"`), with the arbitrator named separately. Attach your recommendation to the poll; the choice is the user's. Fill the returned selection template with the answer and run the printed `reviewmatic run --resume --url <mr-url> --participants <template>` command. A `fast` review never stops for the poll: it runs without a panel. Never substitute a configuration silently: the recorded names appear in the results, and the state machine rejects a substituted configuration.
+The run stops once for the panel poll. The stop carries the complete poll
+presentation under `poll`: `poll.text` is the verbatim question, keyed to the
+review locale, and `poll.rules` instructs how to present it — present the text
+word for word, without paraphrasing or summarizing; never retell the template
+in your own words. The poll names the critics, the engine of every critic, the
+one-line arbitrator role, and the resolved mode with an engines note when the
+OCR engine is excluded (incremental reviews, or a background file above the
+CLI limit); when the note excludes OCR, do not offer it. The term meanings are
+fixed in `references/poll-glossary.md`. Attach your recommendation to the poll; the choice is the user's. Fill the
+returned selection template with the answer and run the printed
+`reviewmatic run --resume --url <mr-url> --participants <template>` command. A `fast` review never stops for the poll: it runs without a panel. Never
+substitute a configuration silently: the recorded names appear in the results, and the state machine rejects a substituted configuration.
 
 After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the background from the collected context, invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
 

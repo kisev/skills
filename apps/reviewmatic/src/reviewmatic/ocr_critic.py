@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 OCR_TIMEOUT_SECONDS = 300
 OCR_SEVERITIES = {"critical", "high", "medium", "low"}
+# The external ocr CLI rejects background files above this size; the runtime
+# refuses before spawning so the panel never depends on the CLI's own error.
+OCR_BACKGROUND_LIMIT = 8000
 
 _LOCAL_SEVERITY_BLOCKING = {"critical", "high"}
 
@@ -195,6 +198,13 @@ def invoke_ocr_critic(
     if (base is None) != (head is None):
         raise contract.WorkflowError(
             "the OCR critic needs both --from and --to revisions, or neither for workspace mode"
+        )
+    # Preflight: refuse an oversized background before spawning the CLI.
+    size = background.stat().st_size if background.exists() else len(background.read_bytes())
+    if size > OCR_BACKGROUND_LIMIT:
+        raise contract.WorkflowError(
+            f"the OCR background is {size} bytes, above the ocr CLI limit of "
+            f"{OCR_BACKGROUND_LIMIT}; run the panel without OCR critics"
         )
     command = [
         "ocr",

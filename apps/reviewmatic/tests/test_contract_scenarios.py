@@ -498,9 +498,9 @@ def test_validate_critic_binds_evidence_and_scope() -> None:
     del bare["scope_digest"]
     del bare["target_finding_ids"]
     contract.validate_critic(bare, DIGEST)
-    with workflow_error(r"\$\.evidence_digest: must bind the selected evidence digest"):
+    with workflow_error(r"the receipt binds the selected evidence; path: \$\.evidence_digest"):
         contract.validate_critic(receipt, "b" * 64)
-    with workflow_error(r"\$\.scope_digest: an incremental receipt must bind"):
+    with workflow_error(r"an incremental receipt binds the reviewed delta; path: \$\.scope_digest"):
         contract.validate_critic({**receipt, "scope_digest": "c" * 64}, DIGEST, DIGEST)
     with workflow_error("independent run identity"):
         contract.validate_critic({**receipt, "run_id": ""}, DIGEST)
@@ -510,11 +510,14 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
     report = decision_payload()
     receipt = critic_payload()
     contract.validate_decision(report, DIGEST, receipt, "deep", DIGEST, DIGEST)
-    with workflow_error("schema-invalid"):
+    with workflow_error(
+        r"the verdict names a decided state; path: \$\.verdict; valid form: one of "
+        "ready, not_ready, blocked"
+    ):
         contract.validate_decision(
             {**report, "verdict": "unknown"}, DIGEST, receipt, "deep", DIGEST, DIGEST
         )
-    with workflow_error("does not account for every finding"):
+    with workflow_error("every finding and unresolved thread gets exactly one answer"):
         contract.validate_decision(
             {**report, "responses": []}, DIGEST, receipt, "deep", DIGEST, DIGEST
         )
@@ -546,7 +549,7 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
     }
     contract.validate_decision(with_threads, DIGEST, receipt, "deep", DIGEST, DIGEST)
     bad_namespace = {**with_threads, "unresolved_threads": [{"id": "finding-1"}]}
-    with workflow_error("namespace-safe"):
+    with workflow_error("findings and threads never share identities"):
         contract.validate_decision(bad_namespace, DIGEST, receipt, "deep", DIGEST, DIGEST)
     duplicates = {
         **report,
@@ -556,7 +559,7 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
             {"id": "finding-2", "decision": "accept", "reason": "same"},
         ],
     }
-    with workflow_error("structurally duplicate findings"):
+    with workflow_error("accepted findings are structurally distinct"):
         contract.validate_decision(duplicates, DIGEST, receipt, "deep", DIGEST, DIGEST)
 
 

@@ -211,7 +211,9 @@ def test_replace_artifact_repairs_a_defective_decision(fixture: ReviewFixture) -
     content_template = contract.read_json(Path(content["template_path"]), "content template")
     edited = filled_content(content_template, [low_finding()])
     edited_path = _write(fixture, "review-content.json", edited)
-    with pytest.raises(contract.WorkflowError, match="findings do not match"):
+    with pytest.raises(
+        contract.WorkflowError, match="plan content mirrors the decision findings exactly"
+    ):
         review_context.scaffold_review(
             evidence_path, context_path, str(_progress(root, "decision_path")), str(edited_path)
         )

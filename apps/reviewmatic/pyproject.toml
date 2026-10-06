@@ -102,6 +102,9 @@
         "RUF001"
       ]                                                                          # User-visible Cyrillic evidence is intentional.
       "src/reviewmatic/cli.py" = ["PLR0911"]                                     # Dispatch mirrors the explicit TypeScript return chain.
+      "src/reviewmatic/run_panel.py" = [
+        "RUF001",                                                                # The locale-keyed poll text is intentionally Russian.
+      ]
       "src/reviewmatic/draft.py" = [
         "C901",                                                                  # check_review mirrors the TypeScript validation sequence in one pass.
         "PLR0911",                                                               # Section diagnostics intentionally model every outcome shape.

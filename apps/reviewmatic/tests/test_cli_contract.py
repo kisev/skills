@@ -402,15 +402,27 @@ def test_collected_options_keep_every_occurrence() -> None:
 def test_resolve_install_source_recovers_the_commit_defensively() -> None:
     from reviewmatic.cli import resolve_install_source
 
-    uv_git = (
-        '{"url": "git+https://github.com/kisev/skills.git@dev#subdirectory=apps/reviewmatic",'
-        ' "vcs": "git", "commit": "3e409c217e94d643f77eb543caab9a2ed4b7288d"}'
+    # The real uv form: PEP 610 nests the VCS data in vcs_info.
+    uv_git = json.dumps(
+        {
+            "url": "git+https://github.com/kisev/skills.git@dev#subdirectory=apps/reviewmatic",
+            "vcs_info": {"vcs": "git", "commit_id": "3e409c217e94d643f77eb543caab9a2ed4b7288d"},
+        }
     )
     assert resolve_install_source(uv_git) == {
         "url": "git+https://github.com/kisev/skills.git@dev#subdirectory=apps/reviewmatic",
         "vcs": "git",
         "commit": "3e409c217e94d643f77eb543caab9a2ed4b7288d",
     }
+    # Legacy flat writers record the commit and vcs next to the url.
+    legacy_flat = (
+        '{"url": "git+https://github.com/kisev/skills.git@dev#subdirectory=apps/reviewmatic",'
+        ' "vcs": "git", "commit": "3e409c217e94d643f77eb543caab9a2ed4b7288d"}'
+    )
+    assert resolve_install_source(legacy_flat)["commit"] == (
+        "3e409c217e94d643f77eb543caab9a2ed4b7288d"
+    )
+    assert resolve_install_source(legacy_flat)["vcs"] == "git"
     pinned_in_url = (
         '{"url": "git+https://github.com/kisev/skills.git'
         '@df46265aabbccdd00112233445566778899aabbb#subdirectory=apps/reviewmatic"}'
@@ -425,7 +437,7 @@ def test_resolve_install_source_recovers_the_commit_defensively() -> None:
         "vcs": None,
         "commit": "unknown",
     }
-    for honest_unknown in (None, "not json", "[1, 2]", '{"url": 7}'):
+    for honest_unknown in (None, "not json", "[1, 2]", '{"url": 7}', '{"vcs_info": "git"}'):
         assert resolve_install_source(honest_unknown)["commit"] == "unknown"
 
 

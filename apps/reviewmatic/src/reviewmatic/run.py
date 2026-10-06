@@ -201,6 +201,23 @@ class ReviewRun:
                     if self.participants is None:
                         return self._waiting_participants(status)
                     self.step("panel-selection", self._panel_selection)
+                    self.participants = None
+                    continue
+                if self.participants is not None:
+                    bound = [
+                        str(critic["name"])
+                        for critic in run_panel.selected_critics(panel)
+                        if isinstance(critic.get("receipt"), dict)
+                    ]
+                    if bound:
+                        raise contract.WorkflowError(
+                            "--participants cannot replace the recorded panel: bound critic "
+                            f"receipts exist for {', '.join(bound)}. Omit --participants to "
+                            "continue the recorded panel, or start a fresh reviewmatic run "
+                            "without --resume to ask the poll again"
+                        )
+                    self.step("panel-selection", self._panel_selection)
+                    self.participants = None
                     continue
                 waiting = self._panel_step(panel, status)
                 if waiting is not None:
@@ -378,9 +395,19 @@ class ReviewRun:
     def _waiting_participants(self, status: dict[str, Any]) -> dict[str, Any]:
         """Stop at the one poll: critic composition and the engine of every critic."""
         assert self.root is not None
-        progress = context.load_progress(self.root) or {}
+        root = self.root
+        progress = context.load_progress(root) or {}
+        locale = str(progress.get("locale") or self.locale)
+        mode = str(progress.get("mode") or self.mode)
         context_digest = str(progress.get("context_digest") or "")
-        template_path = run_panel.selection_template(self.root, context_digest)
+        context_artifact = context.progress_artifact(root, progress, "context", "review_context")
+        if context_artifact is None:
+            raise contract.WorkflowError("the panel poll requires the selected review context")
+        background, background_bytes = run_panel.render_run_background(
+            root, context_artifact[1], context_digest
+        )
+        poll = run_panel.poll(locale, mode, background_bytes)
+        template_path = run_panel.selection_template(root, context_digest)
         argv = [
             "reviewmatic",
             "run",
@@ -397,16 +424,12 @@ class ReviewRun:
             "status": "waiting",
             "stage": self.stage,
             "reason": status.get("reason"),
-            "artifact_root": str(self.root),
+            "artifact_root": str(root),
             "template_kind": "participants",
             "template_path": str(template_path),
-            "rules": (
-                "Ask the user one poll at review start: the critic composition and the engine "
-                'of every critic - a model subagent (engine "model") or the mechanical '
-                'OpenCodeReview CLI (engine "ocr"). Attach a recommendation when you have one; '
-                "the choice is the user's. Fill the selection template with the answer and run "
-                "the printed command."
-            ),
+            "poll": poll,
+            "background_path": str(background),
+            "rules": run_panel.poll_rules(locale),
             "manual_command": " ".join(shlex.quote(value) for value in argv),
             "manual_argv": argv,
             "resume_command": self.resume_command(),

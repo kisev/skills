@@ -5143,6 +5143,12 @@ def answers_are_valid(answers: object) -> bool:
     )
 
 
+def _validation_record(rule: str, path: str, valid_form: str) -> str:
+    """One validation refusal as a record: the rule, the offending path, and
+    the accepted form. Consumers surface the record verbatim."""
+    return f"{rule}; path: {path}; valid form: {valid_form}"
+
+
 def validate_critic(
     receipt: dict[str, Any], evidence_digest: str, scope_digest: str | None = None
 ) -> None:
@@ -5169,59 +5175,107 @@ def validate_critic(
     problems: list[str] = []
     if receipt.get("schema") != "portable-gitlab/critic-receipt/v2":
         problems.append(
-            f'$.schema: expected exactly "portable-gitlab/critic-receipt/v2", '
-            f"got {json.dumps(receipt.get('schema'))}"
+            _validation_record(
+                "the receipt names its contract",
+                "$.schema",
+                'exactly "portable-gitlab/critic-receipt/v2", got '
+                + json.dumps(receipt.get("schema")),
+            )
         )
     for key in required:
         if key not in keys:
-            problems.append(f"$.{key}: required field is missing")
+            problems.append(_validation_record("required field is present", f"$.{key}", "a value"))
     for key in keys:
         if key not in allowed:
             problems.append(
-                f"$.{key}: unknown field; allowed fields are {', '.join(sorted(allowed))}"
+                _validation_record(
+                    "only contract fields appear",
+                    f"$.{key}",
+                    "one of " + ", ".join(sorted(allowed)),
+                )
             )
     if "evidence_digest" in keys and receipt["evidence_digest"] != evidence_digest:
         problems.append(
-            f"$.evidence_digest: must bind the selected evidence digest {evidence_digest}"
+            _validation_record(
+                "the receipt binds the selected evidence",
+                "$.evidence_digest",
+                f"the selected evidence digest {evidence_digest}",
+            )
         )
     if scope_digest is not None:
         if receipt.get("scope_digest") != scope_digest:
             problems.append(
-                f"$.scope_digest: an incremental receipt must bind the incremental delta "
-                f"digest {scope_digest}"
+                _validation_record(
+                    "an incremental receipt binds the reviewed delta",
+                    "$.scope_digest",
+                    f"the incremental delta digest {scope_digest}",
+                )
             )
         if not isinstance(target_finding_ids, list):
             problems.append(
-                "$.target_finding_ids: an incremental receipt requires the assessed "
-                "previous finding IDs"
+                _validation_record(
+                    "an incremental receipt assesses previous findings",
+                    "$.target_finding_ids",
+                    "an array of the assessed previous finding IDs",
+                )
             )
     if (
         scope_digest is None
         and "scope_digest" in receipt
         and not is_digest(receipt["scope_digest"])
     ):
-        problems.append("$.scope_digest: expected a SHA-256 digest")
-    if "findings" in keys and not findings_are_valid(receipt["findings"]):
         problems.append(
-            "$.findings: every finding requires id, severity, summary, risk, evidence, "
-            "consequence, relation_to_change, and minimum_fix"
+            _validation_record("a scope binding is a digest", "$.scope_digest", "a SHA-256 digest")
         )
+    if "findings" in keys:
+        values = receipt["findings"]
+        if not isinstance(values, list):
+            problems.append(
+                _validation_record("findings are an array", "$.findings", "an array of findings")
+            )
+        else:
+            for index, item in enumerate(values):
+                if not findings_are_valid([item]):
+                    problems.append(
+                        _validation_record(
+                            "every finding is complete and uniquely identified",
+                            f"$.findings[{index}]",
+                            "id plus severity, summary, risk, a non-empty evidence array, "
+                            "consequence, relation_to_change, and minimum_fix",
+                        )
+                    )
     if "target_finding_ids" in receipt and (
         not isinstance(target_finding_ids, list)
         or not all(nonempty_string(item) for item in target_finding_ids)
         or len(target_finding_ids) != len(set(target_finding_ids))
     ):
-        problems.append("$.target_finding_ids: expected an array of distinct non-empty finding IDs")
+        problems.append(
+            _validation_record(
+                "assessed previous findings are distinct",
+                "$.target_finding_ids",
+                "an array of distinct non-empty finding IDs",
+            )
+        )
     if "question_answers" in receipt and not answers_are_valid(answers):
         problems.append(
-            "$.question_answers: every answer requires question_id, verdict "
-            "confirmed/refuted/not_verified, real run/session identity, evidence or reason "
-            "for the verdict, and the question's context_digest"
+            _validation_record(
+                "every assigned question gets an explicit answer",
+                "$.question_answers",
+                "per answer: question_id, verdict confirmed/refuted/not_verified, real "
+                "run/session identity, evidence or a concrete reason, and the question's "
+                "context_digest",
+            )
         )
     if receipt.get("external_mutations") is not False:
-        problems.append("$.external_mutations: must be false")
+        problems.append(
+            _validation_record(
+                "a receipt never mutates externally", "$.external_mutations", "false"
+            )
+        )
     if "engine" in receipt and receipt["engine"] != "ocr":
-        problems.append('$.engine: expected exactly "ocr"')
+        problems.append(
+            _validation_record("a declared engine is the OCR engine", "$.engine", 'exactly "ocr"')
+        )
     if "ocr" in receipt:
         if not isinstance(ocr, dict) or set(ocr) != {
             "provider",
@@ -5229,7 +5283,13 @@ def validate_critic(
             "terminal_state",
             "comments",
         }:
-            problems.append("$.ocr: expected exactly provider, model, terminal_state, and comments")
+            problems.append(
+                _validation_record(
+                    "the OCR block names the run configuration",
+                    "$.ocr",
+                    "exactly provider, model, terminal_state, and comments",
+                )
+            )
         elif (
             not all(nonempty_string(ocr[key]) for key in ("provider", "model", "terminal_state"))
             or isinstance(ocr["comments"], bool)
@@ -5237,8 +5297,11 @@ def validate_critic(
             or ocr["comments"] < 0
         ):
             problems.append(
-                "$.ocr: provider, model, and terminal_state must be non-empty strings and "
-                "comments a non-negative integer"
+                _validation_record(
+                    "the OCR block fields are typed",
+                    "$.ocr.provider, $.ocr.model, $.ocr.terminal_state, $.ocr.comments",
+                    "non-empty strings and a non-negative integer comment count",
+                )
             )
     if problems:
         raise WorkflowError(
@@ -5290,21 +5353,78 @@ def validate_decision(
         or critic.get("session_id") == report.get("session_id")
         for critic in [receipt, *cast("list[dict[str, Any]]", receipt.get("contributors", []))]
     ):
-        raise WorkflowError("critic receipt is not independent of the primary review")
-    if (
-        report.get("schema") != "portable-gitlab/review-decision/v2"
-        or report.get("evidence_digest") != evidence_digest
-        or (context_digest is not None and report.get("context_digest") != context_digest)
-        or (report.get("critic_receipt_digest") if "critic_receipt_digest" in report else None)
-        != critic_receipt_digest
-        or not is_digest(report.get("finalize_digest"))
-        or report.get("mode") != mode
-        or report.get("external_mutations") is not False
-        or report.get("verdict") not in {"ready", "not_ready", "blocked"}
-        or not isinstance(report.get("responses"), list)
-        or not isinstance(report.get("unresolved_threads"), list)
+        raise WorkflowError(
+            _validation_record(
+                "the primary decision is independent of its critic",
+                "$.run_id, $.session_id",
+                "identities that differ from every critic receipt identity, contributors included",
+            )
+        )
+    for rule, path, valid_form, failed in (
+        (
+            "the decision names its contract",
+            "$.schema",
+            'exactly "portable-gitlab/review-decision/v2"',
+            report.get("schema") != "portable-gitlab/review-decision/v2",
+        ),
+        (
+            "the decision binds the selected evidence",
+            "$.evidence_digest",
+            f"the selected evidence digest {evidence_digest}",
+            report.get("evidence_digest") != evidence_digest,
+        ),
+        (
+            "the decision binds the selected context",
+            "$.context_digest",
+            f"the selected context digest {context_digest}",
+            context_digest is not None and report.get("context_digest") != context_digest,
+        ),
+        (
+            "the decision binds its critic receipt",
+            "$.critic_receipt_digest",
+            "the bound critic receipt digest, or null when no receipt is bound",
+            (report.get("critic_receipt_digest") if "critic_receipt_digest" in report else None)
+            != critic_receipt_digest,
+        ),
+        (
+            "the decision binds the finalize report",
+            "$.finalize_digest",
+            "the SHA-256 digest of the bound finalize report",
+            not is_digest(report.get("finalize_digest")),
+        ),
+        (
+            "the decision names the selected review mode",
+            "$.mode",
+            f"exactly {mode}",
+            report.get("mode") != mode,
+        ),
+        (
+            "a decision never mutates externally",
+            "$.external_mutations",
+            "false",
+            report.get("external_mutations") is not False,
+        ),
+        (
+            "the verdict names a decided state",
+            "$.verdict",
+            "one of ready, not_ready, blocked",
+            report.get("verdict") not in {"ready", "not_ready", "blocked"},
+        ),
+        (
+            "every finding and unresolved thread gets one response",
+            "$.responses",
+            "an array of accept/reject responses with non-empty reasons",
+            not isinstance(report.get("responses"), list),
+        ),
+        (
+            "unresolved threads are listed",
+            "$.unresolved_threads",
+            "an array of thread:[...] subjects",
+            not isinstance(report.get("unresolved_threads"), list),
+        ),
     ):
-        raise WorkflowError("review decision is schema-invalid")
+        if failed:
+            raise WorkflowError(_validation_record(rule, path, valid_form))
     response_values = cast("list[dict[str, Any]]", report["responses"])
     response_ids = {
         item["id"]
@@ -5345,24 +5465,59 @@ def validate_decision(
             for item in cast("list[object]", report["unresolved_threads"])
             if isinstance(item, dict)
         }
-        if (
-            len(finding_ids) != len(finding_subjects)
-            or any(
-                not isinstance(item_id, str)
-                or full_match("[A-Za-z0-9][A-Za-z0-9._-]{0,63}", item_id) is None
-                for item_id in finding_ids
-            )
-            or any(
-                not isinstance(item_id, str)
-                or full_match("thread:[A-Za-z0-9][A-Za-z0-9._-]{0,127}", item_id) is None
-                for item_id in thread_ids
-            )
-            or finding_ids & thread_ids
+        if len(finding_ids) != len(finding_subjects) or any(
+            not isinstance(item_id, str)
+            or full_match("[A-Za-z0-9][A-Za-z0-9._-]{0,63}", item_id) is None
+            for item_id in finding_ids
         ):
-            raise WorkflowError("code-review finding and thread subjects are not namespace-safe")
-    if None in required or len(response_ids) != len(response_values) or response_ids != required:
+            raise WorkflowError(
+                _validation_record(
+                    "finding identities are unique and namespace-safe",
+                    "$.findings[*].id",
+                    "distinct strings matching [A-Za-z0-9][A-Za-z0-9._-]{0,63}",
+                )
+            )
+        if any(
+            not isinstance(item_id, str)
+            or full_match(r"thread:[A-Za-z0-9][A-Za-z0-9._-]{0,127}", item_id) is None
+            for item_id in thread_ids
+        ):
+            raise WorkflowError(
+                _validation_record(
+                    "unresolved threads use the thread namespace",
+                    "$.unresolved_threads[*].id",
+                    "strings matching thread:[A-Za-z0-9][A-Za-z0-9._-]{0,127}",
+                )
+            )
+        if finding_ids & thread_ids:
+            overlap = ", ".join(sorted(str(item) for item in finding_ids & thread_ids))
+            raise WorkflowError(
+                _validation_record(
+                    f"findings and threads never share identities ({overlap})",
+                    "$.findings[*].id, $.unresolved_threads[*].id",
+                    "disjoint namespaces: plain finding ids and thread:[...] subjects",
+                )
+            )
+    if None in required:
         raise WorkflowError(
-            "review decision does not account for every finding and unresolved thread"
+            _validation_record(
+                "every answered subject carries a real id",
+                "$.findings[*].id, $.unresolved_threads[*].id",
+                "non-empty string ids for every finding and unresolved thread; a null id "
+                "cannot be answered",
+            )
+        )
+    if len(response_ids) != len(response_values) or response_ids != required:
+        unanswered = ", ".join(sorted(str(item) for item in required - response_ids)) or "none"
+        unknown = ", ".join(sorted(str(item) for item in response_ids - required)) or "none"
+        raise WorkflowError(
+            _validation_record(
+                f"every finding and unresolved thread gets exactly one answer "
+                f"(unanswered: {unanswered}; unknown: {unknown})",
+                "$.responses[*].id",
+                "one accept/reject response with a non-empty reason per finding id and "
+                "thread:[...] subject, and no others",
+            )
         )
     response_by_id = {item["id"]: item for item in response_values}
     accepted_findings = [
@@ -5379,17 +5534,38 @@ def validate_decision(
             or response.get("decision") != "accept"
         ):
             raise WorkflowError(
-                "severity_override must preserve the original severity and explain the "
-                "accepted finding's reassessment"
+                _validation_record(
+                    "a severity override preserves the original severity and explains the "
+                    "reassessment of an accepted finding",
+                    f"$.responses[id={finding['id']}].severity_override",
+                    "original_severity equal to the finding's severity, a severity in "
+                    "critical/high/medium/low, a non-empty reason, and decision accept",
+                )
             )
         if "duplicate_of" in response and (
             response.get("decision") != "reject"
             or response_by_id.get(response["duplicate_of"], {}).get("decision") != "accept"
             or response["duplicate_of"] == finding["id"]
         ):
-            raise WorkflowError("duplicate_of must refer to an accepted canonical finding")
+            raise WorkflowError(
+                _validation_record(
+                    "a duplicate names its accepted canonical finding",
+                    f"$.responses[id={finding['id']}].duplicate_of",
+                    "the id of a different, accepted finding, on a reject response",
+                )
+            )
     if duplicate_detailed_finding_ids(accepted_findings):
-        raise WorkflowError("review decision accepts structurally duplicate findings")
+        pairs = "; ".join(
+            " + ".join(group) for group in duplicate_detailed_finding_ids(accepted_findings)
+        )
+        raise WorkflowError(
+            _validation_record(
+                f"accepted findings are structurally distinct ({pairs})",
+                "$.findings[*]",
+                "findings that differ in more than identity; merge true duplicates into one "
+                "accepted finding",
+            )
+        )
     if mode in {"normal", "deep", "incremental"} and receipt is None:
         raise WorkflowError(
             "normal, deep, and incremental review require an independent critic receipt"

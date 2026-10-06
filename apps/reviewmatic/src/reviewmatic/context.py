@@ -1442,6 +1442,14 @@ def validate_chat_assessment(value: object) -> dict[str, Any]:
     return cast("dict[str, Any]", value)
 
 
+def validation_record(
+    rule: str, path: str, valid_form: str, detail: str = ""
+) -> portable.WorkflowError:
+    """One validation refusal as a record: rule, offending path, accepted form."""
+    message = f"{rule}; path: {path}; valid form: {valid_form}"
+    return portable.WorkflowError(f"{message}; detail: {detail}" if detail else message)
+
+
 def suggestion_blocks(body: str) -> list[re.Match[str]]:
     matches = list(SUGGESTION_RE.finditer(body))
     if len(SUGGESTION_OPENER_RE.findall(body)) != len(matches):
@@ -1473,7 +1481,12 @@ def validate_suggestion(
         raise portable.WorkflowError("suggestion path is unavailable at the reviewed head") from exc
     line_count = len(str(source).splitlines())
     if line - before < 1 or line + after > line_count:
-        raise portable.WorkflowError("GitLab suggestion range escapes the reviewed file")
+        raise validation_record(
+            "a suggestion anchors on lines that exist at the reviewed head",
+            "$.body (suggestion anchor)",
+            f"a suggestion:-{before}+{after} block anchored at {path}:{line}, inside the "
+            f"{line_count}-line file; anchor on a changed line, not an unchanged context line",
+        )
 
 
 def patch_paths(patch: str) -> list[str]:
@@ -1662,7 +1675,13 @@ def validate_git_patch(
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise portable.WorkflowError("Git patch validation could not be completed") from exc
         if checked.returncode:
-            raise portable.WorkflowError("Git patch does not apply to the exact reviewed head")
+            raise validation_record(
+                "the patch applies to the exact reviewed head",
+                "$.patch",
+                "a unified diff whose hunk counters and line numbers match the reviewed "
+                "revision exactly",
+                (checked.stderr or checked.stdout).decode(errors="replace").strip()[-500:],
+            )
         try:
             applied = subprocess.run(
                 apply_command,
@@ -1959,8 +1978,11 @@ def validate_patch_fallback(
     ):
         return
     if not portable.nonempty_string(fix.get("patch_reason")):
-        raise portable.WorkflowError(
-            "Expected a concrete patch_reason explaining technical impossibility or unsafe division"
+        raise validation_record(
+            "a patch fallback names its concrete reason",
+            f"$.patch_reason (owner {fix.get('finding_id') or fix.get('id')})",
+            "a non-empty patch_reason stating the technical impossibility or unsafe division "
+            "that forbids a bounded suggestion",
         )
     repo = Path(str(cast("dict[str, Any]", context_value["exact_git"])["repo_root"]))
     head = str(evidence["head_sha"])
@@ -2173,10 +2195,11 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
                 or old_line is not None
                 or "suggestions" in item
             ):
-                raise portable.WorkflowError(
-                    "existing_thread requires the thread_id of a prepared thread, non-empty "
-                    "prose body, fix_mode=not_required, null patch, and null positions: the "
-                    "existing thread owns the fix, so the publication adds no new position"
+                raise validation_record(
+                    "an existing_thread publication binds the prepared thread that owns the fix",
+                    f"$.finding_publications[finding_id={finding_id}]",
+                    "thread_id of a prepared thread, non-empty prose body, "
+                    "fix_mode=not_required, and null patch/positions",
                 )
             seen.add(cast("str", finding_id))
             result.append(cast("dict[str, Any]", item))
@@ -4127,7 +4150,12 @@ def scaffold_review(
         "list[dict[str, Any]]", decision.get("accepted_findings", decision.get("findings", []))
     )
     if accepted_findings != findings:
-        raise portable.WorkflowError("review plan findings do not match the review decision")
+        raise validation_record(
+            "plan content mirrors the decision findings exactly",
+            "$.findings",
+            "copy the decision's accepted findings verbatim - same ids, fields, and severity "
+            "order; changing them here desynchronizes the plan from the recorded decision",
+        )
     # A thread that owns the fix inherits the linked finding's severity.
     publications_for_threads = cast("list[dict[str, Any]]", content["finding_publications"])
 
@@ -4343,14 +4371,23 @@ def scaffold_review(
     thread_decisions = cast("list[dict[str, Any]]", content["thread_decisions"])
     actual_threads = {item["id"]: item for item in thread_decisions}
     if len(actual_threads) != len(thread_decisions) or set(actual_threads) != set(expected_threads):
-        raise portable.WorkflowError("review plan must account for every non-system thread")
+        raise validation_record(
+            "the plan accounts for every collected non-system thread exactly once",
+            "$.thread_decisions[*].id",
+            "one decision per collected thread id, prepared by the runtime in the content "
+            "template; never drop or invent threads",
+        )
     for thread_id, item in actual_threads.items():
         source = expected_threads[thread_id]
         validate_user_confirmation(item, source, context)
         if item["state"] != source["state"]:
             raise portable.WorkflowError("thread decision state does not match review context")
         if source["state"] == "open" and item["outcome"] == "no_publication":
-            raise portable.WorkflowError("an open thread requires an explicit outcome")
+            raise validation_record(
+                "an open thread gets an explicit outcome",
+                f"$.thread_decisions[id={thread_id}].outcome",
+                "reply, resolve, reopen, or local_fix - an open thread never takes no_publication",
+            )
         if (item["outcome"] == "no_publication" and item["proposed_response"] is not None) or (
             item["outcome"] != "no_publication"
             and not portable.nonempty_string(item["proposed_response"])
@@ -4398,7 +4435,11 @@ def scaffold_review(
                 raise portable.WorkflowError("an accepted thread requires a validated code fix")
             expected_outcome = "reopen" if source["state"] == "resolved" else None
             if expected_outcome is not None and outcome != expected_outcome:
-                raise portable.WorkflowError("an accepted resolved thread requires reopen")
+                raise validation_record(
+                    "an accepted fix on a resolved thread reopens it",
+                    f"$.thread_decisions[id={thread_id}].outcome",
+                    "reopen: the thread owns an accepted fix and must not stay resolved",
+                )
             if source["state"] == "open" and outcome not in {"reply", "local_fix"}:
                 raise portable.WorkflowError("an accepted open thread must remain open")
         if assessment in {"fixed", "false_positive", "duplicate", "not_related"}:
@@ -4408,8 +4449,11 @@ def scaffold_review(
                     "a closing assessment on an open thread requires resolve"
                 )
             if source["state"] == "resolved" and outcome not in {"reply", "no_publication"}:
-                raise portable.WorkflowError(
-                    "a closing assessment must keep a resolved thread closed"
+                raise validation_record(
+                    "a closing assessment keeps a resolved thread closed",
+                    f"$.thread_decisions[id={thread_id}].outcome",
+                    "reply or no_publication on an already-resolved thread; reopen only with "
+                    "an accepted assessment that reintroduces the fix",
                 )
         if assessment in {"question", "neutral"} and outcome in {"resolve", "reopen"}:
             raise portable.WorkflowError(

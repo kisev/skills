@@ -698,10 +698,12 @@ COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 def resolve_install_source(direct_url_text: str | None) -> dict[str, Any]:
     """Resolve the installation source from PEP 610 ``direct_url.json`` text.
 
-    The structure uv writes floats between versions, so the commit is read
-    defensively: the recorded ``commit`` wins, a commit pinned in the URL is
-    recovered next, and anything else — including non-git installs and missing
-    metadata — reports an honest ``unknown``.
+    uv writes the nested PEP 610 form (``vcs_info.commit_id``); older writers
+    and hand-made fixtures may carry flat ``commit``/``vcs`` keys, so both are
+    read defensively: the nested commit wins, the flat legacy commit is next,
+    a commit pinned in the URL is recovered after that, and anything else —
+    including non-git installs and missing metadata — reports an honest
+    ``unknown``.
     """
     unknown: dict[str, Any] = {"url": None, "vcs": None, "commit": "unknown"}
     if direct_url_text is None:
@@ -713,8 +715,15 @@ def resolve_install_source(direct_url_text: str | None) -> dict[str, Any]:
     if not isinstance(value, dict):
         return unknown
     url = value.get("url") if isinstance(value.get("url"), str) else None
-    vcs = value.get("vcs") if isinstance(value.get("vcs"), str) else None
-    commit = value.get("commit")
+    raw_vcs_info = value.get("vcs_info")
+    vcs_info = cast("dict[str, Any]", raw_vcs_info) if isinstance(raw_vcs_info, dict) else {}
+    commit = vcs_info.get("commit_id")
+    vcs = vcs_info.get("vcs")
+    if not isinstance(vcs, str):
+        vcs = value.get("vcs") if isinstance(value.get("vcs"), str) else None
+    if not (isinstance(commit, str) and COMMIT_RE.fullmatch(commit)):
+        # Legacy flat writers record the commit next to the url.
+        commit = value.get("commit")
     if not (isinstance(commit, str) and COMMIT_RE.fullmatch(commit)):
         pinned = re.search(r"@([0-9a-f]{40})", url or "")
         commit = pinned.group(1) if pinned else None

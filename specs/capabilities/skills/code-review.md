@@ -63,9 +63,21 @@ and a missing bridge trace never marks the evidence incomplete. The
 one-process run bounds every stage — a stage repeating without progress more
 than three times stops loudly with the collected evidence errors and preserves
 the state for resume. The runtime identifies itself: `runtime-info` prints the
-package version and the resolved installation commit (`unknown` for non-git
-installs), and the agent pins the moving channel to an exact SHA before
-starting and verifies the pin with that single call. Only proven
+package version and the resolved installation commit (the nested PEP 610
+`vcs_info.commit_id` uv writes, legacy flat fields, a URL-pinned SHA, or an
+honest `unknown` for non-git installs), and the agent pins the moving channel
+to an exact SHA before starting and verifies the pin with that single call. A
+resumed `--participants` answer replaces the recorded panel only while no
+critic receipt is bound; with bound receipts it is refused loudly with the
+bound names and the honest path. The panel poll renders after the mode and
+background resolve: an incremental review and a background above the OCR CLI
+limit each exclude the OCR engine with the reason, the same offline render
+measures the size the critic would run, the CLI invocation prefights the
+limit before spawning, and the verbatim locale-keyed poll text plus its fixed
+glossary are presented word for word. Tail refusals name the rule, the
+offending path, and the accepted form — the canonical decision and critic
+validators and the plan, thread, suggestion, and patch checks each answer with
+one such record. Only proven
 manual process gates can be non-blocking. Trace collection bounds bytes, retains
 an explicit truncated tail, and cleans up its process group under deadlines.
 Schema diagnostics identify invalid fields; an invalid SemVer object is not

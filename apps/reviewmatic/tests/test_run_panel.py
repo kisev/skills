@@ -587,3 +587,110 @@ def test_run_panel_aggregate_carries_merged_findings(fixture: ReviewFixture) -> 
             "a" * 64,
             None,
         )
+
+
+def test_resume_participants_replaces_an_unbound_panel(fixture: ReviewFixture, capsys: Any) -> None:
+    """While no critic receipt is bound, a resumed --participants answer replaces
+    the recorded selection instead of being silently ignored."""
+    first = fixture.tmp / "participants-first.json"
+    contract.write_json(
+        first,
+        {"critics": [{"name": "model-a", "engine": "model"}], "arbitrator": {"name": "arb-1"}},
+    )
+    base = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo)]
+    assert cli_main([*base, "--participants", str(first), "--json"]) == 0
+    waiting = _stdout_json(capsys)
+    assert waiting["participant"] == "model-a"
+
+    second = fixture.tmp / "participants-second.json"
+    contract.write_json(
+        second,
+        {"critics": [{"name": "model-b", "engine": "model"}], "arbitrator": {"name": "arb-2"}},
+    )
+    assert cli_main([*base, "--resume", "--participants", str(second), "--json"]) == 0
+    replaced = _stdout_json(capsys)
+    assert replaced["status"] == "waiting"
+    assert replaced["participant"] == "model-b"
+    assert replaced["panel"]["critics"] == [{"name": "model-b", "engine": "model", "bound": False}]
+    assert replaced["panel"]["arbitrator"] == "arb-2"
+
+
+def test_resume_participants_refuses_a_bound_panel(
+    fixture: ReviewFixture, fake_ocr: dict[str, Path], capsys: Any
+) -> None:
+    """Bound receipts fix the panel: --participants refuses loudly with the
+    bound names and the honest path instead of ignoring the answer."""
+    participants = selection_path(fixture, SELECTION)
+    base = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo)]
+    assert cli_main([*base, "--participants", participants, "--json"]) == 0
+    waiting = _stdout_json(capsys)
+    assert waiting["panel"]["critics"][0]["run_id"] == "ocr-run-1"
+
+    assert cli_main([*base, "--resume", "--participants", participants, "--json"]) == 1
+    failure = _stdout_json(capsys)
+    assert failure["status"] == "error"
+    assert "bound critic receipts exist for ocr-critic" in failure["error"]
+    assert "fresh reviewmatic run" in failure["error"]
+    # The recorded panel is untouched by the refusal.
+    root = Path(str(failure["artifact_root"]))
+    panel = run_panel.load(root)
+    assert panel is not None
+    assert run_panel.summary(panel)["critics"][0]["run_id"] == "ocr-run-1"
+
+
+def test_engine_offering_and_poll_exclude_ocr_for_incremental() -> None:
+    offering = run_panel.engine_offering("incremental", 120)
+    assert offering == {
+        "ocr": False,
+        "exclusion": "incremental",
+        "background_bytes": 120,
+        "background_limit": 8000,
+    }
+    poll = run_panel.poll("en", "incremental", 120)
+    assert "OCR critics are not offered" in poll["text"]
+    assert "delta-scoped" in poll["text"]
+    assert "incremental" in poll["text"]
+    russian = run_panel.poll("ru", "incremental", 120)
+    assert "OCR-критики не предлагаются" in russian["text"]
+
+
+def test_engine_offering_and_poll_exclude_ocr_for_oversized_background(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The offline render measures the same background the critic would run."""
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setenv("XDG_STATE_HOME", str(state))
+    root = state / "agent-skills" / "gitlab" / "panel"
+    root.mkdir(parents=True)
+    bulky = {
+        "discussions": [
+            {
+                "id": f"discussion-{index}",
+                "root_system": False,
+                "root_resolved": False,
+                "notes": [{"body": f"thread {index}: " + "x" * 260}],
+            }
+            for index in range(40)
+        ]
+    }
+    background, size = run_panel.render_run_background(root, bulky, "d" * 64)
+    assert size > 8000
+    offering = run_panel.engine_offering("normal", size)
+    assert offering["ocr"] is False
+    assert offering["exclusion"] == "oversized"
+    poll = run_panel.poll("en", "normal", size)
+    assert f"the background file is {size} bytes" in poll["text"]
+    assert "above the ocr CLI limit of 8000" in poll["text"]
+    assert background.exists()
+
+
+def test_poll_presents_the_verbatim_locale_keyed_text() -> None:
+    poll = run_panel.poll("en", "deep", 500)
+    assert poll["ocr"] is True
+    assert poll["exclusion"] is None
+    for line in ("Critics:", "Arbitrator:", "Mode: deep review."):
+        assert line in poll["text"]
+    assert "OCR critics are not offered" not in poll["text"]
+    assert run_panel.poll_rules("ru").startswith("Предъяви текст опроса дословно")
+    assert run_panel.poll_rules("en").startswith("Present the poll text verbatim")
