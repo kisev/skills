@@ -234,6 +234,24 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         (OptionSpec("draft", "generated editable review draft", required=True),),
     ),
     CommandSpec(
+        "render-review",
+        "Render the complete content draft from the recorded decision",
+        (OptionSpec("draft", "generated editable review draft", required=True),),
+    ),
+    CommandSpec(
+        "record-prose",
+        "Apply the prose surface onto the rendered draft; structural keys refuse",
+        (
+            OptionSpec("draft", "generated editable review draft", required=True),
+            OptionSpec("input", "content prose file", required=True),
+        ),
+    ),
+    CommandSpec(
+        "re-anchor-review",
+        "Re-anchor machine fields onto drifted evidence; decision and prose stay verbatim",
+        (OptionSpec("draft", "generated editable review draft", required=True),),
+    ),
+    CommandSpec(
         "runtime-info",
         "Print the runtime version and the resolved installation commit",
     ),
@@ -912,7 +930,15 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
         )
         contract.emit(result)
         return EXIT_OK if str(result["status"]) in {"ok", "needs_reassessment"} else EXIT_INVALID
-    if name in {"start-review", "resume-review", "check-review", "finish-review"}:
+    if name in {
+        "start-review",
+        "resume-review",
+        "check-review",
+        "finish-review",
+        "render-review",
+        "record-prose",
+        "re-anchor-review",
+    }:
         if name == "start-review":
             result = draft_module.start_review(
                 url=str(_field(namespace, "url")),
@@ -925,6 +951,14 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
             result = draft_module.resume_review(str(_field(namespace, "artifactRoot")))
         elif name == "check-review":
             result = draft_module.check_review(str(_field(namespace, "draft")))
+        elif name == "render-review":
+            result = draft_module.render_content_review(str(_field(namespace, "draft")))
+        elif name == "record-prose":
+            result = draft_module.record_prose(
+                str(_field(namespace, "draft")), str(_field(namespace, "input"))
+            )
+        elif name == "re-anchor-review":
+            result = draft_module.re_anchor_review(str(_field(namespace, "draft")))
         else:
             result = draft_module.finish_review(str(_field(namespace, "draft")))
         contract.emit(result)

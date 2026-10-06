@@ -227,6 +227,28 @@ depth. Follow `references/context-package.md` for the package content, the
 answer verdicts, and the resume/refresh lifecycle, and
 `references/review-state-machine.md` for the full panel contract.
 
+## The inverted tail: render, edit prose, finalize
+
+After the decision is recorded the tail is machine-first. Run
+`reviewmatic render-review --draft <draft-path>`: the runtime renders the
+complete content draft from the recorded decision - anchors from the changed
+lines, bindings, revisions, and stamps derived by the validators' own
+functions - and materializes `content-prose-<digest>.json` next to the draft,
+carrying only the prose and semantic fields with structurally detectable
+placeholders. Edit that one file (fill the placeholders, keep the row ids) and
+apply it with `reviewmatic record-prose --draft <draft-path> --input <prose>`.
+Structural keys in the prose file are rejected loudly; after rendering,
+`record-input` over rendered fields requires a recorded repair kind, and a
+draft with unfilled placeholders is not finalizable - `check-review` answers
+with fill guidance instead of raw rule errors. When the reviewed head drifts,
+run `reviewmatic re-anchor-review --draft <draft-path>` instead of re-authoring:
+the decision and prose are preserved verbatim, machine bindings re-derive,
+receipts keep their original digest provenance, the drift (old/new head) is
+recorded in the draft, and positioned anchors remap deterministically - an
+anchor inside a changed hunk refuses loudly with the repair path, never a
+guess. This routing is the precedence: render, prose, finalize; the
+structural path is repair (`references/repair.md`).
+
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 
 Verify collection completeness, exact refs, complete changed files, commits, discussions, notes, and local object availability. Confirm the recorded merge base and compare local changed paths with GitLab. Keep raw refs out of chat and prose in `runbook.md`; executable GitLab position arguments retain exact refs. A mismatch or incomplete page makes the review blocked or partial.

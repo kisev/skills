@@ -11,7 +11,15 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import context, fixes, ocr_critic, publication_skeletons, review_worktree, scope
+from reviewmatic import (
+    context,
+    fixes,
+    ocr_critic,
+    publication_skeletons,
+    render,
+    review_worktree,
+    scope,
+)
 from reviewmatic.context_package import (
     ExpectedPackage,
     bind_question_contexts,
@@ -90,6 +98,19 @@ _DISPOSITION = {
         "reason": _TEXT,
         "dependencies": _DEPENDENCIES,
         "duplicate_of": _TEXT,
+        # The publication intent of an accepted finding: which publication
+        # kind the runtime renders and which fix mode it uses. The agent
+        # chooses the intent; anchors, ranges, stamps, revisions, and the
+        # issue-update derivation stay machine-rendered.
+        "publication": {
+            "type": "object",
+            "required": ["kind", "fix_mode"],
+            "additionalProperties": False,
+            "properties": {
+                "kind": {"enum": ["none", "general", "line", "local_fix", "existing_thread"]},
+                "fix_mode": {"enum": ["suggestion", "patch"]},
+            },
+        },
         "severity_override": {
             "type": "object",
             "required": ["original_severity", "severity", "reason"],
@@ -183,6 +204,8 @@ _CONTENT_PROPERTIES: dict[str, Any] = {
         },
     },
     "checks": _TEXTS,
+    "findings": {"type": "array", "items": _FINDING},
+    "rejected_candidates": {"type": "array"},
     "finding_publications": {
         "type": "array",
         "items": _input_schema(
@@ -439,6 +462,26 @@ DRAFT_SCHEMA: dict[str, Any] = {
         "arbitration": _ARBITRATION_RECEIPT,
         "context_package_path": {"anyOf": [_TEXT, {"type": "null"}]},
         "context_package_digest": {"anyOf": [_ref("digest"), {"type": "null"}]},
+        "rendered": {
+            "type": "object",
+            "required": ["context_digest", "at"],
+            "additionalProperties": False,
+            "properties": {
+                "context_digest": _ref("digest"),
+                "at": _TEXT,
+            },
+        },
+        "re_anchor": {
+            "type": "object",
+            "required": ["from_head", "to_head", "at", "receipts_bound_to"],
+            "additionalProperties": False,
+            "properties": {
+                "from_head": _TEXT,
+                "to_head": _TEXT,
+                "at": _TEXT,
+                "receipts_bound_to": _TEXT,
+            },
+        },
         "superseded_question_results": {
             "type": "array",
             "items": {
@@ -484,7 +527,9 @@ DRAFT_SCHEMA: dict[str, Any] = {
         "owner_decision_reasons": _TEXTS,
         "content": {
             "type": "object",
-            "required": list(_CONTENT_PROPERTIES),
+            "required": [
+                key for key in _CONTENT_PROPERTIES if key not in ("findings", "rejected_candidates")
+            ],
             "additionalProperties": False,
             "properties": _CONTENT_PROPERTIES,
         },
@@ -2556,6 +2601,21 @@ def check_review(path: str) -> dict[str, Any]:
         field = f"$.content.finding_publications[{index}]"
         if not safe(field) or not isinstance(fix, dict):
             continue
+        # Rendered placeholders answer with fill guidance, never with the raw
+        # rule errors their placeholders would trip over.
+        if "rendered" in draft and publication_skeletons.placeholder_fields(fix):
+            errors.append(
+                {
+                    "path": field,
+                    "message": (
+                        "unfilled template variant: fill the judgment fields "
+                        + ", ".join(publication_skeletons.placeholder_fields(fix))
+                        + " in the prose file and apply them with record-prose, or delete "
+                        "the unused variant rows"
+                    ),
+                }
+            )
+            continue
 
         def check_patch_reason(current_fix: dict[str, Any] = fix) -> None:
             context.validate_patch_fallback(current_fix, review_context, evidence)
@@ -3811,6 +3871,23 @@ def record_draft_input(path: str, input_path: str) -> dict[str, Any]:
     )
     contract.reject_envelope_wrapper(user_input, "draft input")
     issues: list[dict[str, str]] = []
+    # Rendered drafts are edited through the prose surface: record-input over
+    # rendered fields is a structural repair and needs a recorded repair kind.
+    if "rendered" in draft:
+        repair_kind = (
+            str(draft["repair"]["kind"]) if isinstance(draft.get("repair"), dict) else None
+        )
+        if repair_kind is None and "content" in user_input:
+            issues.append(
+                {
+                    "path": "$.content",
+                    "message": (
+                        "This draft is rendered: prose edits go through the prose file and "
+                        "record-prose; structural edits need a recorded repair kind "
+                        "(repair-review) first"
+                    ),
+                }
+            )
     # In panel mode the orchestrating session owns no review semantics: every
     # finding, verdict, and assessment arrives through the arbitration receipt.
     # A repair draft may still edit the sections its repair kind owns.
@@ -4206,5 +4283,141 @@ def record_draft_critic(
         "pending": draft_gaps(draft),
         **({"arbitrator_task": arbitrator_task} if arbitrator_task is not None else {}),
         "next_action": context.runner_action("check-review", "--draft", resolved_draft),
+        "external_mutations": False,
+    }
+
+
+# The inverted tail: after the decision is recorded the runtime renders the
+# complete content draft (machine fields by the validators' own functions,
+# prose as placeholders), the agent edits only the prose surface, and drift
+# re-anchors machine fields instead of re-authoring the review.
+def render_content_review(path: str) -> dict[str, Any]:
+    draft, root, _progress, evidence, review_context = _selected_draft(path)
+    if "participants" in draft and "arbitration" not in draft:
+        raise contract.WorkflowError(
+            "render-review requires the recorded arbitration receipt; import it with "
+            "record-arbitration first"
+        )
+    if "participants" not in draft and not (
+        isinstance(draft.get("run_id"), str) and draft.get("run_id")
+    ):
+        raise contract.WorkflowError(
+            "render-review requires the recorded decision; record the dispositions and "
+            "identity with record-input first"
+        )
+    content = render.render_content(draft, review_context, evidence)
+    draft["content"] = content
+    draft["rendered"] = {
+        "context_digest": draft["context_digest"],
+        "at": render.now_iso(),
+    }
+    contract.write_json(Path(path), draft)
+    prose_path = render.prose_file(root, str(draft["context_digest"]))
+    contract.write_json(prose_path, render.prose_projection(content))
+    guidance = render.placeholder_guidance(content)
+    return {
+        "status": "ok",
+        "draft_path": str(Path(path).resolve()),
+        "rendered": draft["rendered"],
+        "prose_path": str(prose_path),
+        "fill_guidance": guidance,
+        "next_action": context.runner_action(
+            "record-prose", "--draft", str(Path(path).resolve()), "--input", str(prose_path)
+        ),
+        "note": (
+            "Machine fields are rendered by the runtime; edit only the prose file and "
+            "apply it with record-prose. Structural edits need a recorded repair kind."
+        ),
+        "external_mutations": False,
+    }
+
+
+def record_prose(path: str, input_path: str) -> dict[str, Any]:
+    draft, _root, _progress, _evidence, _review_context = _selected_draft(path)
+    if "rendered" not in draft:
+        raise contract.WorkflowError(
+            "record-prose applies the rendered prose surface; run render-review first"
+        )
+    user_input = contract.read_json(
+        contract.regular_file(Path(input_path), "content prose"), "content prose"
+    )
+    contract.reject_envelope_wrapper(user_input, "content prose")
+    content = render.apply_prose(cast("dict[str, Any]", draft["content"]), user_input)
+    draft["content"] = content
+    arbitration = draft.get("arbitration")
+    if isinstance(arbitration, dict):
+        # Panel mode: the prose surface is the sanctioned editor of the
+        # arbitration content prose; decision keys stay untouched, so the
+        # ownership check keeps passing.
+        arbitration_content = cast("dict[str, Any]", arbitration.get("content") or {})
+        arbitration["content"] = render.apply_prose({**arbitration_content, **content}, user_input)
+    contract.write_json(Path(path), draft)
+    guidance = render.placeholder_guidance(content)
+    return {
+        "status": "ok",
+        "draft_path": str(Path(path).resolve()),
+        "applied": sorted(user_input),
+        "fill_guidance": guidance,
+        "next_action": context.runner_action("check-review", "--draft", str(Path(path).resolve())),
+        "external_mutations": False,
+    }
+
+
+def re_anchor_review(path: str) -> dict[str, Any]:
+    """Drift re-anchor: fresh evidence, decision and prose preserved verbatim."""
+    draft, root, _progress, evidence, review_context = _selected_draft(path)
+    exact = cast("dict[str, Any]", review_context["exact_git"])
+    repo_root = Path(str(exact["repo_root"]))
+    del draft
+    old_head = str(evidence["head_sha"])
+    refresh = refresh_review(path)
+    if refresh.get("status") not in {"ok", "needs_reassessment"}:
+        return refresh
+    draft_next = contract.read_json(Path(str(refresh.get("draft_path") or path)), "draft")
+    _, evidence_next = contract.artifact_payload(
+        Path(str(draft_next["evidence_path"])), "evidence_snapshot"
+    )
+    new_head = str(evidence_next["head_sha"])
+    if new_head == old_head:
+        return {
+            "status": "ok",
+            "draft_path": str(refresh.get("draft_path") or path),
+            "re_anchored": False,
+            "reason": "the reviewed head has not moved",
+            "external_mutations": False,
+        }
+    draft_next["re_anchor"] = {
+        "from_head": old_head,
+        "to_head": new_head,
+        "at": render.now_iso(),
+        "receipts_bound_to": "original digests (provenance preserved)",
+    }
+    publications = cast(
+        "list[dict[str, Any]]",
+        draft_next.get("content", {}).get("finding_publications") or [],
+    )
+    draft_next["content"]["finding_publications"] = render.re_anchor_line(
+        repo_root, old_head, new_head, publications
+    )
+    if draft_next.get("rendered"):
+        prose_path = render.prose_file(root, str(draft_next["context_digest"]))
+        contract.write_json(
+            prose_path,
+            render.prose_projection(cast("dict[str, Any]", draft_next["content"])),
+        )
+    contract.write_json(Path(str(refresh["draft_path"])), draft_next)
+    return {
+        "status": "ok",
+        "draft_path": str(refresh["draft_path"]),
+        "re_anchored": True,
+        "from_head": old_head,
+        "to_head": new_head,
+        "receipts_provenance": "original digests",
+        "next_action": context.runner_action("check-review", "--draft", str(refresh["draft_path"])),
+        "note": (
+            "Evidence re-anchored: decision and prose preserved verbatim, machine "
+            "bindings re-derived, receipts keep their original digest provenance. "
+            "Ambiguous anchors refuse loudly with a repair path."
+        ),
         "external_mutations": False,
     }

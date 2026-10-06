@@ -37,6 +37,10 @@ REQUIRED_DOCUMENTED = (
     "runtime-info",
     # Finalization preview: the pure raw-SHA scrub.
     "scrub-preview",
+    # The inverted tail: render, edit prose, re-anchor on drift.
+    "render-review",
+    "record-prose",
+    "re-anchor-review",
     # Marked repair path: the step-by-step panel flow.
     "start-review",
     "resume-review",
@@ -186,3 +190,16 @@ def test_the_poll_is_presented_verbatim_with_a_fixed_glossary() -> None:
     glossary = (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8")
     for term in ("Poll", "Critic", "Engine", "OCR engine", "Arbitrator", "Panel"):
         assert term in glossary
+
+
+def test_the_tail_routing_precedence_is_documented() -> None:
+    """Render before prose before finalize; structural edits are repair."""
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    tail = workflow.index("The inverted tail")
+    section = workflow[tail:]
+    render_at = section.index("render-review")
+    prose_at = section.index("record-prose")
+    assert render_at < prose_at, "render-review precedes record-prose in the tail"
+    assert "re-anchor-review" in section
+    assert "instead of re-authoring" in section
+    assert "requires a recorded repair kind" in section
