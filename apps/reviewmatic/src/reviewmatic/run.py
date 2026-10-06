@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote as url_quote
 
-from reviewmatic import context, ocr_critic, run_panel, workflow
+from reviewmatic import context, ocr_critic, run_panel, tail, workflow
 from reviewmatic.portable.portable_gitlab import contract
 
 if TYPE_CHECKING:
@@ -43,6 +43,7 @@ CALLBACK_DESTS: dict[str, str] = {
     "critic": "criticCmd",
     "decision": "arbitratorCmd",
     "content": "contentCmd",
+    "delta": "deltaCmd",
 }
 CALLBACK_LABELS: dict[str, str] = {
     "critic": "critic receipt",
@@ -95,7 +96,7 @@ class ReviewRun:
 
     def __init__(self, namespace: argparse.Namespace) -> None:
         self.url = str(getattr(namespace, "url", ""))
-        self.repo_root: str | None = getattr(namespace, "repoRoot", None)
+        self.repo_root: str | None = getattr(namespace, "repoRoot", None) or str(Path.cwd())
         self.mode: str = getattr(namespace, "reviewMode", None) or "normal"
         self.locale: str = getattr(namespace, "locale", None) or "en"
         self.incremental: str = getattr(namespace, "incremental", None) or "auto"
@@ -163,17 +164,50 @@ class ReviewRun:
                 ),
             )
         attempts = 0
-        previous_stage: str | None = None
+        previous_progress: tuple[object, ...] | None = None
         while True:
+            authoring = tail.load(self.root)
+            if authoring and authoring.get("pending_delta"):
+                if self.participants is not None:
+                    raise contract.WorkflowError(
+                        "--participants cannot replace a delta continuation; omit it to keep the selected verifier and historical panel"
+                    )
+                if "delta" in self.callbacks:
+                    template_path = Path(authoring["pending_delta"]["template_path"])
+                    output_path = template_path.with_name("delta-completed.json")
+                    self.step(
+                        "delta-callback",
+                        partial(
+                            run_callback,
+                            self.callbacks["delta"],
+                            template_path,
+                            output_path,
+                            "delta verification",
+                        ),
+                    )
+                    checked = self.step(
+                        "delta-record", partial(tail.record_delta, self.root, str(output_path))
+                    )
+                    if checked["status"] == "ok":
+                        continue
+                return self._waiting_delta(authoring)
             status = context.review_status(str(self.root))
             stage = str(status.get("resume_stage") or status.get("stage"))
             self.stage = stage
             self.log(f"stage {stage}")
-            if stage == previous_stage:
+            observed = context.load_progress(self.root) or {}
+            token = (
+                stage,
+                *(
+                    observed.get(f"{key}_digest")
+                    for key in ("evidence", "context", "critic_receipt", "decision")
+                ),
+            )
+            if token == previous_progress:
                 attempts += 1
             else:
                 attempts = 1
-                previous_stage = stage
+                previous_progress = token
             if attempts > STAGE_ATTEMPT_LIMIT:
                 raise contract.WorkflowError(
                     f"evidence stays incomplete after {STAGE_ATTEMPT_LIMIT} attempts: "
@@ -232,8 +266,17 @@ class ReviewRun:
                 self._callback_stage("decision")
                 continue
             if stage == "content_missing":
+                changed = self.step(
+                    "delta-preflight", lambda: tail.re_anchor(cast("Path", self.root))
+                )
+                if changed is not None:
+                    continue
+                state = self.step("content-render", lambda: tail.prepare(cast("Path", self.root)))
+                if state.get("applied"):
+                    self.step("content-finalize", lambda: tail.finalize(cast("Path", self.root)))
+                    continue
                 if "content" not in self.callbacks:
-                    return self._waiting(status, "content")
+                    return self._waiting_prose(status, state)
                 self._callback_stage("content")
                 continue
             raise contract.WorkflowError(f"the run cannot continue from stage {stage!r}")
@@ -263,9 +306,13 @@ class ReviewRun:
     def _callback_stage(self, kind: str) -> None:
         assert self.root is not None
         root = self.root
-        template = cast(
-            "dict[str, Any]",
-            self.step(f"{kind}-template", lambda: context.template_review(str(root), kind)),
+        template = (
+            {"template_path": tail.prepare(root)["prose_path"]}
+            if kind == "content"
+            else cast(
+                "dict[str, Any]",
+                self.step(f"{kind}-template", lambda: context.template_review(str(root), kind)),
+            )
         )
         template_path = Path(str(template["template_path"]))
         output = template_path.with_name(f"{kind}-completed.json")
@@ -293,13 +340,8 @@ class ReviewRun:
             )
         elif kind == "content":
             self.step(
-                "content-scaffold",
-                lambda: context.scaffold_review(
-                    evidence_path,
-                    str(progress.get("context_path")),
-                    str(progress.get("decision_path")),
-                    str(output),
-                ),
+                "content-prose-apply",
+                lambda: tail.record_prose(root, str(output)),
             )
         else:
             raise contract.WorkflowError(f"unknown authoring callback kind {kind!r}")
@@ -503,16 +545,83 @@ class ReviewRun:
             "external_mutations": False,
         }
 
+    def _waiting_prose(self, status: dict[str, Any], state: dict[str, Any]) -> dict[str, Any]:
+        assert self.root is not None
+        action = context.runner_action(
+            "record-prose", "--artifact-root", str(self.root), "--input", str(state["prose_path"])
+        )
+        return {
+            "status": "waiting",
+            "stage": "content_missing",
+            "template_kind": "prose",
+            "artifact_root": str(self.root),
+            "reason": status.get("reason"),
+            "template_path": state["prose_path"],
+            "manual_command": action["command"],
+            "manual_argv": action["argv"],
+            "resume_command": self.resume_command(),
+            "timings": self.timings,
+            "total_seconds": self._elapsed(),
+            "external_mutations": False,
+            "clarification": state.get("clarification"),
+        }
+
+    def _waiting_delta(self, state: dict[str, Any]) -> dict[str, Any]:
+        assert self.root is not None
+        pending = state["pending_delta"]
+        action = context.runner_action(
+            "record-delta",
+            "--artifact-root",
+            str(self.root),
+            "--input",
+            str(pending["template_path"]),
+        )
+        panel = run_panel.load(self.root)
+        return {
+            "status": "waiting",
+            "stage": "delta_check_missing",
+            "template_kind": "delta",
+            "artifact_root": str(self.root),
+            "template_path": pending["template_path"],
+            "history_path": pending["history_path"],
+            "scope": pending["scope"],
+            "targets": pending["targets"],
+            "inputs": {
+                key: (context.load_progress(self.root) or {}).get(key)
+                for key in ("evidence_path", "context_path", "repo_root")
+            },
+            "verifier": panel.get("participants", {}).get("arbitrator") if panel else None,
+            "rules": "Use a fresh independent native session for the selected verifier. Check the new delta and affected conclusions using dependencies and related consumers. Line mapping proves a position, never truth. Confirm, refute, revise, or leave not_verified explicitly; inspect new defects too. Historical receipts remain bound to their original snapshot. Address only affected conclusions; preserve authored prose.",
+            "affected": pending.get("needs_addressed", []),
+            "prose_path": state["prose_path"],
+            "manual_command": action["command"],
+            "manual_argv": action["argv"],
+            "resume_command": self.resume_command(),
+            "timings": self.timings,
+            "total_seconds": self._elapsed(),
+            "external_mutations": False,
+        }
+
     def _final(
         self, status: str, stage: str, report: dict[str, Any] | None = None
     ) -> dict[str, Any]:
         panel = run_panel.load(self.root) if self.root is not None else None
+        authored = tail.load(self.root) if self.root is not None else None
         return {
             "status": status,
             "stage": stage,
             "artifact_root": str(self.root) if self.root else None,
             "report": report,
             **({"panel": run_panel.summary(panel)} if panel is not None else {}),
+            **(
+                {
+                    "panel_role": "historical",
+                    "delta_checks": authored["delta_checks"],
+                    "authorship_history": authored.get("history", []),
+                }
+                if authored and authored.get("delta_checks")
+                else {}
+            ),
             "timings": self.timings,
             "total_seconds": self._elapsed(),
             "external_mutations": False,

@@ -47,11 +47,11 @@ Drive a remote-MR review with one process: `reviewmatic run --url <mr-url> --rev
 
 The run stops once for the panel poll. The stop carries the complete poll
 presentation under `poll`: `poll.text` is the verbatim question, keyed to the
-review locale, and `poll.rules` instructs how to present it — present the text
+review locale, and the stop's `rules` instruct how to present it — present the text
 word for word, without paraphrasing or summarizing; never retell the template
 in your own words. The poll names the critics, the engine of every critic, the
 one-line arbitrator role, and the resolved mode with an engines note when the
-OCR engine is excluded (incremental reviews, or a background file above the
+OCR engine is excluded (a background file above the
 CLI limit); when the note excludes OCR, do not offer it. The term meanings are
 fixed in `references/poll-glossary.md`. Attach your recommendation to the poll; the choice is the user's. Fill the
 returned selection template with the answer and run the printed
@@ -60,7 +60,20 @@ substitute a configuration silently: the recorded names appear in the results, a
 
 After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the background from the collected context, invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
 
-The remaining stops are the decision and the content. At the decision stop, launch the selected arbitrator as a separate subagent: it arbitrates every critic finding (including the OCR findings) with a concrete reason per response, selects exactly one verdict, and fills the decision template, which you then import with the printed `reviewmatic finalize-review` command. At the content stop, complete the plan content template and run the printed `reviewmatic scaffold-review` command. The templates pre-render every valid publication variant per accepted finding: keep one variant per finding, fill its judgment placeholders, and delete the unused rows. The final run response prints the review report with the `runbook.md` path; follow `references/output-format.md` from there. Apply the discussion-audit, findings-discipline, suggestion, SemVer, and metadata doctrine of the stages below to the templates exactly as written — the templates carry the same contracts; the run changes only who assembles them.
+The remaining stops are the decision and the prose. At the decision stop,
+launch the selected arbitrator in a separate native session. It verdicts every
+critic finding and may record `publication_intents`: one finding ID with
+`publication: {kind, fix_mode}` and optional dependencies and source target.
+Import the decision with the returned `reviewmatic finalize-review` command.
+The real `run` then invokes the shared renderer, materializes
+`content-prose-<digest>.json`, and returns `template_kind=prose` with
+`reviewmatic record-prose --artifact-root <root> --input <prose>`.
+Edit prose, semantic choices, and fix payloads only. Do not author positions,
+range counters, patch paths/digests, revisions, or `update_issue`.
+Resume the same run to finalize; `scaffold-review` is the structural repair
+path, never the normal tail. Apply the discussion, findings, SemVer, and
+metadata doctrine below to those judgments. Print the returned report through
+`references/output-format.md`, and execute no publication commands.
 
 ## Necessity and completion
 
@@ -229,12 +242,18 @@ answer verdicts, and the resume/refresh lifecycle, and
 
 ## The inverted tail: render, edit prose, finalize
 
-For the draft path, after the decision is recorded, run
+For the primary `run` path the order is decision → shared render → record-prose → finalize.
+For a separate draft, after its decision is recorded, run
 `reviewmatic render-review --draft <draft-path>`: the runtime renders the
 content draft from accepted primary and critic findings and their publication
-intents. A line intent needs one unambiguous added-line anchor in its path
-dependencies. An existing-thread intent needs one prepared thread in its
-thread dependencies. Multiple possible anchors require decision repair.
+intents. A line fix uses a semantic `target: {path, before}` with the exact
+source excerpt and a `replacement` string. The runtime derives its anchor and
+`suggestion:-N+M` range, including ordinary multi-line fixes. For separate
+positions use semantic `parts` with a source target, replacement, and optional
+explanation per part, plus a judged `split_rationale`. Multiple matches ask for
+a distinguishing source excerpt, preserving the existing prose. Never solve
+ambiguity by guessing a line or re-authoring the complete structure.
+An existing-thread intent binds one prepared thread named by its dependencies.
 The runtime materializes `content-prose-<digest>.json` next to the draft,
 carrying only the prose and semantic fields with structurally detectable
 placeholders. Edit that one file (fill the placeholders, keep the row ids) and
@@ -247,22 +266,38 @@ finalizing. Patch companions and revisions are stamped during plan creation,
 not supplied in the prose file. This routing is the precedence: render, prose, finalize; the
 structural path is repair (`references/repair.md`).
 
-`reviewmatic re-anchor-review --draft <draft-path>` checks for drift before
-refreshing. Unchanged evidence leaves the draft and progress untouched.
-For a draft without critic receipts, it can remap surviving line anchors and
-returns `needs_reassessment`: verify the changed scope and re-record the
-refreshed context package before finalization. An anchor inside a changed
-hunk refuses before refresh instead of re-authoring or guessing it.
-For a panel or any draft with critic receipts, changed evidence refuses
-without modifying the draft, prose, receipts, or progress. The current v2
-contract requires each receipt to bind the selected evidence digest. Use
-explicit `refresh-review` with fresh targeted receipts, never edit the original
-digests. A provenance-preserving panel re-anchor is not yet supported.
+Before finalization `run` checks for drift. Explicit
+`reviewmatic re-anchor-review --artifact-root <root>` uses that same mechanism;
+`reviewmatic re-anchor-review --draft <draft-path>` checkpoints a validated
+rendered draft and hands off to the shared run tail. Unchanged evidence leaves
+authorship untouched. Changed evidence creates an authorship checkpoint with
+the original decision, prose, panel, and bound receipts, then asks for a fresh
+delta check from the selected verifier in a new independent native session.
+The stop provides exact new evidence/context/worktree paths, the delta, affected
+conclusions and dependencies, and a ready template. Read related consumers too.
+Line mapping proves a publication position, never the truth of a finding.
 
-The one-process `run` path still uses its existing decision/content stops.
-It does not invoke this draft renderer or `record-prose`, and its evidence
-drift path still requires a new review cycle. Do not claim the draft tail's
-routing or re-anchor behavior for `run`.
+Record the completed check with
+`reviewmatic record-delta --artifact-root <root> --input <delta-check>`.
+Every affected conclusion gets concrete evidence and one verdict: `confirmed`,
+`refuted`, `changed`, or `not_verified`. Refuted conclusions need the addressed
+`accept_refutation` resolution; changed findings need `revise` with their
+revised finding and stable ID. New delta findings need their semantic
+`new_dispositions`, not a repeat of the entire review. `not_verified` never
+passes by setting a resolution. Confirmed conclusions and prose carry forward;
+changed or ambiguous fixes return the same prose surface for addressed edits.
+Original digests are never overwritten. Historical checks certify the old
+snapshot; a separate current receipt and delta-result record certify what was
+checked or carried on the new snapshot.
+
+Re-publication fields are derived from the finalized baseline. Re-confirmation
+retains stable IDs and revision; changed content increments revision once,
+not once per render or head drift. Follow-ups remain proposals: the runtime
+derives `no_publication`, not an unsupported `update_issue` command. Original
+critic evidence and CI/SemVer texts remain in private history; their user-facing
+Markdown/chat projections scrub known current and historical SHA tokens while
+preserving revision links and executable fix code. The live ≤15-minute budget
+requires measurement and never waives a necessary wider delta verification.
 
 For a remote MR, derive role only from `MR.author.username` and `GET /user`: equal means `author`, otherwise `reviewer`. If either identity is unavailable, stop rather than guess. A reviewer reports findings and proposed fixes without promising to edit another person's MR. An author receives concrete local fixes and must not be presented as an independent reviewer of their own MR.
 

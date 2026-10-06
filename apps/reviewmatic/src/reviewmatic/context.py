@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import __version__, fixes, publication, publication_skeletons
+from reviewmatic import __version__, fixes, publication, publication_skeletons, render
 from reviewmatic.portable.portable_gitlab import contract as portable
 from reviewmatic.portable.portable_gitlab import review_semver
 from reviewmatic.portable.portable_gitlab.label_assessment import (
@@ -3940,6 +3940,11 @@ def raw_ref_sources(
         if isinstance(value, str) and len(value) >= 12
     ]
     if context is not None:
+        sources.extend(
+            (sha, "historical reviewed head")
+            for sha in context.get("historical_refs", [])
+            if isinstance(sha, str) and len(sha) >= 12
+        )
         release = context.get("release_evidence")
         if isinstance(release, dict):
             candidates = [(release.get("target_sha"), "release target_sha")]
@@ -4687,8 +4692,22 @@ def scaffold_review(
         "thread_decisions": enriched_threads,
         **({"review_source": draft["source"]} if draft is not None and draft.get("source") else {}),
     }
-    markdown = review_markdown(evidence, context, decision, render_content, metadata, publication)
-    reject_visible_raw_refs(markdown, evidence, context)
+    visible_context = {
+        **context,
+        "historical_refs": (draft or {})
+        .get("source", {})
+        .get("run_authoring", {})
+        .get("historical_heads", []),
+    }
+    markdown = review_markdown(
+        render.copied_presentation(evidence, evidence, visible_context),
+        render.copied_presentation(context, evidence, visible_context),
+        render.copied_presentation(decision, evidence, visible_context),
+        render.copied_presentation(render_content, evidence, visible_context),
+        render.copied_presentation(metadata, evidence, visible_context),
+        render.copied_presentation(publication, evidence, visible_context),
+    )
+    reject_visible_raw_refs(markdown, evidence, visible_context)
     finding_ledger = build_finding_ledger(
         incremental,
         previous_assessments,
@@ -5314,7 +5333,10 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
             value["scope_digest"] = incremental["incremental_delta_digest"]
             value["target_finding_ids"] = sorted(
                 str(item["id"])
-                for item in cast("list[dict[str, Any]]", incremental["previous_findings"])
+                for item in [
+                    *incremental["previous_findings"],
+                    *incremental["previous_recommended_issues"],
+                ]
             )
         identity = evidence_digest
     elif kind == "decision":
@@ -5504,6 +5526,22 @@ MERGE_VERDICT_LABELS = {
 
 
 def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -> str:
+    context = {
+        **context,
+        "historical_refs": plan.get("review_source", {})
+        .get("run_authoring", {})
+        .get("historical_heads", []),
+    }
+    evidence_digest = plan.get("evidence_digest")
+    evidence: dict[str, Any] = {}
+    if portable.is_digest(evidence_digest) and isinstance(plan.get("artifact_root"), str):
+        _, evidence = artifact_for_digest(
+            Path(plan["artifact_root"]), "evidence_snapshot", evidence_digest
+        )
+    else:
+        # Normal report callers supply exact refs in the selected context.
+        evidence = dict(context.get("exact_git", {}).get("refs") or {})
+    plan = render.copied_presentation(plan, evidence, context)
     assessment = validate_chat_assessment(plan.get("chat_assessment"))
     presentation = cast("dict[str, Any]", plan["presentation"])
     locale = cast("str", plan["locale"])

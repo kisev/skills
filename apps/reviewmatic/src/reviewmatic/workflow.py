@@ -7,7 +7,8 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import context, run_panel
+from reviewmatic import context, run_panel, tail
+from reviewmatic import draft as draft_module
 
 if TYPE_CHECKING:
     import argparse
@@ -474,6 +475,45 @@ def decide(args: argparse.Namespace) -> dict[str, Any]:
         Path(args.finalize_report), Path(args.evidence), evidence
     )
     report = portable.read_json(Path(args.report), "review decision")
+    # Authoring-only intent never enters the stored v2 decision artifact.
+    publication_intents = report.pop("publication_intents", [])
+    if not isinstance(publication_intents, list) or any(
+        not isinstance(row, dict) for row in publication_intents
+    ):
+        raise portable.WorkflowError(
+            "publication_intents must be an array of semantic publication choices"
+        )
+    for index, intent in enumerate(publication_intents):
+        if not portable.nonempty_string(intent.get("finding_id")) or set(intent) - {
+            "finding_id",
+            "publication",
+            "dependencies",
+        }:
+            raise portable.WorkflowError(
+                f"$.publication_intents[{index}] needs finding_id, publication, and optional dependencies; no positions or stamps"
+            )
+        publication_schema = cast("dict[str, Any]", draft_module._DISPOSITION["properties"])[
+            "publication"
+        ]
+        issues = draft_module.schema_issues(
+            publication_schema,
+            intent.get("publication"),
+            f"$.publication_intents[{index}].publication",
+        )
+        if issues:
+            raise portable.WorkflowError(
+                "; ".join(f"{issue['path']}: {issue['message']}" for issue in issues)
+            )
+        if "dependencies" in intent:
+            issues = draft_module.schema_issues(
+                draft_module._DEPENDENCIES,
+                intent["dependencies"],
+                f"$.publication_intents[{index}].dependencies",
+            )
+            if issues:
+                raise portable.WorkflowError(
+                    "; ".join(f"{issue['path']}: {issue['message']}" for issue in issues)
+                )
     receipt = None
     receipt_digest = None
     if args.critic_receipt:
@@ -514,6 +554,10 @@ def decide(args: argparse.Namespace) -> dict[str, Any]:
         raise portable.WorkflowError("primary and critic finding IDs must be unique")
     responses = {item["id"]: item for item in report["responses"]}
     accepted = [item for item in candidates if responses[item["id"]]["decision"] == "accept"]
+    if {str(row["finding_id"]) for row in publication_intents} - set(ids):
+        raise portable.WorkflowError(
+            "publication_intents must refer to known primary or critic finding ids"
+        )
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     accepted.sort(key=lambda item: order[item["severity"]])
     context.validate_review_verdict(report, accepted, evidence)
@@ -546,6 +590,7 @@ def decide(args: argparse.Namespace) -> dict[str, Any]:
         plan_path=None,
         plan_digest=None,
     )
+    tail.remember_intents(root, digest, publication_intents)
     return {
         "status": "ok",
         "artifact_path": str(path),

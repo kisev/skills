@@ -40,6 +40,7 @@ REQUIRED_DOCUMENTED = (
     # The inverted tail: render, edit prose, re-anchor on drift.
     "render-review",
     "record-prose",
+    "record-delta",
     "re-anchor-review",
     # Marked repair path: the step-by-step panel flow.
     "start-review",
@@ -150,7 +151,7 @@ def test_publication_skeletons_and_self_documenting_refusals_are_documented() ->
     """The pre-rendered publication variants and their refusal contract are wired."""
     workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
     assert "formally complete block per valid variant" in workflow
-    assert "fill its judgment placeholders" in workflow
+    assert "fill the placeholders" in workflow
     assert "never passes" in workflow
 
 
@@ -197,11 +198,19 @@ def test_the_tail_routing_precedence_is_documented() -> None:
     workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
     tail = workflow.index("The inverted tail")
     section = " ".join(workflow[tail:].split())
-    render_at = section.index("render-review")
-    prose_at = section.index("record-prose")
+    render_at = section.index("render-review --draft")
+    prose_at = section.index("record-prose --draft")
     assert render_at < prose_at, "render-review precedes record-prose in the tail"
     assert "re-anchor-review" in section
-    assert "before refreshing" in section
     assert "requires a recorded repair kind" in section
-    assert "panel re-anchor is not yet supported" in section
-    assert "does not invoke this draft renderer" in section
+    assert "primary `run` path" in section
+    assert "decision → shared render → record-prose → finalize" in section
+    assert "Historical checks certify the old snapshot" in section
+    assert "Line mapping proves a publication position, never the truth" in section
+    primary = workflow[
+        workflow.index("Run path: the primary") : workflow.index("Necessity and completion")
+    ]
+    assert "shared renderer" in primary
+    assert "record-prose --artifact-root" in primary
+    assert "scaffold-review` is the structural repair" in primary
+    assert primary.index("shared renderer") < primary.index("record-prose --artifact-root")

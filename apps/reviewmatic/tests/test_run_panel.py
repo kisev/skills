@@ -20,7 +20,7 @@ import pytest
 from helpers.review_fixture import ReviewFixture, make_review_fixture
 
 from reviewmatic import context as review_context
-from reviewmatic import run_panel
+from reviewmatic import render, run_panel
 from reviewmatic.cli import main as cli_main
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -141,7 +141,7 @@ def empty_content(template: dict[str, Any]) -> dict[str, Any]:
         "recommended_issues": [],
         "rejected_candidates": [
             {**candidate, "reason": "Not observable in the exact reviewed head."}
-            for candidate in template["rejected_candidates"]
+            for candidate in template.get("rejected_candidates", [])
         ],
         "rejected_candidate_assessments": [
             {**item, "reason": "The exact head does not contain the reported gap."}
@@ -152,7 +152,9 @@ def empty_content(template: dict[str, Any]) -> dict[str, Any]:
                 **thread,
                 "assessment": "fixed",
                 "rationale": "The exact reviewed code addresses the remark.",
-                "outcome": "resolve" if thread["state"] == "open" else thread["outcome"],
+                "outcome": "resolve"
+                if thread.get("state", "open") == "open"
+                else thread["outcome"],
                 "proposed_response": "The exact reviewed code handles this path.",
             }
             for thread in template["thread_decisions"]
@@ -259,7 +261,9 @@ def test_run_panel_composes_ocr_and_model_critics(
     waiting = _stdout_json(capsys)
     assert waiting["stage"] == "content_missing"
     template = contract.read_json(Path(waiting["template_path"]), "content template")
-    contract.write_json(Path(waiting["template_path"]), empty_content(template))
+    contract.write_json(
+        Path(waiting["template_path"]), render.prose_projection(empty_content(template))
+    )
     _run_manual(capsys, waiting["manual_argv"])
 
     assert cli_main(resume) == 0
@@ -523,10 +527,10 @@ def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
         "    thread.update({\n"
         "        'assessment': 'fixed',\n"
         "        'rationale': 'The exact reviewed code addresses the remark.',\n"
-        "        'outcome': 'resolve' if thread['state'] == 'open' else thread['outcome'],\n"
+        "        'outcome': 'resolve' if thread.get('state', 'open') == 'open' else thread['outcome'],\n"
         "        'proposed_response': 'The exact reviewed code handles this path.',\n"
         "    })\n"
-        "for candidate in value['rejected_candidates']:\n"
+        "for candidate in value.get('rejected_candidates', []):\n"
         "    candidate['reason'] = 'Not observable in the exact reviewed head.'\n"
         "for item in value['rejected_candidate_assessments']:\n"
         "    item['reason'] = 'The exact head does not contain the reported gap.'\n"
@@ -804,7 +808,15 @@ def test_run_composes_ocr_into_an_incremental_review(
     waiting = _stdout_json(capsys)
     assert waiting["stage"] == "content_missing"
     template = contract.read_json(Path(waiting["template_path"]), "content template")
-    contract.write_json(Path(waiting["template_path"]), finding_content(template, LOW_FINDING))
+    authored = render.prose_projection(finding_content(template, LOW_FINDING))
+    authored["finding_publications"][0] = {
+        "finding_id": "docs-1",
+        "publication": {"kind": "general", "fix_mode": "patch"},
+        "body": "The documented retry needs the key.",
+        "patch": REVIEW_PATCH,
+        "patch_reason": "The documented setup has no suggestion anchor in prose.",
+    }
+    contract.write_json(Path(waiting["template_path"]), authored)
     _run_manual(capsys, waiting["manual_argv"])
     assert cli_main([*base, "--resume", "--json"]) == 0
     final = _stdout_json(capsys)

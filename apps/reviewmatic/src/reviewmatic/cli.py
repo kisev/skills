@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import __version__, local_review, scope, workflow, worktree
+from reviewmatic import __version__, local_review, scope, tail, workflow, worktree
 from reviewmatic import draft as draft_module
 from reviewmatic import run as run_module
 from reviewmatic.portable import state_artifacts
@@ -242,14 +242,26 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         "record-prose",
         "Apply the prose surface onto the rendered draft; structural keys refuse",
         (
-            OptionSpec("draft", "generated editable review draft", required=True),
+            OptionSpec("draft", "generated editable review draft"),
+            OptionSpec("artifact-root", "one-process run artifact root"),
             OptionSpec("input", "content prose file", required=True),
+        ),
+    ),
+    CommandSpec(
+        "record-delta",
+        "Record a fresh delta verification while preserving historical authorship",
+        (
+            OptionSpec("artifact-root", "one-process run artifact root", required=True),
+            OptionSpec("input", "completed delta check", required=True),
         ),
     ),
     CommandSpec(
         "re-anchor-review",
         "Re-anchor machine fields onto drifted evidence; decision and prose stay verbatim",
-        (OptionSpec("draft", "generated editable review draft", required=True),),
+        (
+            OptionSpec("draft", "generated editable review draft"),
+            OptionSpec("artifact-root", "one-process run artifact root"),
+        ),
     ),
     CommandSpec(
         "runtime-info",
@@ -411,6 +423,10 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "content-cmd",
                 "shell command authoring the plan content; template and output paths arrive"
                 " as $1 and $2",
+            ),
+            OptionSpec(
+                "delta-cmd",
+                "shell command verifying a drift delta; template/output arrive as $1/$2",
             ),
             OptionSpec("resume", "continue the existing review from its current stage", flag=True),
             OptionSpec(
@@ -878,6 +894,13 @@ def dispatch(namespace: argparse.Namespace, tokens: Sequence[str]) -> int:
         result = draft_module.scrub_preview(str(_field(namespace, "draft")))
         contract.emit(result)
         return EXIT_OK if result["status"] == "ok" else EXIT_ERROR
+    if name == "record-delta":
+        result = tail.record_delta(
+            contract.artifact_root(Path(str(_field(namespace, "artifactRoot")))),
+            str(_field(namespace, "input")),
+        )
+        contract.emit(result)
+        return EXIT_OK if result["status"] in {"ok", "needs_targeted_repair"} else EXIT_INVALID
     if name == "worktree":
         if getattr(namespace, "list", None) == "list":
             contract.emit(
@@ -954,11 +977,35 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
         elif name == "render-review":
             result = draft_module.render_content_review(str(_field(namespace, "draft")))
         elif name == "record-prose":
-            result = draft_module.record_prose(
-                str(_field(namespace, "draft")), str(_field(namespace, "input"))
-            )
+            draft_path, root_path = _field(namespace, "draft"), _field(namespace, "artifactRoot")
+            if bool(draft_path) == bool(root_path):
+                raise contract.WorkflowError(
+                    "record-prose requires exactly one target: --draft or --artifact-root"
+                )
+            if root_path:
+                result = tail.record_prose(
+                    contract.artifact_root(Path(root_path)), str(_field(namespace, "input"))
+                )
+            else:
+                result = draft_module.record_prose(str(draft_path), str(_field(namespace, "input")))
         elif name == "re-anchor-review":
-            result = draft_module.re_anchor_review(str(_field(namespace, "draft")))
+            draft_path, root_path = _field(namespace, "draft"), _field(namespace, "artifactRoot")
+            if bool(draft_path) == bool(root_path):
+                raise contract.WorkflowError(
+                    "re-anchor-review requires exactly one target: --draft or --artifact-root"
+                )
+            if root_path:
+                root = contract.artifact_root(Path(root_path))
+                state = tail.re_anchor(root)
+                result = {
+                    "status": "ok",
+                    "re_anchored": state is not None,
+                    "artifact_root": str(root),
+                    "delta_check": state.get("pending_delta") if state else None,
+                    "external_mutations": False,
+                }
+            else:
+                result = draft_module.re_anchor_review(str(draft_path))
         else:
             result = draft_module.finish_review(str(_field(namespace, "draft")))
         contract.emit(result)

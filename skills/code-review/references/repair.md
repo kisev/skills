@@ -3,6 +3,13 @@
 Choose the repair path by cost: the cheapest path that honestly covers the
 change is the right one, and a more expensive path never runs first.
 
+For the normal `run` tail, edit the generated prose file and apply it with
+`reviewmatic record-prose --artifact-root ROOT --input PROSE`. Do not rewind or
+refresh merely to fix wording. When the head moves, the same run preserves
+authorship and requests a separate `record-delta` verification. Refuted,
+changed, or ambiguous conclusions require only addressed judgment or target
+edits, not a repeat of panel → decision → content.
+
 1. **Publication or arbitration texts (the cheapest honest path).** Wrong or
    improved publication prose, thread replies, or arbitration wording with
    unchanged decisions: launch a fresh arbitrator session, have it author a

@@ -23,7 +23,7 @@ import pytest
 from helpers.review_fixture import ReviewFixture, make_review_fixture
 
 from reviewmatic import context as review_context
-from reviewmatic import workflow
+from reviewmatic import render, workflow
 from reviewmatic.cli import build_parser
 from reviewmatic.cli import main as cli_main
 from reviewmatic.portable.portable_gitlab import contract
@@ -147,7 +147,7 @@ def filled_content(template: dict[str, Any], findings: list[dict[str, Any]]) -> 
         "recommended_issues": [],
         "rejected_candidates": [
             {**candidate, "reason": "Not observable in the exact reviewed head."}
-            for candidate in template["rejected_candidates"]
+            for candidate in template.get("rejected_candidates", [])
         ],
         "rejected_candidate_assessments": [
             {**item, "reason": "The exact head does not contain the reported gap."}
@@ -158,7 +158,9 @@ def filled_content(template: dict[str, Any], findings: list[dict[str, Any]]) -> 
                 **thread,
                 "assessment": "fixed",
                 "rationale": "The exact reviewed code addresses the remark.",
-                "outcome": "resolve" if thread["state"] == "open" else thread["outcome"],
+                "outcome": "resolve"
+                if thread.get("state", "open") == "open"
+                else thread["outcome"],
                 "proposed_response": "The exact reviewed code handles this path.",
             }
             for thread in template["thread_decisions"]
@@ -354,9 +356,10 @@ def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: 
         "decision-template",
         "decision-callback",
         "decision-record",
-        "content-template",
+        "content-render",
         "content-callback",
-        "content-scaffold",
+        "content-prose-apply",
+        "content-finalize",
         "report",
     ):
         assert expected in steps, f"{expected} must be logged with its timing"
@@ -420,9 +423,11 @@ def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, ca
     waiting = _stdout_json(capsys)
     assert waiting["status"] == "waiting"
     assert waiting["stage"] == "content_missing"
-    assert "scaffold-review" in waiting["manual_command"]
+    assert "record-prose" in waiting["manual_command"]
     template = contract.read_json(Path(waiting["template_path"]), "content template")
-    contract.write_json(Path(waiting["template_path"]), filled_content(template, []))
+    contract.write_json(
+        Path(waiting["template_path"]), render.prose_projection(filled_content(template, []))
+    )
     _run_manual(capsys, waiting["manual_argv"])
 
     assert cli_main([*base, "--resume"]) == 0
@@ -594,10 +599,10 @@ def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
         "    thread.update({\n"
         "        'assessment': 'fixed',\n"
         "        'rationale': 'The exact reviewed code addresses the remark.',\n"
-        "        'outcome': 'resolve' if thread['state'] == 'open' else thread['outcome'],\n"
+        "        'outcome': 'resolve' if thread.get('state', 'open') == 'open' else thread['outcome'],\n"
         "        'proposed_response': 'The exact reviewed code handles this path.',\n"
         "    })\n"
-        "for candidate in value['rejected_candidates']:\n"
+        "for candidate in value.get('rejected_candidates', []):\n"
         "    candidate['reason'] = 'Not observable in the exact reviewed head.'\n"
         "for item in value['rejected_candidate_assessments']:\n"
         "    item['reason'] = 'The exact head does not contain the reported gap.'\n"

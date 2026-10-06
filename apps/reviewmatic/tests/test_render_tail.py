@@ -20,7 +20,7 @@ from helpers.review_fixture import ReviewFixture, make_review_fixture
 
 from reviewmatic import context as review_context
 from reviewmatic import draft as draft_module
-from reviewmatic import publication_skeletons, render
+from reviewmatic import publication_skeletons, render, tail
 from reviewmatic.portable.portable_gitlab import contract
 
 if TYPE_CHECKING:
@@ -100,10 +100,6 @@ def _prose_fill(prose: dict[str, Any]) -> dict[str, Any]:
         ],
         "checks": ["Compared the exact base and head revisions."],
         "recommended_issues": [],
-        "rejected_candidates": [
-            {**candidate, "reason": "Not observable in the exact reviewed head."}
-            for candidate in prose["rejected_candidates"]
-        ],
         "rejected_candidate_assessments": [
             {**item, "reason": "The exact head does not contain the reported gap."}
             for item in prose["rejected_candidate_assessments"]
@@ -449,23 +445,18 @@ def test_re_anchor_preserves_decision_and_remaps_anchors(fixture: ReviewFixture)
     fixture.config_path.write_text(json.dumps({**fixture.read_config(), "headSha": new_head}))
 
     re_anchored = draft_module.re_anchor_review(draft_path)
-    assert re_anchored["status"] == "needs_reassessment", re_anchored
+    assert re_anchored["status"] == "ok", re_anchored
     assert re_anchored["re_anchored"] is True
-    next_draft = contract.read_json(Path(str(re_anchored["draft_path"])), "draft")
-    assert next_draft["re_anchor"]["from_head"] == fixture.head_sha
-    row = next_draft["content"]["finding_publications"][0]
-    # The anchor shifted by exactly the one inserted line: 2 -> 3.
-    assert row["line"] == 3
-    # The decision stays verbatim.
-    assert next_draft["dispositions"][0]["publication"] == {
-        "kind": "line",
-        "fix_mode": "suggestion",
-    }
-    assert next_draft["findings"] == [FINDING]
+    assert re_anchored["delta_check"]["scope"]["from_head"] == fixture.head_sha
+    assert "record-prose" not in re_anchored["next_action"]["command"]
+    checkpoint = tail.load(Path(re_anchored["artifact_root"]))
+    assert checkpoint is not None
     assert (
-        next_draft["content"]["summary"]
+        checkpoint["content"]["summary"]
         == "The change is small and preserves the reviewed contract."
     )
+    # The transfer cannot be certified by mapping alone.
+    assert checkpoint["pending_delta"]["checked"] is False
 
 
 def test_re_anchor_refuses_anchors_inside_changed_hunks(fixture: ReviewFixture) -> None:
@@ -524,8 +515,11 @@ def test_re_anchor_refuses_anchors_inside_changed_hunks(fixture: ReviewFixture) 
     fixture._git(fixture.origin, "update-ref", "refs/merge-requests/7/head", new_head)
     fixture.config_path.write_text(json.dumps({**fixture.read_config(), "headSha": new_head}))
 
-    with pytest.raises(contract.WorkflowError, match="no unique image"):
-        draft_module.re_anchor_review(draft_path)
+    before = Path(draft_path).read_bytes()
+    result = draft_module.re_anchor_review(draft_path)
+    assert result["status"] == "invalid"
+    assert Path(draft_path).read_bytes() == before
+    assert any("unfilled template variant" in row["message"] for row in result["errors"])
 
 
 def test_prose_round_trips_previous_assessment_handles() -> None:
@@ -666,7 +660,7 @@ def test_no_drift_re_anchor_preserves_the_recorded_panel(fixture: ReviewFixture)
     assert (root / review_context.PROGRESS_NAME).read_bytes() == progress_before
 
 
-def test_drifted_panel_re_anchor_refuses_without_destroying_authorship(
+def test_unfinished_panel_re_anchor_preserves_authorship(
     fixture: ReviewFixture,
 ) -> None:
     path = _prepare_panel(fixture)
@@ -678,7 +672,56 @@ def test_drifted_panel_re_anchor_refuses_without_destroying_authorship(
     fixture.git("commit", "-m", "head drift")
     head = fixture.head()
     fixture.config_path.write_text(json.dumps({**fixture.read_config(), "headSha": head}))
-    with pytest.raises(contract.WorkflowError, match="v2 requires"):
-        draft_module.re_anchor_review(path)
+    result = draft_module.re_anchor_review(path)
+    assert result["status"] == "invalid"
     assert Path(path).read_bytes() == before
     assert (root / review_context.PROGRESS_NAME).read_bytes() == progress_before
+
+
+def test_validated_draft_panel_hands_off_to_fresh_delta_check(fixture: ReviewFixture) -> None:
+    path = _prepare_panel(fixture)
+    root = Path(path).parent.parent
+    draft = contract.read_json(Path(path), "draft")
+    assert (
+        draft_module.record_draft_input(
+            path,
+            str(
+                _write(
+                    fixture,
+                    "checkpoint-identity.json",
+                    {
+                        "run_id": "checkpoint-primary-run",
+                        "session_id": "checkpoint-primary-session",
+                    },
+                )
+            ),
+        )["status"]
+        == "ok"
+    )
+    prose_path = render.prose_file(root, draft["context_digest"])
+    contract.write_json(prose_path, _prose_fill(contract.read_json(prose_path, "prose")))
+    draft_module.record_prose(path, str(prose_path))
+    before = Path(path).read_bytes()
+    (fixture.repo / "review.txt").write_text("base\nintro\nreviewed change\n")
+    fixture.git("add", "review.txt")
+    fixture.git("commit", "-m", "move the draft head")
+    head = fixture.head()
+    fixture.git("push", "-q", "origin", "main")
+    fixture._git(fixture.origin, "update-ref", "refs/merge-requests/7/head", head)
+    fixture.config_path.write_text(json.dumps({**fixture.read_config(), "headSha": head}))
+    migrated = draft_module.re_anchor_review(path)
+    assert migrated["status"] == "ok", migrated
+    assert Path(path).read_bytes() == before
+    state = tail.load(root)
+    assert state is not None
+    check_path = Path(state["pending_delta"]["template_path"])
+    check = contract.read_json(check_path, "delta")
+    check.update(run_id="draft-delta-run", session_id="draft-delta-session")
+    for row in check["checks"]:
+        row.update(
+            verdict="confirmed", evidence="Verified the changed code and affected consumers."
+        )
+    contract.write_json(check_path, check)
+    assert tail.record_delta(root, str(check_path))["status"] == "ok"
+    final = tail.finalize(root)
+    assert final["status"] == "ok", final

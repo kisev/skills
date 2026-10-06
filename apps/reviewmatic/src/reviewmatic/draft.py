@@ -19,6 +19,7 @@ from reviewmatic import (
     render,
     review_worktree,
     scope,
+    tail,
 )
 from reviewmatic.context_package import (
     ExpectedPackage,
@@ -109,6 +110,12 @@ _DISPOSITION = {
             "properties": {
                 "kind": {"enum": ["none", "general", "line", "local_fix", "existing_thread"]},
                 "fix_mode": {"enum": ["suggestion", "patch"]},
+                "target": {
+                    "type": "object",
+                    "required": ["path", "before"],
+                    "additionalProperties": False,
+                    "properties": {"path": _TEXT, "before": _TEXT},
+                },
             },
         },
         "severity_override": {
@@ -563,7 +570,10 @@ def _critic_receipt(context: dict[str, Any], mode: str) -> dict[str, Any]:
         receipt["scope_digest"] = incremental["incremental_delta_digest"]
         receipt["target_finding_ids"] = [
             item["id"]
-            for item in cast("list[dict[str, Any]]", incremental.get("previous_findings") or [])
+            for item in [
+                *cast("list[dict[str, Any]]", incremental.get("previous_findings") or []),
+                *cast("list[dict[str, Any]]", incremental.get("previous_recommended_issues") or []),
+            ]
         ]
     return receipt
 
@@ -2566,7 +2576,12 @@ def check_review(path: str) -> dict[str, Any]:
         ):
 
             def check_ref(raw: str = value) -> None:
-                context.reject_visible_raw_refs(raw, evidence, review_context)
+                visible = (
+                    render.copied_presentation(raw, evidence, review_context)
+                    if "rendered" in draft
+                    else raw
+                )
+                context.reject_visible_raw_refs(visible, evidence, review_context)
 
             check(field, check_ref)
         elif isinstance(value, list):
@@ -4301,7 +4316,7 @@ def render_content_review(path: str) -> dict[str, Any]:
     }
     contract.write_json(Path(path), draft)
     prose_path = render.prose_file(root, str(draft["context_digest"]))
-    contract.write_json(prose_path, render.prose_projection(content))
+    contract.write_json(prose_path, render.prose_projection(content, review_context, evidence))
     guidance = render.placeholder_guidance(content)
     return {
         "status": "ok",
@@ -4321,7 +4336,7 @@ def render_content_review(path: str) -> dict[str, Any]:
 
 
 def record_prose(path: str, input_path: str) -> dict[str, Any]:
-    draft, _root, _progress, _evidence, _review_context = _selected_draft(path)
+    draft, _root, _progress, evidence, review_context = _selected_draft(path)
     if "rendered" not in draft:
         raise contract.WorkflowError(
             "record-prose applies the rendered prose surface; run render-review first"
@@ -4330,7 +4345,9 @@ def record_prose(path: str, input_path: str) -> dict[str, Any]:
         contract.regular_file(Path(input_path), "content prose"), "content prose"
     )
     contract.reject_envelope_wrapper(user_input, "content prose")
-    content = render.apply_prose(cast("dict[str, Any]", draft["content"]), user_input)
+    prepared_content = copy.deepcopy(cast("dict[str, Any]", draft["content"]))
+    resolved = render.resolve_prose_fixes(prepared_content, user_input, review_context, evidence)
+    content = render.apply_prose(prepared_content, resolved)
     draft["content"] = content
     arbitration = draft.get("arbitration")
     if isinstance(arbitration, dict):
@@ -4379,6 +4396,29 @@ def re_anchor_review(path: str) -> dict[str, Any]:
             "draft_path": str(Path(path).resolve()),
             "re_anchored": False,
             "reason": "the review evidence has not changed",
+            "external_mutations": False,
+        }
+    if "rendered" in draft:
+        checked = check_review(path)
+        if checked["status"] != "ok":
+            return {
+                **checked,
+                "note": "Finish only the addressed prose judgments before checkpointing this draft; no review state was replaced.",
+            }
+        compiled = _compile_draft(draft, review_context, evidence, str(_progress["mode"]))
+        tail.adopt_draft(root, draft, compiled, _progress, review_context, evidence)
+        state = tail.re_anchor(root)
+        return {
+            "status": "ok",
+            "re_anchored": state is not None,
+            "artifact_root": str(root),
+            "draft_path": str(Path(path).resolve()),
+            "prose_path": state["prose_path"] if state else None,
+            "delta_check": state.get("pending_delta") if state else None,
+            "next_action": context.runner_action(
+                "run", "--resume", "--url", str(evidence["target"]["url"])
+            ),
+            "note": "The original draft is retained as history; continue through the shared run tail and fresh delta verification.",
             "external_mutations": False,
         }
     if "participants" in draft or _records(draft.get("critics")):

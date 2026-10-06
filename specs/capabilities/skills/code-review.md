@@ -361,12 +361,16 @@ findings with complete fields, a pre-existing bloat candidate shall become a
 recommended issue instead of a finding, and in local reviews it shall keep
 `origin: pre_existing` and never block.
 
-The draft renderer shall derive the accepted set from both primary and critic
+The shared renderer shall derive the accepted set from both primary and critic
 findings with their recorded dispositions and effective severities. Accepted
 findings rendered through `render-review` shall carry a publication intent in
-the app-layer disposition. A line intent shall derive only an unambiguous
-added-line anchor, not choose an unchanged context line or guess among
-multiple positions. An existing-thread intent shall bind exactly one prepared
+the app-layer disposition or run's authoring-only publication intents. A line
+fix shall use a semantic source target (`path`, exact `before` excerpt) and
+replacement text; the runtime shall locate the target and derive the visible
+anchor and bounded suggestion range, including multi-line replacements and
+grouped semantic parts. Multiple matching excerpts shall request a concrete
+clarification while preserving authored prose, never require manual range
+or line authoring. An existing-thread intent shall bind exactly one prepared
 thread named by the finding's dependencies. The generated prose surface shall
 retain row identity handles and reject structural publication stamps and
 SemVer bindings. Panel prose edits shall preserve arbitration decision keys
@@ -374,15 +378,34 @@ and retain the semantic-only thread representation in `arbitration.content`.
 After rendering, direct `record-input` edits outside session identity shall
 require a recorded repair kind.
 
-Re-anchor shall check evidence before refresh. When evidence is unchanged, it
-shall preserve draft and progress bytes. Without critic receipts, surviving
-line anchors may map across head drift, but the changed scope and refreshed
-package shall require reassessment before completion. With a panel or critic
-receipts, changed evidence shall refuse without replacing authoring state:
-the current v2 receipt contract requires the selected evidence binding, so
-original receipts cannot certify a new snapshot by having their digests
-rewritten. The one-process `run` retains its existing authoring stops and
-does not use the draft prose surface or provenance-preserving re-anchor.
+The primary `run` tail shall invoke this renderer after recording the decision
+and expose `content-prose-<digest>.json` applied through `record-prose`. Normal
+completion shall not require structural `scaffold-review` input. Canonical
+v2 decisions shall exclude authoring-only intent fields. Re-confirmed prior
+findings and proposals shall retain stable IDs and revisions; changed content
+shall derive one revision increment from the finalized baseline through the
+same materialization functions as validation. Published follow-ups remain
+proposals: the runtime shall derive `no_publication`, never an unsupported
+issue-update action requiring the agent to guess `update_issue` semantics.
+
+Re-anchor shall preserve the original decision, panel receipts, and authored
+prose as private history. New evidence shall receive a separate delta check
+from a fresh independent native session of the selected verifier, covering the
+changed paths, affected conclusions and dependencies, conversation and
+metadata changes, and current CI. Source-location mapping shall establish only
+a position, never factual confirmation. Each affected conclusion shall be
+confirmed, refuted, revised, or explicitly not verified with evidence; unresolved
+results shall block completion and request addressed work. Confirmed authorship
+shall carry automatically; refuted or changed conclusions shall revise only
+their affected judgments and fixes. New delta findings shall need addressed
+dispositions without restarting the complete review. Old receipt digests shall
+never be rewritten: new current-bound receipts and decisions shall record the
+separate delta verification with the original artifacts retained as provenance.
+Validated rendered drafts shall checkpoint into this same run tail; unfinished
+prose shall refuse checkpointing without discarding authorship. Rendering shall
+scrub current and historical SHA tokens from the copied Markdown/chat
+presentation, including critic, CI, and SemVer text, retaining original private
+evidence, immutable links, and executable fix code.
 
 Incremental analysis shall follow changed code, conversations, metadata, and CI,
 including affected unchanged consumers. Previous accepted findings and recommended

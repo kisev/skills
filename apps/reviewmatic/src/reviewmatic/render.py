@@ -35,7 +35,6 @@ PROSE_KEYS = (
     "checks",
     "previous_finding_assessments",
     "recommended_issues",
-    "rejected_candidates",
     "rejected_candidate_assessments",
     "thread_decisions",
     "finding_publications",
@@ -58,7 +57,16 @@ STRUCTURAL_PUBLICATION_KEYS = {
     "patch_sha256",
     "revision",
 }
-STRUCTURAL_ASSESSMENT_KEYS = {"critic_required", "previous_status", "revision", "update_issue"}
+STRUCTURAL_ASSESSMENT_KEYS = {
+    "critic_required",
+    "previous_status",
+    "current_status",
+    "action",
+    "publication_action",
+    "publication_body",
+    "revision",
+    "update_issue",
+}
 SEMVER_PROSE_KEYS = {"policy", "sources", "fallback_reason", "release_impact", "release_rationale"}
 
 
@@ -112,12 +120,310 @@ def _first_changed_line(
         for match in re.finditer(r"^@@ -[^ ]+ \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
             start, count = int(match[1]), int(match[2]) if match[2] is not None else 1
             anchors.extend((path, line) for line in range(start, start + count) if line in visible)
-    if len(anchors) > 1:
+    return anchors[0] if len(anchors) == 1 else None
+
+
+def targeted_suggestion(
+    repo_root: Path,
+    base: str,
+    head: str,
+    target: dict[str, Any],
+    replacement: str,
+    body: str,
+) -> dict[str, Any]:
+    """Locate a semantic source excerpt and derive the GitLab range, never guess."""
+    if set(target) != {"path", "before"} or not all(
+        isinstance(target[key], str) and target[key] for key in target
+    ):
         raise contract.WorkflowError(
-            "line intent has multiple possible anchors; use decision repair to supply a "
-            "verified publication instead of guessing a changed line"
+            "target needs path and before: the exact source excerpt, not line numbers"
         )
-    return anchors[0] if anchors else None
+    path, before = str(target["path"]), str(target["before"])
+    if path.startswith("/") or ".." in Path(path).parts:
+        raise contract.WorkflowError("target.path must be a repository-relative file")
+    source = str(contract.git_read(repo_root, "show", f"{head}:{path}")).splitlines()
+    snippet = before.splitlines()
+    matches = [
+        index
+        for index in range(len(source) - len(snippet) + 1)
+        if source[index : index + len(snippet)] == snippet
+    ]
+    if len(matches) != 1:
+        positions = ", ".join(str(index + 1) for index in matches) or "none"
+        raise contract.WorkflowError(
+            f"target.before has {len(matches)} matches in {path} (candidate starts: {positions}); "
+            "clarify the exact source excerpt, including distinguishing context; existing prose is retained"
+        )
+    start, end = matches[0] + 1, matches[0] + len(snippet)
+    _, visible = context.changed_diff_lines(repo_root, base, head, path)
+    anchors = sorted(visible & set(range(start, end + 1)))
+    if not anchors:
+        raise contract.WorkflowError(
+            f"target in {path}:{start}-{end} has no visible diff anchor; choose an affected source excerpt"
+        )
+    # Select a visible anchor that stays within GitLab's bounded range limits.
+    anchor = next(
+        (line for line in reversed(anchors) if line - start <= 100 and end - line <= 100), None
+    )
+    if anchor is None:
+        raise contract.WorkflowError(
+            "target exceeds the suggestion range limit; split the semantic fix into bounded parts"
+        )
+    payload = replacement[:-1] if replacement.endswith("\n") else replacement
+    suggestion = f"```suggestion:-{anchor - start}+{end - anchor}\n{payload}\n```"
+    return {
+        "path": path,
+        "line": anchor,
+        "old_line": None,
+        "body": f"{body.rstrip()}\n\n{suggestion}",
+    }
+
+
+def suggestion_target(
+    row: dict[str, Any], review_context: dict[str, Any], evidence: dict[str, Any]
+) -> dict[str, Any]:
+    """Expose source text, not machine positions, as the prose edit handle."""
+    span = context.suggestion_blocks(str(row.get("body") or ""))
+    before = int(span[0].group("before") or 0) if span else 0
+    after = int(span[0].group("after") or 0) if span else 0
+    line = row.get("line")
+    if not isinstance(line, int) or not isinstance(row.get("path"), str):
+        return {"path": publication_skeletons.PATH_HINT, "before": "<BEFORE: exact source excerpt>"}
+    repo = Path(str(review_context["exact_git"]["repo_root"]))
+    source = str(contract.git_read(repo, "show", f"{evidence['head_sha']}:{row['path']}"))
+    return {
+        "path": row["path"],
+        "before": "\n".join(source.splitlines()[line - before - 1 : line + after]),
+    }
+
+
+def resolve_prose_fixes(
+    content: dict[str, Any],
+    incoming: dict[str, Any],
+    review_context: dict[str, Any],
+    evidence: dict[str, Any],
+) -> dict[str, Any]:
+    """Translate semantic fix payloads to the input publication shape."""
+    result = copy.deepcopy(incoming)
+    current = {str(row["finding_id"]): row for row in content.get("finding_publications", [])}
+    for row in result.get("finding_publications", []):
+        prepared = current.get(str(row.get("finding_id")))
+        if prepared is None:
+            continue
+        parts = row.pop("parts", None)
+        if parts is not None:
+            if (
+                prepared.get("fix_mode") != "suggestion"
+                or not isinstance(parts, list)
+                or not parts
+                or len(parts) > 50
+            ):
+                raise contract.WorkflowError("parts requires 1..50 semantic suggestion payloads")
+            built = []
+            for part in parts:
+                if (
+                    not isinstance(part, dict)
+                    or set(part) - {"target", "replacement", "body"}
+                    or not isinstance(part.get("replacement"), str)
+                ):
+                    raise contract.WorkflowError(
+                        "each part needs target {path,before}, replacement text, and optional explanation body; positions are runtime-owned"
+                    )
+                located = targeted_suggestion(
+                    Path(str(review_context["exact_git"]["repo_root"])),
+                    str(evidence["base_sha"]),
+                    str(evidence["head_sha"]),
+                    part.get("target") or {},
+                    part["replacement"],
+                    str(part.get("body") or row.get("body") or ""),
+                )
+                built.append({key: located[key] for key in ("path", "line", "body")})
+            prepared["suggestions"] = built
+            if prepared.get("type") == "line":
+                prepared["path"], prepared["line"], prepared["old_line"] = (
+                    built[0]["path"],
+                    built[0]["line"],
+                    None,
+                )
+            else:
+                prepared["path"], prepared["line"], prepared["old_line"] = None, None, None
+            row["patch"] = None
+            continue
+        if prepared.get("fix_mode") == "suggestion" and "replacement" in row:
+            replacement = row.pop("replacement")
+            target = row.pop("target", None) or suggestion_target(
+                prepared, review_context, evidence
+            )
+            if replacement != "" and publication_skeletons.is_placeholder(replacement):
+                row["body"] = str(replacement)
+                continue
+            if not isinstance(replacement, str):
+                raise contract.WorkflowError(
+                    "replacement must be text (empty text deletes the source excerpt)"
+                )
+            located = targeted_suggestion(
+                Path(str(review_context["exact_git"]["repo_root"])),
+                str(evidence["base_sha"]),
+                str(evidence["head_sha"]),
+                target,
+                replacement,
+                str(row.get("body") or ""),
+            )
+            prepared.update({key: located[key] for key in ("path", "line", "old_line")})
+            row["body"] = located["body"]
+    return result
+
+
+def copied_presentation(
+    value: object,
+    evidence: dict[str, Any],
+    review_context: dict[str, Any],
+    _tokens: set[str] | None = None,
+) -> Any:
+    """Scrub copied prose recursively; immutable original evidence is not edited."""
+    if _tokens is None:
+        _tokens = {
+            sha[:length].casefold()
+            for sha, _source in context.raw_ref_sources(evidence, review_context)
+            for length in range(7, len(sha) + 1)
+        }
+    if isinstance(value, list):
+        return [copied_presentation(item, evidence, review_context, _tokens) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: copy.deepcopy(item)
+            if key
+            in {
+                "evidence_digest",
+                "context_digest",
+                "scope_digest",
+                "thread_sha256",
+                "last_note_body_sha256",
+                "target_sha",
+                "sha",
+                "url",
+                "patch",
+                "patch_sha256",
+                "patch_path",
+                "head_sha",
+                "base_sha",
+                "start_sha",
+                "from_head",
+                "to_head",
+                "command",
+                "path",
+                "repo_root",
+                "source_repo_root",
+            }
+            else copied_presentation(item, evidence, review_context, _tokens)
+            for key, item in value.items()
+        }
+    if not isinstance(value, str):
+        return value
+    # Preserve executable fix code and immutable revision links. Token lookup
+    # avoids re-scanning every release/tag SHA for every copied text field.
+    pieces = re.split(
+        r"(^`{3,}[^\n]*\n.*?^`{3,}[ \t]*$|https?://[^\s)]+)", value, flags=re.MULTILINE | re.DOTALL
+    )
+    tokens = _tokens
+    for index in range(0, len(pieces), 2):
+        pieces[index] = re.sub(
+            r"(?<![0-9a-f])[0-9a-f]{7,64}(?![0-9a-f])",
+            lambda match: "reviewed revision" if match[0].casefold() in tokens else match[0],
+            pieces[index],
+            flags=re.IGNORECASE,
+        )
+    for index in range(1, len(pieces), 2):
+        if (
+            pieces[index].startswith(("http://", "https://"))
+            and not pieces[index - 1].endswith("](")
+            and any(
+                match[0].casefold() in tokens
+                for match in re.finditer(r"[0-9a-f]{7,64}", pieces[index], flags=re.IGNORECASE)
+            )
+        ):
+            pieces[index] = f"[reviewed revision]({pieces[index]})"
+    return "".join(pieces)
+
+
+def reconcile_history(
+    content: dict[str, Any], decision: dict[str, Any], review_context: dict[str, Any]
+) -> dict[str, Any]:
+    """Derive re-publication structure from the immutable finalized baseline."""
+    result = copy.deepcopy(content)
+    incremental = review_context.get("incremental") or {}
+    old = {str(row["id"]): row for row in incremental.get("previous_finding_ledger", [])}
+    authored = {str(row["id"]): row for row in result.get("previous_finding_assessments", [])}
+    findings = {str(row["id"]): row for row in result.get("findings", [])}
+    publications = {str(row["finding_id"]): row for row in result.get("finding_publications", [])}
+    issues = {str(row["id"]): row for row in result.get("recommended_issues", [])}
+    targets = set(decision.get("critic_target_finding_ids") or [])
+    reasons = {
+        str(row["id"]): str(row.get("reason") or "") for row in decision.get("responses", [])
+    }
+    rows = []
+    for identifier, prior in old.items():
+        kind = str(prior["kind"])
+        row = authored.get(identifier) or {}
+        current = findings.get(identifier) if kind == "finding" else issues.get(identifier)
+        previous = copy.deepcopy(prior["record"][kind])
+        previous.pop("revision", None)
+        changed = current is not None and current != previous
+        if kind == "finding" and current is not None:
+            previous_publication = {
+                key: value
+                for key, value in prior["record"]["publication"].items()
+                if key not in {"revision", "patch_path", "patch_sha256"}
+            }
+            changed = changed or publications.get(identifier) != previous_publication
+        if current is not None:
+            status = "changed" if changed or prior["status"] in {"fixed", "withdrawn"} else "active"
+        else:
+            status = str(row.get("status") or "unverified")
+            if status not in {"fixed", "withdrawn"}:
+                status = "unverified"
+        if kind == "issue":
+            # Follow-ups are proposals, not a second issue-publication workflow.
+            publication_action, publication_body = "no_publication", None
+        elif status == "changed":
+            publication_action = "reply"
+            publication_body = str(
+                (publications.get(identifier) or {}).get("body")
+                or row.get("publication_body")
+                or ""
+            )
+        else:
+            publication_action = "no_publication"
+            publication_body = None
+        rows.append(
+            {
+                "id": identifier,
+                "kind": kind,
+                "status": status,
+                "previous_status": str(prior["status"]),
+                "current_status": status,
+                "rationale": str(
+                    row.get("rationale")
+                    or reasons.get(identifier)
+                    or "<RATIONALE: verify this prior conclusion>"
+                ),
+                "action": "Update the confirmed fix."
+                if status == "changed"
+                else "Retain the confirmed conclusion."
+                if status == "active"
+                else "Record the verified closure."
+                if status in {"fixed", "withdrawn"}
+                else "Verify the prior conclusion.",
+                "publication_action": publication_action,
+                "publication_body": publication_body,
+                "critic_required": status in {"changed", "unverified"} or identifier in targets,
+            }
+        )
+    result["previous_finding_assessments"] = rows
+    # Use the same revision function as plan materialization, never an increment
+    # of a previously rendered draft (which would count drift twice).
+    context.finding_revisions(incremental, rows, set(findings))
+    return result
 
 
 def render_content(
@@ -166,21 +472,53 @@ def render_content(
             rows.append(block)
             continue
         if intent.get("kind") == "local_fix" and role == "author":
+            if intent.get("fix_mode") != "patch":
+                raise contract.WorkflowError("author local_fix intent requires a unified patch")
             rows.append(publication_skeletons._variant_block(finding_id, "local_fix+patch"))
             continue
+        if intent.get("kind") == "local_fix":
+            raise contract.WorkflowError(
+                "reviewer intent cannot silently become an author's local_fix"
+            )
         if intent.get("kind") == "line":
             block = publication_skeletons._variant_block(
                 finding_id,
                 "line+suggestion" if intent.get("fix_mode") == "suggestion" else "line+patch",
             )
+            target = intent.get("target")
+            if isinstance(target, dict):
+                located = targeted_suggestion(
+                    repo_root,
+                    base,
+                    head,
+                    target,
+                    "<REPLACEMENT: corrected source>",
+                    publication_skeletons.BODY_HINT,
+                )
+                block.update({key: located[key] for key in ("path", "line", "old_line")})
+                if block["fix_mode"] == "suggestion":
+                    block["body"] = located["body"]
+                rows.append(block)
+                continue
             dependencies = _dependencies_of(draft, finding_id)
             anchor = _first_changed_line(repo_root, base, head, dependencies)
             if anchor is not None:
                 block["path"], block["line"] = anchor[0], anchor[1]
-            else:
-                raise contract.WorkflowError(
-                    f"line intent for {finding_id} has no changed-line anchor; use decision repair"
-                )
+            elif len(dependencies) == 1:
+                # The prose file asks for an exact excerpt. No arbitrary line
+                # is selected when several edited lines are possible.
+                block["path"] = dependencies[0]
+            rows.append(block)
+            continue
+        if intent.get("fix_mode") == "suggestion":
+            block = publication_skeletons._variant_block(finding_id, "general+patch")
+            block.update(
+                fix_mode="suggestion",
+                patch=None,
+                suggestions=[],
+                split_rationale=publication_skeletons.SPLIT_RATIONALE_HINT,
+            )
+            block.pop("patch_reason", None)
             rows.append(block)
             continue
         rows.append(
@@ -194,9 +532,12 @@ def render_content(
     # Scrub at render time on machine-copied texts: semver sources and the
     # previous-finding rows are copied by the runtime, so a raw SHA inside
     # them is refused here, at the moment of copying.
-    sources = cast("list[str]", content.get("semver_assessment", {}).get("sources", []))
-    context.reject_visible_raw_refs("\n".join(sources), evidence, review_context)
-    return content
+    # Findings are immutable decision data. Scrub their user-facing projection
+    # in the Markdown/chat builders, not the evidence preserved in JSON.
+    projected = cast("dict[str, Any]", copied_presentation(content, evidence, review_context))
+    projected["findings"] = accepted
+    projected["rejected_candidates"] = content["rejected_candidates"]
+    return projected
 
 
 def _dependencies_of(draft: dict[str, Any], finding_id: str) -> list[str]:
@@ -218,19 +559,61 @@ def _decision_for_content(draft: dict[str, Any]) -> dict[str, Any]:
     accepted = _accepted_findings(draft)
     return {
         "accepted_findings": accepted,
-        "findings": accepted,
+        "findings": _records_flat(draft.get("findings")),
+        "critic_findings": [
+            finding
+            for receipt in _records_flat(draft.get("critics"))
+            for finding in _records_flat(receipt.get("findings"))
+        ],
         "responses": [
-            {"id": str(item.get("id")), "decision": "accept", "reason": "recorded"}
-            for item in accepted
+            {"id": row["id"], "decision": row["decision"], "reason": row["reason"]}
+            for row in _records_flat(draft.get("dispositions"))
         ],
     }
+
+
+def rejected_from_decision(
+    decision: dict[str, Any], intents: list[dict[str, Any]], review_context: dict[str, Any]
+) -> list[dict[str, Any]]:
+    responses = {str(row["id"]): row for row in decision.get("responses", [])}
+    dependencies = {str(row["finding_id"]): row.get("dependencies") for row in intents}
+    rejected = []
+    for source, findings in (
+        ("primary", decision.get("findings") or []),
+        ("critic", decision.get("critic_findings") or []),
+    ):
+        for finding in findings:
+            response = responses.get(str(finding["id"]))
+            if response and response["decision"] == "reject":
+                rejected.append(
+                    {
+                        "id": finding["id"],
+                        "source": source,
+                        "finding": copy.deepcopy(finding),
+                        "reason": response["reason"],
+                        **(
+                            dependencies.get(str(finding["id"]))
+                            or {
+                                "paths": review_context["exact_git"].get("changed_paths", []),
+                                "thread_ids": [],
+                                "metadata_fields": [],
+                                "ci": False,
+                            }
+                        ),
+                    }
+                )
+    return rejected
 
 
 def prose_file(root: Path, context_digest: str) -> Path:
     return root / "review-drafts" / f"content-prose-{context_digest[:16]}.json"
 
 
-def prose_projection(content: dict[str, Any]) -> dict[str, Any]:
+def prose_projection(
+    content: dict[str, Any],
+    review_context: dict[str, Any] | None = None,
+    evidence: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """The prose surface: agent-editable fields only, machine keys stripped."""
     projection: dict[str, Any] = {}
     for key in PROSE_KEYS:
@@ -249,6 +632,33 @@ def prose_projection(content: dict[str, Any]) -> dict[str, Any]:
                 for item in value
                 if isinstance(item, dict)
             ]
+            if review_context is not None and evidence is not None:
+                for original, row in zip(value, projection[key], strict=True):
+                    if original.get("fix_mode") == "suggestion":
+                        if "suggestions" in original:
+                            row["parts"] = [
+                                {
+                                    "target": suggestion_target(part, review_context, evidence),
+                                    "replacement": context.suggestion_blocks(part["body"])[0].group(
+                                        "replacement"
+                                    ),
+                                    "body": context.SUGGESTION_RE.sub("", part["body"]).strip(),
+                                }
+                                for part in original["suggestions"]
+                            ]
+                            row.pop("patch", None)
+                            continue
+                        row["target"] = suggestion_target(original, review_context, evidence)
+                        matches = context.suggestion_blocks(str(original.get("body") or ""))
+                        row["replacement"] = (
+                            matches[0].group("replacement")
+                            if matches
+                            else "<REPLACEMENT: corrected source>"
+                        )
+                        row["body"] = context.SUGGESTION_RE.sub(
+                            "", str(original.get("body") or "")
+                        ).strip()
+                        row.pop("patch", None)
         elif key == "previous_finding_assessments" and isinstance(value, list):
             projection[key] = [
                 {field: item[field] for field in item if field not in STRUCTURAL_ASSESSMENT_KEYS}
