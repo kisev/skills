@@ -2515,6 +2515,33 @@ def previous_revisions(incremental: dict[str, Any]) -> dict[str, int]:
     return result
 
 
+def enrich_fix_publication(
+    item: dict[str, Any],
+    owner_kind: str,
+    owner_id: str,
+    patch_directory: Path,
+    *,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Materialize one publication's patch: path and digest stamped by the
+    runtime, never by the input. Shared by the plan builder, the thread
+    fixes, and the tests that verify first-pass acceptance."""
+    patch = item.get("patch")
+    if item.get("fix_mode") != "patch":
+        return {**item, "patch_path": None, "patch_sha256": None}
+    if not isinstance(patch, str):
+        raise portable.WorkflowError("patch fix content is unavailable")
+    identity = hashlib.sha256(f"{owner_kind}:{owner_id}".encode()).hexdigest()[:12]
+    patch_digest = hashlib.sha256(patch.encode()).hexdigest()
+    destination = str(patch_directory / f"{identity}-{patch_digest}.patch")
+    if dry_run:
+        patch_path, actual_digest = destination, patch_digest
+    else:
+        written_path, actual_digest = portable.write_companion(Path(destination), patch)
+        patch_path = str(written_path)
+    return {**item, "patch_path": str(patch_path), "patch_sha256": actual_digest}
+
+
 def finding_revisions(
     incremental: dict[str, Any],
     assessments: list[dict[str, Any]],
@@ -2590,20 +2617,7 @@ def structured_publication_preview(
         )
 
     def enrich_fix(owner_kind: str, owner_id: str, item: dict[str, Any]) -> dict[str, Any]:
-        patch = item.get("patch")
-        if item.get("fix_mode") != "patch":
-            return {**item, "patch_path": None, "patch_sha256": None}
-        if not isinstance(patch, str):
-            raise portable.WorkflowError("patch fix content is unavailable")
-        identity = hashlib.sha256(f"{owner_kind}:{owner_id}".encode()).hexdigest()[:12]
-        patch_digest = hashlib.sha256(patch.encode()).hexdigest()
-        destination = str(patch_directory / f"{identity}-{patch_digest}.patch")
-        if dry_run:
-            patch_path, actual_digest = destination, patch_digest
-        else:
-            written_path, actual_digest = portable.write_companion(Path(destination), patch)
-            patch_path = str(written_path)
-        return {**item, "patch_path": str(patch_path), "patch_sha256": actual_digest}
+        return enrich_fix_publication(item, owner_kind, owner_id, patch_directory, dry_run=dry_run)
 
     def body_with_fix(body: str, fix: dict[str, Any]) -> str:
         if fix.get("fix_mode") != "patch":

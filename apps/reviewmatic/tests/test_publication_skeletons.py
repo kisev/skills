@@ -10,7 +10,6 @@ artifact validator, first time, without any form corrections.
 
 from __future__ import annotations
 
-import hashlib
 from pathlib import Path
 from typing import Any
 
@@ -210,26 +209,19 @@ def test_filled_variants_pass_both_layers_first_time(tmp_path: Path) -> None:
     )
     assert accepted == chosen
 
-    # The runtime's own materialization: patch companions land content-addressed
-    # with the patch digest, exactly as enrich_fix writes them.
+    # The runtime's own materialization, through the named enrich function.
+    patches = tmp_path / "patches"
+    patches.mkdir()
     materialized: list[dict[str, Any]] = []
     for item in accepted:
-        if item["fix_mode"] != "patch":
-            materialized.append({**item, "patch_path": None, "patch_sha256": None})
-            continue
-        patch = str(item["patch"])
-        identity = hashlib.sha256(f"finding:{item['finding_id']}".encode()).hexdigest()[:12]
-        patch_digest = hashlib.sha256(patch.encode()).hexdigest()
-        destination = tmp_path / "patches" / f"{identity}-{patch_digest}.patch"
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        written, digest = contract.write_companion(destination, patch)
         materialized.append(
-            {**item, "revision": 1, "patch_path": str(written), "patch_sha256": digest}
+            {
+                **review_context.enrich_fix_publication(
+                    item, "finding", str(item["finding_id"]), patches
+                ),
+                "revision": 1,
+            }
         )
-    for index, item in enumerate(materialized):
-        if item["fix_mode"] == "patch":
-            continue
-        materialized[index] = {**item, "revision": 1}
 
     # Layer two: the canonical artifact validator accepts the materialized rows.
     assert contract.finding_publications_are_valid(materialized, require_fixes=True) is True
