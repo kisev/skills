@@ -42,8 +42,26 @@ def key(service: str, volume: str) -> str:
     return f"DEV_{service}_{suffix}".upper().replace("-", "_")
 
 
+def require_main_checkout(directory: Path | None = None) -> None:
+    """Refuse to run the environment from a secondary managed worktree.
+
+    Fixture ref dispatch checks out exact refs with --detach in the main
+    checkout; a secondary worktree (whose path carries the managed worktree
+    hash) cannot own that dispatch. Retries belong to the orchestration, never
+    to the dispatch itself.
+    """
+    current = Path(directory or Path.cwd()).resolve()
+    if any(part.endswith(".worktrees") for part in current.parts):
+        raise RuntimeError(
+            "refuse to run the stand from a secondary worktree "
+            f"({current}); run it from the main checkout so ref dispatch stays "
+            "detached and single-owner"
+        )
+
+
 class Environment:
     def __init__(self, compose: str = "docker-compose"):
+        require_main_checkout()
         self.owner = hashlib.sha256(str(ROOT).encode()).hexdigest()
         self.home = common.private_directory(ROOT / ".build/env")
         self.record = self.home / "volumes.json"

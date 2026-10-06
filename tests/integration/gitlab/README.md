@@ -21,10 +21,19 @@ mise install
 task generate
 task env:gitlab:up
 task test:integration:gitlab:preflight
+task test:integration:gitlab:smoke
 task test:integration:gitlab
 ```
 
 All GitLab browser tests are deferred from this stage's blocking API/backend acceptance.
+`smoke` runs the dependency-closed subset (fixture, pagination fixture, CE API
+matrix, real shell CI, real inline comments) without the coverage gate and
+without the workflow chains; `test` remains the full default run that owns the
+gate. Every report carries `started_at`, `duration_seconds`, and `partial` —
+`partial` stays true until the whole operation passes, so a crash mid-run
+still leaves a metric-bearing result.json. The stand refuses to run from a
+secondary worktree: ref dispatch stays `--detach` in the main checkout only,
+and retries belong to the orchestration.
 They remain separately invokable; ordinary `test` and `preflight` neither launch nor
 require a browser. Deferred scenarios are not passing evidence, and UI behavior
 remains unverified.

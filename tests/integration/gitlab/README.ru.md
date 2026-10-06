@@ -21,10 +21,19 @@ mise install
 task generate
 task env:gitlab:up
 task test:integration:gitlab:preflight
+task test:integration:gitlab:smoke
 task test:integration:gitlab
 ```
 
 Все GitLab browser-тесты отложены и не блокируют API/backend-приёмку этого этапа.
+`smoke` запускает зависимостно-замкнутое подмножество (fixture, pagination
+fixture, CE API-матрица, реальный shell CI, реальные inline-комментарии) без
+гейта покрытия и без цепочек воркфлоу; `test` остаётся полным прогоном,
+который владеет гейтом. Каждый отчёт несёт `started_at`, `duration_seconds` и
+`partial` — `partial` держится true, пока вся операция не прошла, поэтому крэш
+посередине всё равно оставляет result.json с метриками. Стенд отказывается
+работать из вторичного ворктри: ref-dispatch остаётся `--detach` только в
+основном чекауте, повторы принадлежат оркестрации.
 Они сохранены для отдельного запуска; обычные `test` и `preflight` не запускают
 браузер и не проверяют его наличие. Отложенные сценарии не считаются прошедшими,
 а состояние UI остаётся непроверенным.

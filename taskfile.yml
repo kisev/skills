@@ -128,6 +128,11 @@ tasks:
     cmds:
       - task: build:skills
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand test --compose '{{.COMPOSE}}'
+  test:integration:gitlab:smoke:
+    desc: Run the dependency-closed GitLab smoke subset without the coverage gate
+    cmds:
+      - task: build:skills
+      - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand smoke --compose '{{.COMPOSE}}'
   test:integration:mattermost:
     desc: Run Mattermost workflows against the ready dev environment
     cmds:

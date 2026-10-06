@@ -966,3 +966,65 @@ def test_cached_pagination_endpoints_cannot_escape_fixtures(
     )
     with pytest.raises(ValueError, match="fixtures project"):
         resources(local)
+
+
+def test_report_is_partial_with_metrics_even_when_the_operation_crashes(
+    tmp_path: Path,
+) -> None:
+    """A crash mid-run still leaves result.json with started_at and duration."""
+    report = STAND.new_report("test")
+    assert report["partial"] is True
+    assert report["started_at"]
+    started = STAND.time.monotonic()
+    try:
+        raise RuntimeError("boom mid-run")
+    except RuntimeError:
+        report["error"] = "boom mid-run"
+    finally:
+        STAND.finish_report(report, tmp_path, started)
+    written = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))
+    assert written["partial"] is True
+    assert written["duration_seconds"] >= 0
+    assert written["started_at"]
+    # A passing operation flips the partial flag before the same finisher runs.
+    report["status"] = "passed"
+    report["partial"] = False
+    STAND.finish_report(report, tmp_path, started)
+    assert json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))["partial"] is False
+
+
+def test_smoke_is_a_dependency_closed_subset_of_the_full_scenario_set() -> None:
+    from tests.integration.gitlab.scripts.checks import SMOKE_SCENARIOS, scenario_names
+
+    full = scenario_names("test")
+    smoke = scenario_names("smoke")
+    assert smoke == SMOKE_SCENARIOS
+    assert set(smoke) < set(full)
+    # The smoke set needs only the fixture and the stand: no publication,
+    # reviewmatic, triage, same-file, or release chains.
+    assert not any(
+        name in smoke
+        for name in (
+            "workflow-collection",
+            "reviewmatic",
+            "mr-copied-publication",
+            "task-triage-publication",
+            "same-file-grouped-recovery",
+            "release-workflows",
+        )
+    )
+    assert scenario_names("test") == full
+
+
+def test_environment_refuses_secondary_worktrees(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("gitlab_dev_env", ROOT / "dev/env.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    main = tmp_path / "repo"
+    main.mkdir()
+    module.require_main_checkout(main)
+    secondary = tmp_path / "repo.worktrees" / "reviewmatic" / "abc123"
+    secondary.mkdir(parents=True)
+    with pytest.raises(RuntimeError, match="secondary worktree"):
+        module.require_main_checkout(secondary)

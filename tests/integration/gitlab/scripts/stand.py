@@ -312,22 +312,12 @@ class Stand:
         return text
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "action",
-        choices=("preflight", "test", "browser", "live"),
-    )
-    parser.add_argument("--compose", default="docker-compose")
-    args = parser.parse_args()
-    stand = Stand(
-        "gitlab-workflows",
-        int(os.environ.get("GL_TEST_PORT", "443")),
-        args.compose,
-    )
-    report: dict[str, Any] = {
-        "action": args.action,
+def new_report(action: str) -> dict[str, Any]:
+    """One stand report: partial until the whole operation passes."""
+    return {
+        "action": action,
         "status": "failed",
+        "partial": True,
         "checks": [],
         "live": "not-run",
         "started_at": datetime.now(UTC).isoformat(),
@@ -337,6 +327,28 @@ def main() -> int:
             "glab": "1.120.0",
         },
     }
+
+
+def finish_report(report: dict[str, Any], destination: Path, started: float) -> None:
+    """Stamp the duration and persist the report; a crash still leaves it."""
+    report["duration_seconds"] = round(time.monotonic() - started, 3)
+    write_json(destination / "result.json", report)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "action",
+        choices=("preflight", "smoke", "test", "browser", "live"),
+    )
+    parser.add_argument("--compose", default="docker-compose")
+    args = parser.parse_args()
+    stand = Stand(
+        "gitlab-workflows",
+        int(os.environ.get("GL_TEST_PORT", "443")),
+        args.compose,
+    )
+    report = new_report(args.action)
     started = time.monotonic()
     destination = private_directory(
         stand.reports / (time.strftime("%Y%m%dT%H%M%S") + "-" + secrets.token_hex(3))
@@ -355,7 +367,7 @@ def main() -> int:
                     "gitlab_preflight", APP / "scripts/preflight.py"
                 ).run(stand, destination, browser=args.action == "browser")
                 stand.connect()
-                if args.action in ("test", "browser", "live"):
+                if args.action in ("smoke", "test", "browser", "live"):
                     report["versions"] = {
                         "server": stand.request("GET", "/version"),
                         "runner": stand.docker(
@@ -390,7 +402,7 @@ def main() -> int:
                     report["resources"] = stand.docker(
                         "stats", "--no-stream", "--format", "{{json .}}"
                     )
-                    if args.action in ("test", "browser", "live"):
+                    if args.action in ("smoke", "test", "browser", "live"):
                         checks = shared.load("gitlab_checks", APP / "scripts/checks.py")
                         checks.run(stand, destination, report, args.action)
         except Exception as exc:
@@ -403,6 +415,7 @@ def main() -> int:
             return 1
         else:
             report["status"] = "passed"
+            report["partial"] = False
             return 0
         finally:
             write_json(
@@ -413,7 +426,6 @@ def main() -> int:
                     "manual_contents_inspected": False,
                 },
             )
-            report["duration_seconds"] = round(time.monotonic() - started, 3)
             if "resources" in report:
                 try:
                     report["resources_final"] = stand.docker(
@@ -421,7 +433,7 @@ def main() -> int:
                     )
                 except Exception as exc:
                     report["resources_final_error"] = stand.redact(str(exc))
-            write_json(destination / "result.json", report)
+            finish_report(report, destination, started)
             write_json(
                 stand.reports / "latest.json",
                 {"report": str(destination / "result.json"), "status": report["status"]},

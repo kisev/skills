@@ -8,6 +8,7 @@ import sys
 import time
 import urllib.error
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -865,6 +866,42 @@ def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[s
     record(report, "reviewmatic-material-refresh", refreshed)
 
 
+# Dependency-closed smoke subset: it needs only the fixture project and the
+# stand itself - no reviewmatic install, no publication or triage chains - and
+# skips the coverage gate by design (the full run owns the gate).
+SMOKE_SCENARIOS = (
+    "fixture",
+    "pagination-fixture",
+    "ce-api-matrix",
+    "real-shell-ci",
+    "real-inline-comments",
+)
+
+
+def scenario_names(action: str) -> tuple[str, ...]:
+    """The scenario set for one action: smoke is a subset of the full run."""
+    if action == "smoke":
+        return SMOKE_SCENARIOS
+    return (
+        "fixture",
+        "pagination-fixture",
+        "helper-catalog-pagination",
+        "ce-api-matrix",
+        "real-shell-ci",
+        "real-inline-comments",
+        "workflow-collection",
+        "transport-fault-and-retry",
+        "mr-copied-publication",
+        "task-copied-publication",
+        "task-triage-publication",
+        "task-triage-lifecycle",
+        "reviewmatic",
+        "same-file-grouped-recovery",
+        "release-workflows",
+        "automation-scope",
+    )
+
+
 def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> None:
     if action == "live":
         f = fixture(stand, directory)
@@ -895,50 +932,46 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             ),
         )
         return
-    report["coverage"] = {
-        "status": "incomplete",
-        "scope": "GitLab API/backend acceptance; browser behavior is deferred and unverified",
-        "deferred": [
-            "all GitLab browser scenarios, including exact-head UI remapping and application"
-        ],
-        "mandatory_remaining": [
-            "exhaustive six-workflow helper pagination and author/reviewer matrix",
-            "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands",
-            "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment",
-            "task-triage information-request lifecycle, stale analysis and relationship recovery",
-            "complete release inventory/readiness/publication roles and negative-outcome matrix",
-            "CLI faults, timeout and ambiguous-publication reconciliation",
-        ],
-        "fault_injection": "synthetic CLI transport rejection and separate real-server read-only retry; not server behavior",
-    }
-    names = (
-        "fixture",
-        "pagination-fixture",
-        "helper-catalog-pagination",
-        "ce-api-matrix",
-        "real-shell-ci",
-        "real-inline-comments",
-        "workflow-collection",
-        "transport-fault-and-retry",
-        "mr-copied-publication",
-        "task-copied-publication",
-        "task-triage-publication",
-        "task-triage-lifecycle",
-        "reviewmatic",
-        "same-file-grouped-recovery",
-        "release-workflows",
-        "automation-scope",
-    )
+    if action == "smoke":
+        report["coverage"] = {
+            "status": "smoke",
+            "scope": "dependency-closed API/backend subset; the full run owns the coverage gate",
+            "deferred": [
+                "helper catalog pagination and the workflow matrix",
+                "reviewmatic, same-file, triage, and release scenarios",
+            ],
+            "mandatory_matrix_proven": False,
+        }
+    else:
+        report["coverage"] = {
+            "status": "incomplete",
+            "scope": "GitLab API/backend acceptance; browser behavior is deferred and unverified",
+            "deferred": [
+                "all GitLab browser scenarios, including exact-head UI remapping and application"
+            ],
+            "mandatory_remaining": [
+                "exhaustive six-workflow helper pagination and author/reviewer matrix",
+                "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands",
+                "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment",
+                "task-triage information-request lifecycle, stale analysis and relationship recovery",
+                "complete release inventory/readiness/publication roles and negative-outcome matrix",
+                "CLI faults, timeout and ambiguous-publication reconciliation",
+            ],
+            "fault_injection": "synthetic CLI transport rejection and separate real-server read-only retry; not server behavior",
+        }
+    names = scenario_names(action)
     report["scenarios"] = [{"name": name, "status": "not-run"} for name in names]
 
     def scenario(name: str, operation: Any) -> Any:
         entry = next(item for item in report["scenarios"] if item["name"] == name)
+        entry["started_at"] = datetime.now(UTC).isoformat()
         started = time.monotonic()
         try:
             result = operation()
         except Exception as exc:
             entry.update(status="failed", error=stand.redact(str(exc)))
-            completed_coverage(report)
+            if action != "smoke":
+                completed_coverage(report)
             raise
         else:
             entry["status"] = "passed"
@@ -946,75 +979,88 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         finally:
             entry["duration_seconds"] = round(time.monotonic() - started, 3)
 
+    selected = set(names)
     f = scenario("fixture", lambda: fixture(stand, directory))
     write_json(directory / "fixture.json", f)
     scenario("pagination-fixture", lambda: pagination_fixture(stand, directory, report))
-    record(
-        report,
-        "helper-catalog-pagination",
-        scenario(
+    if "helper-catalog-pagination" in selected:
+        record(
+            report,
             "helper-catalog-pagination",
-            lambda: load("gitlab_pagination_checks", APP / "scripts/pagination_checks.py").run(
-                stand, directory
+            scenario(
+                "helper-catalog-pagination",
+                lambda: load("gitlab_pagination_checks", APP / "scripts/pagination_checks.py").run(
+                    stand, directory
+                ),
             ),
-        ),
-    )
+        )
     scenario("ce-api-matrix", lambda: api_matrix(stand, f, directory, report))
     scenario("real-shell-ci", lambda: pipeline(stand, f, directory, report))
     scenario("real-inline-comments", lambda: review_comments(stand, f, directory, report))
-    scenario("workflow-collection", lambda: preparation(stand, f, directory, report))
-    faults = load("gitlab_faults", APP / "scripts/fault_checks.py")
-    record(
-        report,
-        "transport-fault-and-retry",
-        scenario("transport-fault-and-retry", lambda: faults.run(stand, f, directory)),
-    )
-    publication = load("gitlab_publication", APP / "scripts/publication_checks.py")
-    record(
-        report,
-        "mr-copied-publication",
-        scenario("mr-copied-publication", lambda: publication.mr(stand, f, directory)),
-    )
-    record(
-        report,
-        "task-copied-publication",
-        scenario("task-copied-publication", lambda: publication.task(stand, f, directory)),
-    )
-    triage = load("gitlab_triage_checks", APP / "scripts/triage_checks.py")
-    record(
-        report,
-        "task-triage-publication",
-        scenario("task-triage-publication", lambda: triage.run(stand, f, directory)),
-    )
-    triage_lifecycle = load("gitlab_triage_lifecycle", APP / "scripts/triage_lifecycle_checks.py")
-    record(
-        report,
-        "task-triage-lifecycle",
-        scenario("task-triage-lifecycle", lambda: triage_lifecycle.run(stand, f, directory)),
-    )
-    scenario("reviewmatic", lambda: review_plan(stand, f, directory, report))
-    same_file = load("gitlab_same_file_checks", APP / "scripts/same_file_checks.py")
-    record(
-        report,
-        "same-file-grouped-recovery",
-        scenario("same-file-grouped-recovery", lambda: same_file.run(stand, directory, report)),
-    )
-    releases = load("gitlab_release_checks", APP / "scripts/release_checks.py")
-    record(
-        report,
-        "release-workflows",
-        scenario("release-workflows", lambda: releases.run(stand, f, directory, report)),
-    )
-
-    record(
-        report,
-        "automation-scope",
-        scenario(
+    if "workflow-collection" in selected:
+        scenario("workflow-collection", lambda: preparation(stand, f, directory, report))
+    if "transport-fault-and-retry" in selected:
+        faults = load("gitlab_faults", APP / "scripts/fault_checks.py")
+        record(
+            report,
+            "transport-fault-and-retry",
+            scenario("transport-fault-and-retry", lambda: faults.run(stand, f, directory)),
+        )
+    if "mr-copied-publication" in selected:
+        publication = load("gitlab_publication", APP / "scripts/publication_checks.py")
+        record(
+            report,
+            "mr-copied-publication",
+            scenario("mr-copied-publication", lambda: publication.mr(stand, f, directory)),
+        )
+        record(
+            report,
+            "task-copied-publication",
+            scenario("task-copied-publication", lambda: publication.task(stand, f, directory)),
+        )
+    if "task-triage-publication" in selected:
+        triage = load("gitlab_triage_checks", APP / "scripts/triage_checks.py")
+        record(
+            report,
+            "task-triage-publication",
+            scenario("task-triage-publication", lambda: triage.run(stand, f, directory)),
+        )
+        triage_lifecycle = load(
+            "gitlab_triage_lifecycle", APP / "scripts/triage_lifecycle_checks.py"
+        )
+        record(
+            report,
+            "task-triage-lifecycle",
+            scenario("task-triage-lifecycle", lambda: triage_lifecycle.run(stand, f, directory)),
+        )
+    if "reviewmatic" in selected:
+        scenario("reviewmatic", lambda: review_plan(stand, f, directory, report))
+    if "same-file-grouped-recovery" in selected:
+        same_file = load("gitlab_same_file_checks", APP / "scripts/same_file_checks.py")
+        record(
+            report,
+            "same-file-grouped-recovery",
+            scenario("same-file-grouped-recovery", lambda: same_file.run(stand, directory, report)),
+        )
+    if "release-workflows" in selected:
+        releases = load("gitlab_release_checks", APP / "scripts/release_checks.py")
+        record(
+            report,
+            "release-workflows",
+            scenario("release-workflows", lambda: releases.run(stand, f, directory, report)),
+        )
+    if "automation-scope" in selected:
+        record(
+            report,
             "automation-scope",
-            lambda: {"scope": "fixtures only", "manual_contents_inspected": False},
-        ),
-    )
+            scenario(
+                "automation-scope",
+                lambda: {"scope": "fixtures only", "manual_contents_inspected": False},
+            ),
+        )
 
+    if action == "smoke":
+        return
     completed_coverage(report)
     if report["coverage"]["mandatory_remaining"]:
         raise RuntimeError(
