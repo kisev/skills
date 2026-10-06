@@ -488,7 +488,17 @@ async function modelSelection(
     const model = candidates[value(await selectOption("Model", candidates))];
     const variants = await availableModelVariants(model);
     let variant: string | null = null;
-    if (variants.length) {
+    if (variants === null) {
+      // The variants metadata is unavailable: say so honestly and accept a
+      // manual variant instead of degrading the whole model selection.
+      process.stderr.write(
+        "Model variants are unknown (variants metadata unavailable); enter one manually or leave it empty.\n",
+      );
+      const answer = await promptText(
+        current?.variant ? "Variant (empty keeps current)" : "Variant (optional)",
+      );
+      variant = (answer ? validateVariant(answer) : current?.variant) ?? null;
+    } else if (variants.length) {
       const labels = variants.map((item) =>
         item === current?.variant ? `${item} (default)` : item,
       );
@@ -677,22 +687,9 @@ async function deploy(options: Options, repair = false): Promise<void> {
       ],
     };
   }
-  let changes: AgentProfileRequest[] = [];
-  if (
-    !repair &&
-    tty() &&
-    value(await confirmQuestion("Configure agent models or additional critics now?"))
-  ) {
-    const inventory = await listAgentProfiles(options.scope);
-    changes = await profileDraft(options, [
-      ...selection.agents,
-      ...inventory.profiles
-        .filter(
-          (profile) => profile.name.startsWith("critic-") && profile.ownership !== "user-owned",
-        )
-        .map((profile) => profile.name),
-    ]);
-  }
+  // Install never mutates the critic panel: the summary ends with the panel
+  // table and the pointer to configure agent, the single mutation point.
+  const changes: AgentProfileRequest[] = [];
   const plan = await preview(
     "install",
     options.scope,
@@ -763,6 +760,7 @@ async function deploy(options: Options, repair = false): Promise<void> {
     process.stdout.write(
       "Components, npm, and application configuration are separate stages; a later failure does not roll back completed stages.\n",
     );
+    await criticsEpilogue(options);
   }
   if (options.dryRun) {
     if (options.json) json(report);
@@ -814,10 +812,12 @@ async function deploy(options: Options, repair = false): Promise<void> {
       requires_restart: applied.requires_restart || connected.requires_restart,
     };
     if (options.json) json(result);
-    else
+    else {
       process.stdout.write(
         renderPlan(applied, { applied: true }) + renderConfigSetup(connected, { applied: true }),
       );
+      await criticsEpilogue(options);
+    }
   } catch (error) {
     if (
       error instanceof LifecycleError &&
@@ -833,6 +833,18 @@ async function deploy(options: Options, repair = false): Promise<void> {
       completed.includes("owned-components-and-profiles") && plan.requires_restart,
     );
   }
+}
+
+// The critic panel epilogue: the table plus the canonical view and mutation
+// pointers, printed wherever the panel matters (install, staged applies,
+// configure integration).
+async function criticsEpilogue(options: Options): Promise<void> {
+  if (options.json) return;
+  const inventory = await listAgentProfiles(options.scope);
+  process.stdout.write(renderCriticsTable(inventory));
+  process.stdout.write(
+    "Inspect any time: agentomatic agent list | Manage critics: agentomatic configure agent\n",
+  );
 }
 
 function partial(
@@ -910,7 +922,10 @@ async function configureIntegration(options: Options): Promise<void> {
         plan: result,
         requires_restart: result.requires_restart,
       });
-    else process.stdout.write(renderConfigSetup(result, { applied: true }));
+    else {
+      process.stdout.write(renderConfigSetup(result, { applied: true }));
+      await criticsEpilogue(options);
+    }
   } catch (error) {
     partial(
       options,
@@ -964,7 +979,11 @@ async function profileChange(options: Options, request: AgentProfileRequest): Pr
     expectedDigest: plan.digest,
   });
   if (options.json) json(result);
-  else process.stdout.write(renderPlan(result.plan, { applied: true }));
+  else {
+    process.stdout.write(renderPlan(result.plan, { applied: true }));
+    // After a panel mutation the fresh table closes the loop.
+    await criticsEpilogue(options);
+  }
 }
 
 async function uninstall(options: Options): Promise<void> {

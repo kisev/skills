@@ -19,6 +19,7 @@ import {
   AgentProfileError,
   applyAgentProfileChange,
   availableModels,
+  parseModelsOutput,
   availableModelVariants,
   listAgentProfiles,
   previewAgentProfileChange,
@@ -143,7 +144,7 @@ test("inventory separates package-owned, managed, user-owned, drift, and collisi
   }
 });
 
-test("model catalog and variants use the native V2 model snapshot API without refresh", async () => {
+test("model catalog comes from the CLI and variants from the location-free API", async () => {
   const directory = temporary();
   const executable = join(directory, "opencode");
   const originalPath = process.env.PATH;
@@ -151,15 +152,18 @@ test("model catalog and variants use the native V2 model snapshot API without re
     await writeFile(
       executable,
       `#!/bin/sh
-if [ "$1" = "api" ] && [ "$2" = "get" ]; then
-  case "$3" in /api/model\\?location*) ;; *) exit 1 ;; esac
+if [ "$1" = "models" ]; then
+  if [ "$2" = "--standalone" ]; then exit 1; fi
+  printf '%s\n' '  provider summary (noise)' 'anthropic/claude' 'openai/gpt-5' 'anthropic/claude' ''
+elif [ "$1" = "api" ] && [ "$2" = "get" ]; then
+  case "$3" in /api/model?location*) exit 1 ;; esac
   printf '%s\n' '{"data":[{"providerID":"anthropic","id":"claude"},{"providerID":"openai","id":"gpt-5","variants":[{"id":"none"},{"id":"low"},{"id":"high"}]}]}'
 else
   exit 1
 fi
 `,
+      { mode: 0o755 },
     );
-    chmodSync(executable, 0o755);
     process.env.PATH = directory;
     assert.deepEqual(await availableModels(), ["anthropic/claude", "openai/gpt-5"]);
     assert.deepEqual(await availableModelVariants("anthropic/claude"), []);
@@ -172,11 +176,54 @@ fi
         error.code === "catalog_unavailable" &&
         /explicit provider\/model/.test(error.message),
     );
+    assert.equal(await availableModelVariants("openai/gpt-5"), null);
   } finally {
     if (originalPath === undefined) delete process.env.PATH;
     else process.env.PATH = originalPath;
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("the CLI catalog falls back to --standalone when the service is down", async () => {
+  const directory = temporary();
+  const executable = join(directory, "opencode");
+  const originalPath = process.env.PATH;
+  try {
+    await writeFile(
+      executable,
+      `#!/bin/sh
+if [ "$1" = "models" ]; then
+  if [ "$2" = "--standalone" ]; then printf '%s\n' 'openai/gpt-5'; exit 0; fi
+  exit 1
+fi
+exit 1
+`,
+      { mode: 0o755 },
+    );
+    process.env.PATH = directory;
+    assert.deepEqual(await availableModels(), ["openai/gpt-5"]);
+  } finally {
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("parseModelsOutput keeps only provider/model lines, deduplicated and sorted", async () => {
+  assert.deepEqual(
+    parseModelsOutput(
+      [
+        "  Models available:",
+        "z-ai/glm-5.3",
+        "anthropic/claude",
+        "noise line",
+        "anthropic/claude",
+        "openai/gpt-5 ",
+        "",
+      ].join("\n"),
+    ),
+    ["anthropic/claude", "openai/gpt-5", "z-ai/glm-5.3"],
+  );
 });
 
 test("incomplete non-TTY configure exits with JSON guidance and writes no state", async () => {

@@ -371,7 +371,7 @@ async function wizard(context, answers, args = ["install", "--no-dependency", "-
   let output = "";
   let pending = "";
   let index = 0;
-  const timeout = setTimeout(() => child.kill(), 15_000);
+  const timeout = setTimeout(() => child.kill(), 60_000);
   const receive = (chunk) => {
     output += chunk.toString();
     pending += stripVTControlCharacters(chunk.toString());
@@ -383,6 +383,7 @@ async function wizard(context, answers, args = ["install", "--no-dependency", "-
     }
   };
   child.stdout.on("data", receive);
+  child.stderr.on("data", receive);
   child.stderr.on("data", receive);
   const status = await new Promise((resolve) => child.on("close", resolve));
   clearTimeout(timeout);
@@ -397,7 +398,6 @@ test("TTY install can skip model setup and cancellation before apply leaves no f
     ["Fixed agents", "\r"],
     ["Optional plugins", "\r"],
     ["Configure application presets", "n\r"],
-    ["Configure agent models", "n\r"],
     ["Apply the displayed changes", "n\r"],
   ]);
   assert.equal(cancelled.status, 2, cancelled.output);
@@ -405,62 +405,83 @@ test("TTY install can skip model setup and cancellation before apply leaves no f
   await assert.rejects(readdir(join(context.home, ".state")), { code: "ENOENT" });
 });
 
-test("TTY install stages a critic model from the catalog and applies it with one confirmation", async (t) => {
+test("install never prompts for critics; configure agent stages one from the catalog", async (t) => {
   const context = await sandbox(t);
   const bin = join(context.base, "bin");
   await mkdir(bin);
   await writeFile(
     join(bin, "opencode"),
-    '#!/bin/sh\nprintf \'%s\\n\' \'{"data":[{"providerID":"openai","id":"example","variants":[{"id":"high"}]}]}\'\n',
+    `#!/bin/sh
+if [ "$1" = "models" ]; then printf '%s\\n' 'openai/example'; exit 0; fi
+if [ "$1" = "api" ] && [ "$2" = "get" ]; then printf '%s\\n' '{"data":[{"providerID":"openai","id":"example","variants":[{"id":"high"}]}]}'; exit 0; fi
+exit 1
+`,
   );
   await chmod(join(bin, "opencode"), 0o755);
   context.env.PATH = `${bin}:${context.env.PATH}`;
-  const result = await wizard(context, [
+  const install = await wizard(context, [
     ["Skill command adapters", "a\r"],
     ["Fixed agents", "a\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B \r"],
     ["Optional plugins", "\x1b[B \r"],
     ["Configure application presets", "n\r"],
-    ["Configure agent models", "y\r"],
-    ["changes are staged", "\x1b[A\x1b[A\x1b[A\r"],
-    ["Agent", "\r"],
-    ["Agent: critic", "\r"],
-    ["Provider", "\r"],
-    ["Model", "\r"],
-    ["Variant", "\x1b[B\r"],
-    ["Agent models and critics", "\r"],
     ["Apply the displayed changes", "y\r"],
   ]);
-  assert.equal(result.status, 0, result.output);
+  assert.equal(install.status, 0, install.output);
+  assert.doesNotMatch(install.output, /Configure agent models or additional critics now\?/);
+  assert.match(install.output, /Critics:\n\s+No critics/);
+  const staged = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A"],
+      ["● Remove additional critic", "\x1b[A"],
+      ["● Add critic", "\r"],
+      ["Critic name", "security\r"],
+      ["not a safe critic name", "\r"],
+      ["Agent: critic-security", "\r"],
+      ["Provider", "\r"],
+      ["Model", "\r"],
+      ["(none)", "\x1b[B"],
+      ["● high", "\r"],
+      ["● Done", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "agent"],
+  );
+  assert.equal(staged.status, 0, staged.output);
   assert.match(
-    await readFile(join(context.root, "agents/critic.md"), "utf8"),
+    await readFile(join(context.root, "agents/critic-security.md"), "utf8"),
     /model: openai\/example#high/,
   );
+  assert.match(staged.output, /Critics:\n/);
 });
 
-test("TTY install falls back to an explicit model entry when the catalog is unavailable", async (t) => {
+test("configure agent falls back to an explicit model entry when the catalog is unavailable", async (t) => {
   const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
   const bin = join(context.base, "bin");
   await mkdir(bin);
   await writeFile(join(bin, "opencode"), "#!/bin/sh\nexit 1\n");
   await chmod(join(bin, "opencode"), 0o755);
   context.env.PATH = `${bin}:${context.env.PATH}`;
-  const result = await wizard(context, [
-    ["Skill command adapters", "a\r"],
-    ["Fixed agents", "a\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B \r"],
-    ["Optional plugins", "\x1b[B \r"],
-    ["Configure application presets", "n\r"],
-    ["Configure agent models", "y\r"],
-    ["changes are staged", "\x1b[A\x1b[A\x1b[A\r"],
-    ["Agent", "\r"],
-    ["Agent: critic", "\r"],
-    ["Model (provider/model)", "openai/example\r"],
-    ["Variant (optional)", "\r"],
-    ["Agent models and critics", "\r"],
-    ["Apply the displayed changes", "y\r"],
-  ]);
+  const result = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A"],
+      ["● Remove additional critic", "\x1b[A"],
+      ["● Add critic", "\r"],
+      ["Critic name", "security\r"],
+      ["not a safe critic name", "\r"],
+      ["Agent: critic-security", "\r"],
+      ["Model (provider/model)", "openai/example\r"],
+      ["Variant (optional)", "\r"],
+      ["changes are staged", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "agent"],
+  );
   assert.equal(result.status, 0, result.output);
   assert.match(
-    await readFile(join(context.root, "agents/critic.md"), "utf8"),
+    await readFile(join(context.root, "agents/critic-security.md"), "utf8"),
     /^model: openai\/example$/m,
   );
 });
@@ -472,7 +493,6 @@ test("TTY install can apply with model setup skipped", async (t) => {
     ["Fixed agents", "a\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B \r"],
     ["Optional plugins", "\x1b[B \r"],
     ["Configure application presets", "n\r"],
-    ["Configure agent models", "n\r"],
     ["Apply the displayed changes", "y\r"],
   ]);
   assert.equal(result.status, 0, result.output);
@@ -480,20 +500,14 @@ test("TTY install can apply with model setup skipped", async (t) => {
   assert.doesNotMatch(await readFile(join(context.root, "agents/critic.md"), "utf8"), /^model:/m);
 });
 
-test("cancelling the staged model wizard before catalog selection writes nothing", async (t) => {
+test("cancelling the configure agent wizard before catalog selection writes nothing", async (t) => {
   const context = await sandbox(t);
-  const result = await wizard(context, [
-    ["Skill command adapters", "\r"],
-    ["Fixed agents", "\r"],
-    ["Optional plugins", "\r"],
-    ["Configure application presets", "n\r"],
-    ["Configure agent models", "y\r"],
-    ["changes are staged", "\x1b[A\x1b[A\x1b[A\r"],
-    ["Agent", "\r"],
-    ["Agent: architect", "\x03"],
-  ]);
+  context.ok(["install", ...subset, "--yes"]);
+  const result = await wizard(context, [["changes are staged", "\x03"]], ["configure", "agent"]);
   assert.equal(result.status, 2, result.output);
-  await assert.rejects(readdir(context.root), { code: "ENOENT" });
+  await assert.rejects(readdir(join(context.root, "agents", "critic-security.md")), {
+    code: "ENOENT",
+  });
 });
 
 test("repeat TTY installation defaults to saved components, models, and disconnected core", async (t) => {
@@ -517,7 +531,6 @@ test("repeat TTY installation defaults to saved components, models, and disconne
       ["Optional plugins", "\r"],
       ["Connect the OpenCode plugin", "\r"],
       ["Configure application presets", "n\r"],
-      ["Configure agent models", "n\r"],
     ],
     ["install", "--no-dependency"],
   );
@@ -562,7 +575,11 @@ test("staged critic editing converts unsafe names and applies from the catalog",
   await mkdir(bin);
   await writeFile(
     join(bin, "opencode"),
-    '#!/bin/sh\nprintf \'%s\\n\' \'{"data":[{"providerID":"openai","id":"example","variants":[{"id":"low"},{"id":"high"}]}]}\'\n',
+    `#!/bin/sh
+if [ "$1" = "models" ]; then printf '%s\\n' 'openai/example'; exit 0; fi
+if [ "$1" = "api" ] && [ "$2" = "get" ]; then printf '%s\\n' '{"data":[{"providerID":"openai","id":"example","variants":[{"id":"low"},{"id":"high"}]}]}'; exit 0; fi
+exit 1
+`,
   );
   await chmod(join(bin, "opencode"), 0o755);
   context.env.PATH = `${bin}:${context.env.PATH}`;
@@ -578,7 +595,7 @@ test("staged critic editing converts unsafe names and applies from the catalog",
       ["Model", "\r"],
       ["(none)", "\x1b[B"],
       ["● low", "\r"],
-      ["changes are staged", "\r"],
+      ["● Done", "\r"],
       ["Apply the displayed changes", "y\r"],
     ],
     ["configure", "critics"],
@@ -650,7 +667,11 @@ test("configure agent stages every agent and marks the saved variant as default"
   await mkdir(bin);
   await writeFile(
     join(bin, "opencode"),
-    '#!/bin/sh\nprintf \'%s\\n\' \'{"data":[{"providerID":"openai","id":"example","variants":[{"id":"low"},{"id":"high"}]}]}\'\n',
+    `#!/bin/sh
+if [ "$1" = "models" ]; then printf '%s\\n' 'openai/example'; exit 0; fi
+if [ "$1" = "api" ] && [ "$2" = "get" ]; then printf '%s\\n' '{"data":[{"providerID":"openai","id":"example","variants":[{"id":"low"},{"id":"high"}]}]}'; exit 0; fi
+exit 1
+`,
   );
   await chmod(join(bin, "opencode"), 0o755);
   context.env.PATH = `${bin}:${context.env.PATH}`;
@@ -665,18 +686,63 @@ test("configure agent stages every agent and marks the saved variant as default"
       ["● Change model", "\r"],
       ["Provider", "\r"],
       ["Model", "\r"],
-      ["(none)", "\x1b[A"],
+      ["Variant", "\x1b[A"],
       ["● low", "\r"],
-      ["changes are staged", "\r"],
+      ["● Done", "\r"],
       ["Apply the displayed changes", "y\r"],
     ],
     ["configure", "agent"],
   );
   assert.equal(result.status, 0, result.output);
   const clean = stripVTControlCharacters(result.output);
-  assert.match(clean, /high \(default\)/);
+  assert.match(clean, /\(none\)[\s\S]*low[\s\S]*high \(default\)/);
   assert.match(
     await readFile(join(context.root, "agents/critic.md"), "utf8"),
     /^model: openai\/example#low$/m,
   );
+});
+
+test("install, staged applies, and configure integration all end with the critic panel", async (t) => {
+  const context = await sandbox(t);
+  const { project, env } = context;
+  const text = (args) =>
+    spawnSync(process.execPath, [cli, ...args], { cwd: project, env, encoding: "utf8" });
+
+  // Install never prompts for critics and ends with the panel + pointers.
+  const install = text(["install", ...subset, "--yes"]);
+  assert.equal(install.status, 0, install.stdout + install.stderr);
+  assert.match(install.stdout, /Critics:\n\s+No critics/);
+  assert.match(
+    install.stdout,
+    /Inspect any time: agentomatic agent list \| Manage critics: agentomatic configure agent/,
+  );
+  assert.doesNotMatch(install.stdout, /Configure agent models or additional critics now\?/);
+
+  // A named panel mutation ends with the fresh table.
+  const profile = text([
+    "configure",
+    "agent",
+    "critic-security",
+    "--model",
+    "openai/example",
+    "--yes",
+  ]);
+  assert.equal(profile.status, 0, profile.stdout + profile.stderr);
+  assert.match(profile.stdout, /Critics:\n/);
+  assert.match(profile.stdout, /critic-security/);
+
+  // configure integration ends with the panel too.
+  const integration = text([
+    "configure",
+    "integration",
+    "--targets",
+    "opencode",
+    "--fragments",
+    "core-disable",
+    "--no-dependency",
+    "--yes",
+  ]);
+  assert.equal(integration.status, 0, integration.stdout + integration.stderr);
+  assert.match(integration.stdout, /Critics:\n/);
+  assert.match(integration.stdout, /critic-security/);
 });

@@ -1116,8 +1116,57 @@ export async function applyAgentProfileChange(
 async function modelCatalog(): Promise<
   Array<{ providerID: string; id: string; variants?: Array<{ id: string }> }>
 > {
-  const query = new URLSearchParams({ "location[directory]": process.cwd() });
-  const { stdout } = await execFileAsync("opencode", ["api", "get", `/api/model?${query}`], {
+  // The CLI catalog is the primary source: it works in a clean terminal, needs
+  // no background service, and never depends on the per-directory location
+  // filter that returns an empty list for some checkouts. If the background
+  // service is down, retry standalone before giving up with a remedy.
+  const models = await cliModels().catch((error: unknown) =>
+    cliModels(["--standalone"]).catch(() => {
+      throw new AgentProfileError(
+        "catalog_unavailable",
+        `The opencode models CLI is unavailable (${
+          error instanceof Error ? error.message : String(error)
+        }); start opencode in a clean terminal or run 'opencode models' yourself to verify, then retry - or pass an explicit provider/model`,
+      );
+    }),
+  );
+  return models.map((model) => {
+    const [providerID, ...rest] = model.split("/");
+    return { providerID, id: rest.join("/") };
+  });
+}
+
+// Line-by-line `provider/model` output of `opencode models`; anything else in
+// the stream is ignored. Exported for the parser test.
+export function parseModelsOutput(stdout: string): string[] {
+  return [
+    ...new Set(
+      stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => MODEL_PATTERN.test(line)),
+    ),
+  ].sort();
+}
+
+async function cliModels(extra: string[] = []): Promise<string[]> {
+  const { stdout } = await execFileAsync("opencode", ["models", ...extra], {
+    timeout: 10_000,
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
+  const models = parseModelsOutput(stdout);
+  if (!models.length) throw new Error("opencode models printed no provider/model lines");
+  return models;
+}
+
+// The variants (effort) metadata still comes from the API - without the
+// location filter: some directories answer an empty list to a located query,
+// and that must never zero the cascade.
+async function modelApiEntries(): Promise<
+  Array<{ providerID: string; id: string; variants?: Array<{ id: string }> }>
+> {
+  const { stdout } = await execFileAsync("opencode", ["api", "get", "/api/model"], {
     timeout: 10_000,
     encoding: "utf8",
     maxBuffer: 10 * 1024 * 1024,
@@ -1152,10 +1201,10 @@ export async function availableModels(): Promise<string[]> {
   }
 }
 
-export async function availableModelVariants(model: string): Promise<string[]> {
+export async function availableModelVariants(model: string): Promise<string[] | null> {
   const selected = validateModel(model);
   try {
-    const metadata = (await modelCatalog()).find(
+    const metadata = (await modelApiEntries()).find(
       (entry) => `${entry.providerID}/${entry.id}` === selected,
     );
     if (!metadata) throw new Error("selected model is absent");
@@ -1168,11 +1217,9 @@ export async function availableModelVariants(model: string): Promise<string[]> {
     )
       throw new Error("invalid variants metadata");
     return metadata.variants.map((variant) => variant.id);
-  } catch (error) {
-    throw new AgentProfileError(
-      "catalog_unavailable",
-      `OpenCode V2 model variants are unavailable: ${error instanceof Error ? error.message : String(error)}`,
-    );
+  } catch {
+    // Unknown is honest: the cascade says so and allows a manual variant.
+    return null;
   }
 }
 
