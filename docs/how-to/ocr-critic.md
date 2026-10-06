@@ -80,5 +80,10 @@ unchanged; rerun the command after fixing the OCR setup.
 The arbitrator receives OCR receipts together with model receipts and gives
 every OCR finding a verdict. Because OCR produces findings only, a panel
 without model critics must resolve every critic-assigned question through
-arbitration `question_verifications`. OCR receipts do not support incremental
-reviews; run those panels with model critics only.
+arbitration `question_verifications`. Incremental reviews scope the OCR critic
+to the `from_head..head` delta: the receipt binds the incremental delta digest,
+and `target_finding_ids` names exactly the previously reported findings
+rendered into the background — those whose previous publication position or
+patch intersects the changed paths. Local OCR critics stay full-scope: the
+local receipt schema has no scope fields, so incremental local panels run
+model critics for the delta.

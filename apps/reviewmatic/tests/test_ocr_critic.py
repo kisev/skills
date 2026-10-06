@@ -701,3 +701,94 @@ def test_invoke_ocr_critic_preflights_the_background_limit(tmp_path: Path) -> No
     bulky.write_text("x" * (ocr_critic.OCR_BACKGROUND_LIMIT + 1), encoding="utf-8")
     with pytest.raises(contract.WorkflowError, match="above the ocr CLI limit"):
         ocr_critic.invoke_ocr_critic(bulky, "a" * 40, "b" * 40, None, None, repo=str(tmp_path))
+
+
+def test_delta_scoped_previous_findings_select_by_publication_intersection() -> None:
+    incremental = {
+        "incremental_delta": {"changed_paths": ["renderer.txt", "notes.txt"]},
+        "previous_findings": [
+            {"id": "touched-line", "severity": "high", "summary": "Positioned."},
+            {"id": "touched-patch", "severity": "low", "summary": "General patch."},
+            {"id": "untouched", "severity": "low", "summary": "Elsewhere."},
+            {"id": "unpublished", "severity": "low", "summary": "No publication."},
+        ],
+        "previous_finding_publications": [
+            {"finding_id": "touched-line", "path": "renderer.txt", "patch": None},
+            {
+                "finding_id": "touched-patch",
+                "path": None,
+                "patch": "diff --git a/notes.txt b/notes.txt\n--- a/notes.txt\n",
+            },
+            {"finding_id": "untouched", "path": "other.txt", "patch": None},
+        ],
+    }
+    scoped = ocr_critic.delta_scoped_previous_findings(incremental)
+    assert [str(item["id"]) for item in scoped] == ["touched-line", "touched-patch"]
+    assert ocr_critic.delta_scoped_previous_findings({}) == []
+    assert (
+        ocr_critic.delta_scoped_previous_findings(
+            {
+                "incremental_delta": {"changed_paths": []},
+                "previous_findings": [],
+                "previous_finding_publications": [],
+            }
+        )
+        == []
+    )
+
+
+def test_render_ocr_background_renders_previous_findings_deterministically(
+    tmp_path: Path,
+) -> None:
+    previous = [{"id": "docs-1", "severity": "low", "summary": "Retry lacks the key."}]
+    first = ocr_critic.render_ocr_background(
+        PACKAGE, tmp_path, "b" * 64, previous_findings=previous
+    )
+    second = ocr_critic.render_ocr_background(
+        PACKAGE, tmp_path, "b" * 64, previous_findings=previous
+    )
+    assert first == second
+    rendered = first.read_text(encoding="utf-8")
+    assert "## Previously reported findings" in rendered
+    assert "- docs-1 (low): Retry lacks the key." in rendered
+    assert "Verdicts over previous findings belong to the arbitrator" in rendered
+    # The identity digest accounts for the parameter: different sets never
+    # share a file, and the plain render keeps its own name.
+    plain = ocr_critic.render_ocr_background(PACKAGE, tmp_path, "b" * 64)
+    assert plain.name != first.name
+    other = ocr_critic.render_ocr_background(
+        PACKAGE,
+        tmp_path,
+        "b" * 64,
+        previous_findings=[{"id": "docs-2", "severity": "low", "summary": "Other."}],
+    )
+    assert other.name != first.name
+
+
+def test_map_ocr_receipt_stamps_scope_only_for_mr() -> None:
+    output = dict(OCR_OUTPUT, comments=[])
+    mr = ocr_critic.map_ocr_receipt(
+        output,
+        evidence_digest="a" * 64,
+        kind="mr",
+        scope_digest="d" * 64,
+        target_finding_ids=["docs-1"],
+    )
+    assert mr["scope_digest"] == "d" * 64
+    assert mr["target_finding_ids"] == ["docs-1"]
+    contract.validate_critic(mr, "a" * 64, "d" * 64)
+    # An empty OCR answer on a small delta is a valid receipt without findings.
+    empty = ocr_critic.map_ocr_receipt(
+        dict(OCR_OUTPUT, comments=[]),
+        evidence_digest="a" * 64,
+        kind="mr",
+        scope_digest="d" * 64,
+        target_finding_ids=[],
+    )
+    contract.validate_critic(empty, "a" * 64, "d" * 64)
+    local = ocr_critic.map_ocr_receipt(output, evidence_digest="a" * 64, kind="local")
+    assert "scope_digest" not in local
+    with pytest.raises(contract.WorkflowError, match="MR receipts only"):
+        ocr_critic.map_ocr_receipt(
+            output, evidence_digest="a" * 64, kind="local", scope_digest="d" * 64
+        )

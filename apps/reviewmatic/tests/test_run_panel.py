@@ -372,20 +372,38 @@ def test_record_run_critic_rejects_unknown_engines_and_reuse(
     assert "already has a bound receipt" in capsys.readouterr().out
 
 
-def test_record_selection_rejects_ocr_critics_for_incremental_reviews(tmp_path: Path) -> None:
+def test_record_selection_accepts_ocr_critics_for_incremental_reviews(tmp_path: Path) -> None:
+    """The wave-III guard is lifted: an incremental panel may select OCR critics.
+
+    The engine is scoped to the delta by the execution path, not by selection.
+    """
     root = tmp_path / "panel-root"
     root.mkdir()
     selection = tmp_path / "selection.json"
     contract.write_json(selection, SELECTION)
-    with pytest.raises(contract.WorkflowError, match="delta-scoped incremental receipts"):
-        run_panel.record_selection(root, str(selection), None, None, "incremental")
-    # The loud refusal records nothing.
-    assert run_panel.load(root) is None
-    panel = run_panel.record_selection(root, str(selection), None, None, "normal")
+    panel = run_panel.record_selection(root, str(selection), None, None, "incremental")
     assert [str(item["name"]) for item in run_panel.selected_critics(panel)] == [
         "ocr-critic",
         "model-critic",
     ]
+    assert run_panel.load(root) is not None
+
+
+def test_engine_offering_and_poll_scope_ocr_for_incremental() -> None:
+    offering = run_panel.engine_offering("incremental", 120)
+    assert offering == {
+        "ocr": True,
+        "exclusion": None,
+        "background_bytes": 120,
+        "background_limit": 8000,
+    }
+    poll = run_panel.poll("en", "incremental", 120)
+    assert "OCR critics are not offered" not in poll["text"]
+    assert "reviews the delta from the previous reviewed head" in poll["text"]
+    assert "previously reported findings" in poll["text"]
+    assert "incremental" in poll["text"]
+    russian = run_panel.poll("ru", "incremental", 120)
+    assert "ревьюит дельту от прошлого reviewed head" in russian["text"]
 
 
 def test_run_refuses_unused_participants_when_the_review_selects_unchanged(
@@ -638,20 +656,14 @@ def test_resume_participants_refuses_a_bound_panel(
     assert run_panel.summary(panel)["critics"][0]["run_id"] == "ocr-run-1"
 
 
-def test_engine_offering_and_poll_exclude_ocr_for_incremental() -> None:
-    offering = run_panel.engine_offering("incremental", 120)
-    assert offering == {
-        "ocr": False,
-        "exclusion": "incremental",
-        "background_bytes": 120,
-        "background_limit": 8000,
-    }
-    poll = run_panel.poll("en", "incremental", 120)
-    assert "OCR critics are not offered" in poll["text"]
-    assert "delta-scoped" in poll["text"]
-    assert "incremental" in poll["text"]
-    russian = run_panel.poll("ru", "incremental", 120)
-    assert "OCR-критики не предлагаются" in russian["text"]
+def test_poll_still_excludes_ocr_for_oversized_backgrounds() -> None:
+    """Only the size limit excludes the OCR engine; the mode never does."""
+    offering = run_panel.engine_offering("incremental", 9000)
+    assert offering["ocr"] is False
+    assert offering["exclusion"] == "oversized"
+    poll = run_panel.poll("en", "incremental", 9000)
+    assert "the background file is 9000 bytes" in poll["text"]
+    assert "above the ocr CLI limit of 8000" in poll["text"]
 
 
 def test_engine_offering_and_poll_exclude_ocr_for_oversized_background(
@@ -694,3 +706,167 @@ def test_poll_presents_the_verbatim_locale_keyed_text() -> None:
     assert "OCR critics are not offered" not in poll["text"]
     assert run_panel.poll_rules("ru").startswith("Предъяви текст опроса дословно")
     assert run_panel.poll_rules("en").startswith("Present the poll text verbatim")
+
+
+LOW_FINDING: dict[str, Any] = {
+    "id": "docs-1",
+    "severity": "low",
+    "summary": "Retry documentation omits the idempotency key",
+    "risk": "Operators can deploy the retry without the required key.",
+    "evidence": ["The reviewed README documents the retry without the key argument."],
+    "consequence": "A deployment following the documented steps repeats writes.",
+    "relation_to_change": "The reviewed change introduces the retry path.",
+    "minimum_fix": "Document the idempotency key next to the retry example.",
+}
+
+REVIEW_PATCH = (
+    "diff --git a/retry-policy.txt b/retry-policy.txt\n"
+    "new file mode 100644\n"
+    "--- /dev/null\n"
+    "+++ b/retry-policy.txt\n"
+    "@@ -0,0 +1 @@\n"
+    "+reserve idempotency key\n"
+)
+
+
+def finding_content(template: dict[str, Any], finding: dict[str, Any]) -> dict[str, Any]:
+    """A complete plan content over one accepted low finding with a patch fix."""
+    base = empty_content(template)
+    return {
+        **base,
+        "findings": [finding],
+        "finding_publications": [
+            {
+                "finding_id": finding["id"],
+                "type": "general",
+                "path": None,
+                "line": None,
+                "old_line": None,
+                "body": "The documented retry needs the idempotency key; the patch adds it.",
+                "fix_mode": "patch",
+                "patch": REVIEW_PATCH,
+                "patch_reason": "The documented setup has no suggestion anchor in prose.",
+            }
+        ],
+    }
+
+
+def test_run_composes_ocr_into_an_incremental_review(
+    fixture: ReviewFixture, fake_ocr: dict[str, Path], capsys: Any
+) -> None:
+    """Run 1 finalizes a finding; run 2 reviews the delta with an OCR critic."""
+    ocr_only = {
+        "critics": [{"name": "ocr-critic", "engine": "ocr"}],
+        "arbitrator": {"name": "arbitrator-1"},
+    }
+    first_head = fixture.head_sha
+    base = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo)]
+    empty_ocr = json.dumps(
+        {
+            **OCR_OUTPUT,
+            "comments": [],
+            "session_id": "ocr-session-1",
+            "manifest": {"run_id": "ocr-run-1", "terminal_state": "complete"},
+        }
+    )
+    fake_ocr["output"].write_text(empty_ocr, encoding="utf-8")
+
+    # Run 1: a full review that accepts one primary low finding fixed by a patch.
+    assert cli_main([*base, "--participants", selection_path(fixture, ocr_only), "--json"]) == 0
+    waiting = _stdout_json(capsys)
+    assert waiting["status"] == "waiting"
+    assert waiting["stage"] == "decision_missing"
+    template = contract.read_json(Path(waiting["template_path"]), "decision template")
+    contract.write_json(
+        Path(waiting["template_path"]),
+        {
+            **template,
+            "run_id": "primary-run",
+            "session_id": "primary-session",
+            "findings": [LOW_FINDING],
+            "accepted_findings": [LOW_FINDING],
+            "responses": [
+                *[
+                    {
+                        **item,
+                        "decision": "accept",
+                        "reason": "Confirmed on the exact reviewed head.",
+                    }
+                    for item in template["responses"]
+                ],
+                {"id": "docs-1", "decision": "accept", "reason": "Confirmed on the exact head."},
+            ],
+        },
+    )
+    _run_manual(capsys, waiting["manual_argv"])
+
+    assert cli_main([*base, "--resume", "--json"]) == 0
+    waiting = _stdout_json(capsys)
+    assert waiting["stage"] == "content_missing"
+    template = contract.read_json(Path(waiting["template_path"]), "content template")
+    contract.write_json(Path(waiting["template_path"]), finding_content(template, LOW_FINDING))
+    _run_manual(capsys, waiting["manual_argv"])
+    assert cli_main([*base, "--resume", "--json"]) == 0
+    final = _stdout_json(capsys)
+    assert final["stage"] == "plan_ready"
+    assert final["report"]["status"] == "ok"
+
+    # Advance the MR head: a real code delta that touches the run-1 fix.
+    (fixture.repo / "review.txt").write_text("base\nreviewed change\ndelta line\n")
+    (fixture.repo / "retry-policy.txt").write_text("reserve idempotency key, changed\n")
+    fixture.git("add", "review.txt", "retry-policy.txt")
+    fixture.git("commit", "-m", "delta")
+    second_head = fixture.head()
+    assert second_head != first_head
+    fixture.git("push", "-q", "origin", "main")
+    fixture._git(fixture.origin, "update-ref", "refs/merge-requests/7/head", second_head)
+    fixture.config_path.write_text(
+        json.dumps(
+            {
+                **fixture.read_config(),
+                "headSha": second_head,
+                "changedPaths": ["review.txt", "retry-policy.txt"],
+            }
+        )
+    )
+
+    # Run 2: the moved MR selects the incremental mode; the OCR critic runs
+    # the delta range and its receipt binds the scoped previous findings.
+    fake_ocr["output"].write_text(
+        json.dumps(
+            {
+                **OCR_OUTPUT,
+                "comments": [],
+                "session_id": "ocr-session-2",
+                "manifest": {"run_id": "ocr-run-2", "terminal_state": "complete"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert cli_main([*base, "--participants", selection_path(fixture, ocr_only), "--json"]) == 0
+    waiting = _stdout_json(capsys)
+    assert waiting["status"] == "waiting"
+    assert waiting["stage"] == "decision_missing"
+    root = Path(str(waiting["artifact_root"]))
+    progress = review_context.load_progress(root) or {}
+    artifact = review_context.progress_artifact(root, progress, "context", "review_context")
+    assert artifact is not None
+    incremental = artifact[1]["incremental"]
+    assert incremental["mode"] == "incremental", (
+        f"reason={incremental.get('reason')} from={incremental.get('incremental_delta', {}).get('from_head')}"
+        f" to={incremental.get('incremental_delta', {}).get('to_head')}"
+        f" first={first_head} second={second_head}"
+    )
+    arguments = fake_ocr["args"].read_text(encoding="utf-8").strip().split("\n")
+    assert arguments[arguments.index("--from") + 1] == first_head
+    assert arguments[arguments.index("--to") + 1] == second_head
+
+    root = Path(str(waiting["artifact_root"]))
+    receipt_path = Path(str(_progress(root, "critic_receipt_path")))
+    _meta, receipt = contract.artifact_payload(receipt_path, "critic_receipt")
+    assert receipt["scope_digest"] == incremental["incremental_delta_digest"]
+    assert receipt["target_finding_ids"] == ["docs-1"]
+    ocr_background_files = (root / "review-drafts").glob("ocr-background-*.md")
+    rendered = "\n".join(path.read_text(encoding="utf-8") for path in ocr_background_files)
+    assert "## Previously reported findings" in rendered
+    assert "- docs-1 (low): Retry documentation omits the idempotency key" in rendered

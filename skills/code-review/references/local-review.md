@@ -184,7 +184,10 @@ repository gates, each with `passed`, `failed`, or `not_run`, `required`, and
 concrete `evidence`. Revalidate applicability to this snapshot; do not copy old
 success claims. Full reviews select `fast`, `normal`, or `deep`; `fast` is only
 for confirmed small low-risk changes, and `normal`/`deep` require an independent
-critic. Incremental reviews require a delta-scoped independent critic. Record
+critic. Incremental reviews require a delta-scoped independent critic; the
+local OCR critic stays full-scope by design — the local receipt schema has no
+scope fields, so an incremental local panel runs model critics for the delta.
+Record
 the actual run identity, scope, and accepted/rejected conclusions in check
 evidence. If unavailable, record the required check as `not_run` and report
 blocked, never simulated self-review. `unchanged` requires no critic unless new

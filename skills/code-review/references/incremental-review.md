@@ -80,6 +80,12 @@ for `changed` and `unverified`, and for any other status the reviewer considers
 disputed. The incremental critic receipt includes all such IDs in
 `target_finding_ids`.
 
+An incremental OCR critic covers exactly the previously reported findings
+rendered into its background: those whose previous publication position or
+patch text references a changed path of the delta. Previous findings without a
+delta intersection are not re-targeted at the critic — they stay with the
+arbitrator's previous-finding assessments, where their verdicts live.
+
 Keep every accepted finding and recommended issue in the cumulative private
 ledger after it becomes fixed or withdrawn. Preserve its stable ID, latest
 revision, record, and status so a later reintroduction is assessed as `changed`

@@ -49,10 +49,11 @@ _POLL_TEXT = {
 }
 _OCR_NOTES = {
     "incremental": {
-        "en": " OCR critics are not offered: an incremental review needs delta-scoped "
-        "receipts, and the OCR CLI reviews the complete base..head range.",
-        "ru": " OCR-критики не предлагаются: инкрементальному ревью нужны дельта-чеки, "
-        "а OCR CLI ревьюит полный диапазон base..head.",
+        "en": " The review is incremental: an OCR critic reviews the delta from the "
+        "previous reviewed head, and the previously reported findings that the delta "
+        "touches are included in its background.",
+        "ru": " Ревью инкрементальное: OCR-критик ревьюит дельту от прошлого reviewed "
+        "head, а прошлые находки, которых касается дельта, включены в его background.",
     },
     "oversized": {
         "en": " OCR critics are not offered: the background file is {bytes} bytes, above "
@@ -86,14 +87,8 @@ def poll_rules(locale: str) -> str:
 
 def engine_offering(mode: str, background_bytes: int) -> dict[str, Any]:
     """Which engines the poll may offer, derived from the resolved mode and
-    the offline-rendered background size."""
-    if mode == "incremental":
-        return {
-            "ocr": False,
-            "exclusion": "incremental",
-            "background_bytes": background_bytes,
-            "background_limit": ocr_critic.OCR_BACKGROUND_LIMIT,
-        }
+    the offline-rendered background size. Incremental reviews offer the OCR
+    engine scoped to the delta; only an oversized background excludes it."""
     if background_bytes > ocr_critic.OCR_BACKGROUND_LIMIT:
         return {
             "ocr": False,
@@ -113,12 +108,12 @@ def poll(locale: str, mode: str, background_bytes: int) -> dict[str, Any]:
     """The verbatim poll presentation: text, engines, and the mode note."""
     offering = engine_offering(mode, background_bytes)
     note = ""
-    if offering["exclusion"] == "incremental":
-        note = _OCR_NOTES["incremental"][locale]
-    elif offering["exclusion"] == "oversized":
+    if offering["exclusion"] == "oversized":
         note = _OCR_NOTES["oversized"][locale].format(
             bytes=background_bytes, limit=ocr_critic.OCR_BACKGROUND_LIMIT
         )
+    elif mode == "incremental":
+        note = _OCR_NOTES["incremental"][locale]
     return {
         "text": _POLL_TEXT[locale].format(mode=mode, ocr_note=note),
         "locale": locale,
@@ -133,11 +128,20 @@ def render_run_background(
     """Render the OCR background offline with the same renderer the critic runs.
 
     No GitLab request and no CLI spawn: this is the measurement the poll uses
-    to decide whether the OCR engine may be offered.
+    to decide whether the OCR engine may be offered. An incremental review
+    renders the same previously-reported-findings section the execution will.
     """
     drafts = contract.private_directory(root / "review-drafts")
+    incremental = cast("dict[str, Any]", review_context.get("incremental") or {})
+    mode = str(incremental.get("mode") or "")
+    scoped_previous = (
+        ocr_critic.delta_scoped_previous_findings(incremental) if mode == "incremental" else []
+    )
     background = ocr_critic.render_ocr_background(
-        ocr_background(review_context), drafts, context_digest
+        ocr_background(review_context),
+        drafts,
+        context_digest,
+        previous_findings=scoped_previous or None,
     )
     return background, background.stat().st_size
 
@@ -223,21 +227,6 @@ def record_selection(
                 cast("list[dict[str, Any]]", user_input["critics"]), ocr_provider, ocr_model
             )
         )
-    if (
-        not errors
-        and mode == "incremental"
-        and ocr_critic.ocr_critics(cast("list[dict[str, Any]]", user_input["critics"]))
-    ):
-        errors = [
-            {
-                "path": "$.critics",
-                "message": (
-                    "OCR critics review the complete base..head range and do not produce "
-                    "delta-scoped incremental receipts; run the panel without OCR critics "
-                    "for incremental reviews"
-                ),
-            }
-        ]
     if errors:
         raise contract.WorkflowError(
             "the panel selection is invalid: "
@@ -414,16 +403,32 @@ def run_ocr_critic(
 ) -> dict[str, Any]:
     """Execute one OCR critic mechanically and bind its receipt."""
     participant = str(critic["name"])
+    incremental = cast("dict[str, Any]", review_context.get("incremental") or {})
+    incremental_mode = scope_digest is not None
+    scoped_previous = (
+        ocr_critic.delta_scoped_previous_findings(incremental) if incremental_mode else []
+    )
     drafts = contract.private_directory(root / "review-drafts")
     background = ocr_critic.render_ocr_background(
-        ocr_background(review_context), drafts, context_digest
+        ocr_background(review_context),
+        drafts,
+        context_digest,
+        previous_findings=scoped_previous or None,
     )
     repo_root = str(progress.get("repo_root") or "")
     if not repo_root:
         raise contract.WorkflowError("the OCR critic requires the selected repository root")
+    # Full reviews run the complete base..head range; an incremental review
+    # runs the delta from the previous reviewed head to the current head.
+    delta = cast("dict[str, Any]", incremental.get("incremental_delta") or {})
+    range_base = (
+        str(delta.get("from_head"))
+        if incremental_mode and isinstance(delta.get("from_head"), str) and delta.get("from_head")
+        else str(evidence["base_sha"])
+    )
     output = ocr_critic.invoke_ocr_critic(
         background,
-        str(evidence["base_sha"]),
+        range_base,
         str(evidence["head_sha"]),
         critic.get("provider"),
         critic.get("model"),
@@ -434,6 +439,10 @@ def run_ocr_critic(
         evidence_digest=str(progress["evidence_digest"]),
         kind="mr",
         package=ocr_background(review_context),
+        scope_digest=scope_digest,
+        target_finding_ids=[str(item["id"]) for item in scoped_previous]
+        if incremental_mode
+        else None,
     )
     contract.write_json(
         drafts / f"ocr-critic-{ocr_critic.safe_id_fragment(participant)}.json", receipt

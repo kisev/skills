@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -78,10 +78,52 @@ def _comment_location(comment: dict[str, Any]) -> str:
     return f"{path}:{start}-{end}"
 
 
+# Previously reported findings an incremental OCR critic must re-report on:
+# exactly the findings whose previous publication positions or patch text
+# reference a path from the incremental delta. Findings without a delta
+# intersection stay with the arbitrator's previous-finding assessments and are
+# not re-targeted at the critic; this boundary is the documented coverage rule.
+def delta_scoped_previous_findings(incremental: dict[str, Any]) -> list[dict[str, Any]]:
+    delta = incremental.get("incremental_delta") if isinstance(incremental, dict) else None
+    changed = (
+        {str(path) for path in cast("list[object]", delta.get("changed_paths") or [])}
+        if isinstance(delta, dict)
+        else set()
+    )
+    findings = incremental.get("previous_findings") if isinstance(incremental, dict) else None
+    publications = (
+        incremental.get("previous_finding_publications") if isinstance(incremental, dict) else None
+    )
+    by_id = {
+        str(item.get("finding_id")): item
+        for item in cast("list[object]", publications or [])
+        if isinstance(item, dict)
+    }
+    scoped: list[dict[str, Any]] = []
+    for finding in cast("list[object]", findings or []):
+        if not isinstance(finding, dict):
+            continue
+        publication = by_id.get(str(finding.get("id")))
+        if publication is None:
+            continue
+        path = str(publication.get("path") or "")
+        patch = str(publication.get("patch") or "")
+        if (path and path in changed) or any(item in patch for item in changed):
+            scoped.append(finding)
+    return scoped
+
+
 # Renders the recorded context package as the Markdown background file passed
 # to ``ocr review --background-file``. Purely derived from the package payload
-# so a re-render of the same package is byte-identical.
-def render_ocr_background(payload: dict[str, Any], directory: Path, package_digest: str) -> Path:
+# (and the explicit previous-findings section for incremental reviews) so a
+# re-render of the same inputs is byte-identical.
+def render_ocr_background(
+    payload: dict[str, Any],
+    directory: Path,
+    package_digest: str,
+    *,
+    previous_findings: list[dict[str, Any]] | None = None,
+) -> Path:
     lines: list[str] = ["# Review background", ""]
     goal = payload.get("goal")
     lines.append("## Goal")
@@ -164,8 +206,29 @@ def render_ocr_background(payload: dict[str, Any], directory: Path, package_dige
         lines.append(background)
         lines.append("")
 
+    if previous_findings:
+        lines.append("## Previously reported findings")
+        lines.append("")
+        lines.append(
+            "These findings were reported before the reviewed delta; re-report a finding "
+            "only when the delta changes or invalidates it. Verdicts over previous "
+            "findings belong to the arbitrator."
+        )
+        lines.append("")
+        for finding in previous_findings:
+            if not isinstance(finding, dict):
+                continue
+            lines.append(
+                f"- {finding.get('id')} ({finding.get('severity')}): {finding.get('summary')}"
+            )
+        lines.append("")
+
+    identity = package_digest[:16] + (
+        f"-{contract.digest(previous_findings)[:16]}" if previous_findings else ""
+    )
+
     directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"ocr-background-{package_digest[:16]}.md"
+    path = directory / f"ocr-background-{identity}.md"
     path.write_text("\n".join(lines), encoding="utf-8")
     return path
 
@@ -347,9 +410,16 @@ def map_ocr_receipt(
     evidence_digest: str,
     kind: str,
     package: dict[str, Any] | None = None,
+    scope_digest: str | None = None,
+    target_finding_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     if kind not in {"mr", "local"}:
         raise contract.WorkflowError(f"unknown OCR receipt kind {kind}")
+    if scope_digest is not None and kind != "mr":
+        raise contract.WorkflowError(
+            "incremental scope stamping applies to MR receipts only; the local "
+            "receipt schema stays full-scope"
+        )
     run_id, session_id = ocr_identity(output)
     comments = output.get("comments")
     if not isinstance(comments, list):
@@ -399,4 +469,9 @@ def map_ocr_receipt(
             "comments": len(comments),
         },
     }
+    # Incremental MR receipts bind the reviewed delta and name exactly the
+    # previously reported findings rendered into the background section.
+    if scope_digest is not None:
+        receipt["scope_digest"] = scope_digest
+        receipt["target_finding_ids"] = list(target_finding_ids or [])
     return receipt

@@ -14,9 +14,10 @@ glossary fixes the meaning of every term the poll and the engines note use.
   model subagent with the session's agent, provider, and model.
 - **OCR engine** (`"engine": "ocr"`) — the critic runs mechanically as the
   OpenCodeReview CLI: the runtime renders the background, invokes the CLI,
-  and maps its comments into a receipt. The OCR engine may be excluded by the
-  mode note (incremental reviews need delta-scoped receipts) or by the size
-  note (the background file exceeds the CLI's limit).
+  and maps its comments into a receipt. An incremental review scopes the OCR
+  engine to the delta from the previous reviewed head and includes the
+  previously reported findings the delta touches in its background; only the
+  size note (the background file exceeds the CLI's limit) excludes the engine.
 - **Arbitrator** — the separate participant that merges every critic finding
   into one verdict; never one of the critics.
 - **Panel** — the recorded answer: the critics with their engines plus the

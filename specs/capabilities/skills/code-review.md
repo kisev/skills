@@ -232,8 +232,12 @@ Markdown background file, invokes the OCR CLI with `--format json` over the
 exact reviewed range under a bounded timeout, maps the comments into one
 receipt carrying the OCR run identity and engine metadata, and binds it to the
 participant through the standard import path; an OCR receipt carries findings
-only, never answers critic-assigned questions, and never supports incremental
-reviews, so with no model critic selected the arbitrator resolves every
+only, never answers critic-assigned questions, and in incremental reviews runs
+scoped to the `from_head..head` delta: the receipt binds the incremental delta
+digest and `target_finding_ids` names exactly the previously reported findings
+rendered into its background (those whose previous publication position or
+patch intersects the changed paths; the rest stay with the arbitrator's
+previous-finding assessments), so with no model critic selected the arbitrator resolves every
 assigned question through `question_verifications`. When every selected receipt is imported, the runtime shall
 return the ready arbitrator task with a complete arbitration input — the
 package binding, every critic receipt verbatim, and the reported

@@ -1478,12 +1478,11 @@ def record_ocr_critic(path: str, participant: str) -> dict[str, Any]:
         raise contract.WorkflowError(
             "record-ocr-critic requires a recorded panel; run record-participants first"
         )
-    if str(progress["mode"]) == "incremental":
-        raise contract.WorkflowError(
-            "OCR critics review the complete base..head range and do not produce "
-            "delta-scoped incremental receipts; run the panel without OCR critics for "
-            "incremental reviews"
-        )
+    incremental = cast("dict[str, Any]", review_context.get("incremental") or {})
+    incremental_mode = str(progress["mode"]) == "incremental"
+    scoped_previous = (
+        ocr_critic.delta_scoped_previous_findings(incremental) if incremental_mode else []
+    )
     critics = cast("list[dict[str, Any]]", cast("dict[str, Any]", draft["participants"])["critics"])
     selected = next((item for item in critics if str(item["name"]) == participant), None)
     if selected is None:
@@ -1511,13 +1510,24 @@ def record_ocr_critic(path: str, participant: str) -> dict[str, Any]:
     )
     drafts_directory = root / "review-drafts"
     background = ocr_critic.render_ocr_background(
-        package_payload, drafts_directory, str(draft["context_package_digest"])
+        package_payload,
+        drafts_directory,
+        str(draft["context_package_digest"]),
+        previous_findings=scoped_previous or None,
     )
     exact = cast("dict[str, Any]", review_context["exact_git"])
     repo_root = str(progress.get("repo_root") or exact.get("repo_root"))
+    # Full reviews run the complete base..head range; an incremental review
+    # runs the delta from the previous reviewed head to the current head.
+    delta = cast("dict[str, Any]", incremental.get("incremental_delta") or {})
+    range_base = (
+        str(delta.get("from_head"))
+        if incremental_mode and isinstance(delta.get("from_head"), str) and delta.get("from_head")
+        else str(evidence["base_sha"])
+    )
     output = ocr_critic.invoke_ocr_critic(
         background,
-        str(evidence["base_sha"]),
+        range_base,
         str(evidence["head_sha"]),
         selected.get("provider"),
         selected.get("model"),
@@ -1528,6 +1538,10 @@ def record_ocr_critic(path: str, participant: str) -> dict[str, Any]:
         evidence_digest=str(draft["evidence_digest"]),
         kind="mr",
         package=package_payload,
+        scope_digest=str(incremental["incremental_delta_digest"]) if incremental_mode else None,
+        target_finding_ids=[str(item["id"]) for item in scoped_previous]
+        if incremental_mode
+        else None,
     )
     receipt_path = drafts_directory / (
         f"ocr-critic-{ocr_critic.safe_id_fragment(participant)}.json"
@@ -1540,7 +1554,12 @@ def record_ocr_critic(path: str, participant: str) -> dict[str, Any]:
             **cast("dict[str, Any]", receipt["ocr"]),
             "background_path": str(background),
             "receipt_path": str(receipt_path),
-            "range": {"base": str(evidence["base_sha"]), "head": str(evidence["head_sha"])},
+            "range": {"base": range_base, "head": str(evidence["head_sha"])},
+            **(
+                {"scope": "incremental", "target_finding_ids": receipt["target_finding_ids"]}
+                if incremental_mode
+                else {}
+            ),
             "repo_root": repo_root,
         },
     }

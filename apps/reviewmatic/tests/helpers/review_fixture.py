@@ -178,7 +178,10 @@ elif clean == "projects/19/merge_requests/7":
     }
 elif clean == "projects/19/merge_requests/7/changes":
     value = {
-        "changes": [{"old_path": config["changedPath"], "new_path": config["changedPath"]}],
+        "changes": [
+            {"old_path": path, "new_path": path}
+            for path in (config.get("changedPaths") or [config["changedPath"]])
+        ],
         "diff_refs": {
             "base_sha": config["baseSha"],
             "start_sha": config["startSha"],

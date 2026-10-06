@@ -158,13 +158,17 @@ the run path above there is no such stop: the runtime executes OCR critics
 itself, without an authoring stop. reviewmatic renders the recorded package as
 a Markdown background file, invokes
 `ocr review --format json --audience agent` over the exact reviewed range (the
-base..head range in the review worktree for a remote MR; workspace mode for a
+base..head range in the review worktree for a full remote-MR review; the
+`from_head..head` delta for an incremental review; workspace mode for a
 local review without a ref), maps every comment into one receipt carrying the
 OCR run identity, and binds it to the participant exactly like a model critic
 receipt. OCR produces findings only: it never answers critic-assigned
 questions, so when no model critic is selected the arbitrator resolves every
-assigned question through `question_verifications`. OCR receipts do not support
-incremental reviews; the bilingual runbook lives at
+assigned question through `question_verifications`. In incremental reviews the
+receipt binds the incremental delta digest and `target_finding_ids` names
+exactly the previously reported findings rendered into its background (the
+coverage boundary lives in `references/incremental-review.md`); the bilingual
+runbook lives at
 `docs/how-to/ocr-critic.md` with its Russian mirror under `docs/ru/how-to/`.
 
 When the last critic receipt is imported, the response returns the ready
