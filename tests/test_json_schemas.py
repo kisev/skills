@@ -54,6 +54,31 @@ def validator(path: str) -> Validator:
 
 
 @pytest.mark.parametrize(
+    "path",
+    [
+        "shared/references/portable_gitlab/artifact-contracts-v2.schema.json",
+        "apps/reviewmatic/src/reviewmatic/portable/portable_gitlab/artifact-contracts-v2.schema.json",
+    ],
+)
+def test_advisory_review_history_schema(path: str) -> None:
+    schema = load(path)["$defs"]["incremental_review"]["properties"]["history_context"]
+    check = validator_for(schema)(schema)
+    instance: dict[str, Any] = {
+        "policy": "advisory",
+        "snapshot": {"plan_digest": DIGEST},
+        "findings": [{"id": "old-finding", "summary": "Historical observation"}],
+        "publications": [],
+        "recommended_issues": [],
+        "rejected_candidates": [],
+        "decisions": [{"id": "old-finding", "reason": "Observed on the previous snapshot"}],
+        "warnings": ["incompatible baseline: using full analysis"],
+    }
+    check.validate(instance)
+    with pytest.raises(ValidationError):
+        check.validate({**instance, "policy": "mandatory"})
+
+
+@pytest.mark.parametrize(
     ("definition", "instance"),
     [
         (

@@ -214,3 +214,33 @@ def test_the_tail_routing_precedence_is_documented() -> None:
     assert "record-prose --artifact-root" in primary
     assert "scaffold-review` is the structural repair" in primary
     assert primary.index("shared renderer") < primary.index("record-prose --artifact-root")
+
+
+def test_standalone_runbook_and_semantic_input_contract_are_documented() -> None:
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    history = " ".join(
+        (SKILL_DIR / "references" / "incremental-review.md").read_text(encoding="utf-8").split()
+    )
+    entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
+    assert "history_context" in entry
+    for fragment in (
+        "History is advisory",
+        "prepared `finding_id` unchanged",
+        "{name,status,rationale}",
+        "semver_assessment.basis: {name,source}",
+        "Recorded rejected-candidate reasons are reused",
+        "Thread fixes use the same semantic",
+        "Addressed prose updates retain other filled rows",
+        "CI-only changes",
+    ):
+        assert fragment in workflow, fragment
+    for fragment in (
+        "replaces mandatory",
+        "historical synchronization",
+        "including OCR",
+        "currently observed defect",
+        "fallback_reasons",
+        "Incomplete **current** evidence",
+        "Green",  # Timing acceptance must not be inferred from offline tests.
+    ):
+        assert fragment in history, fragment

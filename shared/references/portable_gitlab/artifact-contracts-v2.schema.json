@@ -1183,7 +1183,31 @@
         "incremental_delta": { "$ref": "#/$defs/incremental_delta" },
         "incremental_delta_digest": { "$ref": "#/$defs/digest" },
         "critic_required": { "type": "boolean" },
-        "fallback_reasons": { "type": "array", "items": { "type": "string" } }
+        "fallback_reasons": { "type": "array", "items": { "type": "string" } },
+        "history_context": {
+          "type": "object",
+          "required": [
+            "policy",
+            "snapshot",
+            "findings",
+            "publications",
+            "recommended_issues",
+            "rejected_candidates",
+            "decisions",
+            "warnings"
+          ],
+          "properties": {
+            "policy": { "const": "advisory" },
+            "snapshot": { "type": ["object", "null"] },
+            "findings": { "type": "array", "items": { "type": "object" } },
+            "publications": { "type": "array", "items": { "type": "object" } },
+            "recommended_issues": { "type": "array", "items": { "type": "object" } },
+            "rejected_candidates": { "type": "array", "items": { "type": "object" } },
+            "decisions": { "type": "array", "items": { "type": "object" } },
+            "warnings": { "type": "array", "items": { "type": "string" } }
+          },
+          "additionalProperties": false
+        }
       },
       "additionalProperties": false
     },

@@ -21,6 +21,12 @@ and asks for a fresh `reviewmatic record-delta` verification of changes and
 affected conclusions. Original checks remain historical; never replace their
 digests or treat a mapped source position as proof of a finding's truth.
 
+Each runbook stands on the current snapshot. `history_context` is advisory:
+past findings, reasons, and decisions inform critics and arbitration but never
+require ledger coverage, old IDs, revisions, or `update_issue`. Return prepared
+`finding_id` values unchanged. The runtime owns identities and bindings, while
+the agent owns analysis, semantic targets, fixes, and missing judgments.
+
 Review preparation depends on the reviewmatic backend. Finished runbook commands
 execute directly through `glab` without reviewmatic. Backend collection, repair,
 refresh and finalization remain supported; the runtime has no interactive TUI.

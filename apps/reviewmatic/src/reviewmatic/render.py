@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from reviewmatic import context, publication_skeletons
-from reviewmatic.portable.portable_gitlab import contract
+from reviewmatic.portable.portable_gitlab import contract, review_semver
 
 # Prose and semantic keys the agent may edit through the prose surface; every
 # other content key is machine-rendered and rejected here.
@@ -45,6 +45,7 @@ STRUCTURAL_THREAD_KEYS = {
     "last_note_id",
     "last_note_body_sha256",
     "thread_sha256",
+    "suggestions",
 }
 STRUCTURAL_PUBLICATION_KEYS = {
     "type",
@@ -205,6 +206,61 @@ def resolve_prose_fixes(
 ) -> dict[str, Any]:
     """Translate semantic fix payloads to the input publication shape."""
     result = copy.deepcopy(incoming)
+    semver = result.get("semver_assessment")
+    if isinstance(semver, dict) and "basis" in semver:
+        basis = semver.pop("basis")
+        if basis is None:
+            content["semver_assessment"] = review_semver.template(evidence, review_context)
+        else:
+            if not isinstance(basis, dict):
+                raise contract.WorkflowError(
+                    "semver_assessment.basis: return {name,source} from the collected catalog or null for explicit target-branch fallback"
+                )
+            content["semver_assessment"] = review_semver.rendered_template(
+                evidence, review_context, basis
+            )
+    threads = {str(row["id"]): row for row in content.get("thread_decisions", [])}
+    for row in result.get("thread_decisions", []):
+        prepared_thread = threads.get(str(row.get("id")))
+        if prepared_thread is None:
+            continue
+        parts = row.pop("parts", None)
+        if "replacement" in row:
+            if parts is not None:
+                raise contract.WorkflowError(
+                    "thread_decisions: choose target/replacement or parts, not both"
+                )
+            parts = [{"target": row.pop("target", None), "replacement": row.pop("replacement")}]
+        if parts is None:
+            continue
+        if (
+            row.get("fix_mode", prepared_thread.get("fix_mode")) != "suggestion"
+            or not isinstance(parts, list)
+            or not 1 <= len(parts) <= 50
+        ):
+            raise contract.WorkflowError(
+                "thread_decisions.parts: use fix_mode=suggestion with 1..50 semantic target/replacement parts"
+            )
+        suggestions = []
+        for part in parts:
+            if (
+                not isinstance(part, dict)
+                or set(part) - {"target", "replacement", "body"}
+                or not isinstance(part.get("replacement"), str)
+            ):
+                raise contract.WorkflowError(
+                    "thread_decisions.parts: each part needs target {path,before}, replacement text, and optional body; positions are runtime-owned"
+                )
+            located = targeted_suggestion(
+                Path(str(review_context["exact_git"]["repo_root"])),
+                str(evidence["base_sha"]),
+                str(evidence["head_sha"]),
+                part.get("target") or {},
+                part["replacement"],
+                str(part.get("body") or row.get("proposed_response") or ""),
+            )
+            suggestions.append({key: located[key] for key in ("path", "line", "body")})
+        prepared_thread["suggestions"] = suggestions
     current = {str(row["finding_id"]): row for row in content.get("finding_publications", [])}
     for row in result.get("finding_publications", []):
         prepared = current.get(str(row.get("finding_id")))
@@ -442,6 +498,7 @@ def render_content(
     base, head = str(evidence["base_sha"]), str(evidence["head_sha"])
     locale = "ru" if str(draft.get("content", {}).get("locale", "en")) == "ru" else "en"
     content = context.content_template(evidence, review_context, decision, locale)
+    content["semver_assessment"] = review_semver.rendered_template(evidence, review_context)
     accepted = _accepted_findings(draft)
     intents = _publication_intents(draft)
     role = str(review_context.get("role", "reviewer"))
@@ -626,6 +683,19 @@ def prose_projection(
                 for item in value
                 if isinstance(item, dict)
             ]
+            if review_context is not None and evidence is not None:
+                for original, row in zip(value, projection[key], strict=True):
+                    if original.get("fix_mode") == "suggestion" and original.get("suggestions"):
+                        row["parts"] = [
+                            {
+                                "target": suggestion_target(part, review_context, evidence),
+                                "replacement": context.suggestion_blocks(part["body"])[0]
+                                .group("replacement")
+                                .removesuffix("\n"),
+                                "body": context.SUGGESTION_RE.sub("", part["body"]).strip(),
+                            }
+                            for part in original["suggestions"]
+                        ]
         elif key == "finding_publications" and isinstance(value, list):
             projection[key] = [
                 {field: item[field] for field in item if field not in STRUCTURAL_PUBLICATION_KEYS}
@@ -639,9 +709,9 @@ def prose_projection(
                             row["parts"] = [
                                 {
                                     "target": suggestion_target(part, review_context, evidence),
-                                    "replacement": context.suggestion_blocks(part["body"])[0].group(
-                                        "replacement"
-                                    ),
+                                    "replacement": context.suggestion_blocks(part["body"])[0]
+                                    .group("replacement")
+                                    .removesuffix("\n"),
                                     "body": context.SUGGESTION_RE.sub("", part["body"]).strip(),
                                 }
                                 for part in original["suggestions"]
@@ -651,7 +721,7 @@ def prose_projection(
                         row["target"] = suggestion_target(original, review_context, evidence)
                         matches = context.suggestion_blocks(str(original.get("body") or ""))
                         row["replacement"] = (
-                            matches[0].group("replacement")
+                            matches[0].group("replacement").removesuffix("\n")
                             if matches
                             else "<REPLACEMENT: corrected source>"
                         )
@@ -667,6 +737,16 @@ def prose_projection(
             ]
         elif key == "semver_assessment" and isinstance(value, dict):
             projection[key] = {field: value[field] for field in SEMVER_PROSE_KEYS if field in value}
+            baseline = value.get("baseline")
+            projection[key]["basis"] = (
+                {field: baseline[field] for field in ("name", "source")}
+                if isinstance(baseline, dict)
+                else None
+            )
+        elif key == "label_assessments" and isinstance(value, list):
+            projection[key] = [
+                {field: row[field] for field in ("name", "status", "rationale")} for row in value
+            ]
         else:
             projection[key] = value
     return projection
@@ -696,6 +776,15 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
             raise contract.WorkflowError(
                 f"{key} requires an array of prose objects; draft unchanged"
             )
+        if key in {"thread_decisions", "finding_publications", "previous_finding_assessments"}:
+            identity_key = "finding_id" if key == "finding_publications" else "id"
+            identifiers = [row.get(identity_key) for row in value]
+            if any(not isinstance(identifier, str) for identifier in identifiers) or len(
+                set(identifiers)
+            ) != len(identifiers):
+                raise contract.WorkflowError(
+                    f"{key}[*].{identity_key}: return each prepared row identifier once, unchanged; do not invent identities"
+                )
         if key == "thread_decisions" and isinstance(value, list):
             rows: list[dict[str, Any]] = []
             current = {
@@ -706,7 +795,10 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
             for row in value:
                 if not isinstance(row, dict):
                     continue
-                allowed = set(current.get(str(row.get("id"))) or {}) - STRUCTURAL_THREAD_KEYS
+                allowed = (
+                    set(current.get(str(row.get("id"))) or {})
+                    | {"patch_reason", "split_rationale", "severity", "routing_response"}
+                ) - STRUCTURAL_THREAD_KEYS
                 leak = sorted(set(row) - allowed)
                 if leak:
                     structural_rejections.append(f"thread_decisions[{row.get('id')}]: {leak}")
@@ -718,7 +810,8 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
                     )
                     continue
                 rows.append({**base, **row})
-            merged[key] = rows
+            current.update({str(row["id"]): row for row in rows})
+            merged[key] = list(current.values())
             continue
         if key == "finding_publications" and isinstance(value, list):
             rows = []
@@ -747,7 +840,8 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
                     )
                     continue
                 rows.append({**base, **row})
-            merged[key] = rows
+            current.update({str(row["finding_id"]): row for row in rows})
+            merged[key] = list(current.values())
             continue
         if key == "previous_finding_assessments" and isinstance(value, list):
             rows = []
@@ -780,6 +874,29 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
                 del current[identity_key]
             merged[key] = rows
             continue
+        if key == "label_assessments":
+            current = {str(row["name"]): row for row in merged[key]}
+            if not isinstance(value, list) or any(
+                not isinstance(row, dict)
+                or set(row) != {"name", "status", "rationale"}
+                or not isinstance(row.get("name"), str)
+                or row.get("name") not in current
+                for row in value
+            ):
+                raise contract.WorkflowError(
+                    "label_assessments: use prepared {name,status,rationale} rows, without output fields or unknown names; retain complete catalog coverage"
+                )
+            names = [row["name"] for row in value]
+            if len(set(names)) != len(names):
+                raise contract.WorkflowError(
+                    "label_assessments[*].name: return each prepared label once"
+                )
+            current.update({str(row["name"]): copy.deepcopy(row) for row in value})
+            merged[key] = list(current.values())
+            continue
+        if key == "mr_metadata_assessment" and isinstance(value, dict):
+            merged[key].update(copy.deepcopy(value))
+            continue
         merged[key] = value
     if structural_rejections:
         raise contract.WorkflowError(
@@ -806,11 +923,38 @@ def placeholder_guidance(content: dict[str, Any]) -> list[dict[str, str]]:
             )
     for key in ("summary", "architecture_assessment", "semver_rationale"):
         value = content.get(key)
-        if isinstance(value, str) and publication_skeletons.is_placeholder(value):
+        if isinstance(value, str) and (
+            not value.strip() or publication_skeletons.is_placeholder(value)
+        ):
             guidance.append(
                 {
                     "path": f"$.content.{key}",
                     "message": "fill the prose through the content prose file and record-prose",
+                }
+            )
+    semantic_fields: list[tuple[str, object]] = []
+    semver = content.get("semver_assessment") or {}
+    for field in ("policy", "fallback_reason", "release_impact", "release_rationale"):
+        if semver.get(field) is not None:
+            semantic_fields.append((f"$.content.semver_assessment.{field}", semver[field]))
+    for key, field in (("label_assessments", "rationale"), ("thread_decisions", "rationale")):
+        semantic_fields.extend(
+            (f"$.content.{key}[{index}].{field}", row.get(field))
+            for index, row in enumerate(_records_flat(content.get(key)))
+        )
+    for field, row in (content.get("mr_metadata_assessment") or {}).items():
+        semantic_fields.append(
+            (f"$.content.mr_metadata_assessment.{field}.rationale", row.get("rationale"))
+        )
+    for path, value in semantic_fields:
+        if value is None or (
+            isinstance(value, str)
+            and (not value.strip() or publication_skeletons.is_placeholder(value))
+        ):
+            guidance.append(
+                {
+                    "path": path,
+                    "message": "fill this missing substantive assessment through record-prose; retain other authored fields",
                 }
             )
     return guidance

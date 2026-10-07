@@ -514,6 +514,12 @@ class ReviewRun:
             "artifact_root": str(root),
             "template_kind": "critic",
             "participant": participant,
+            "inputs": {
+                "context_path": progress["context_path"],
+                "evidence_path": progress["evidence_path"],
+                "repo_root": progress["repo_root"],
+            },
+            "history_context": context_artifact[1].get("incremental", {}).get("history_context"),
             "panel": run_panel.summary(panel),
             "template_path": str(template_path),
             "manual_command": action["command"],
@@ -536,6 +542,10 @@ class ReviewRun:
             "artifact_root": str(self.root),
             "template_kind": kind,
             "template_path": template["template_path"],
+            "inputs": {
+                key: (context.load_progress(self.root) or {}).get(key)
+                for key in ("context_path", "evidence_path", "critic_receipt_path", "repo_root")
+            },
             **({"panel": run_panel.summary(panel)} if panel is not None else {}),
             "manual_command": template["next_action"]["command"],
             "manual_argv": template["next_action"]["argv"],

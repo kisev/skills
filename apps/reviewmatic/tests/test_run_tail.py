@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 import pytest
 from helpers.review_fixture import ReviewFixture, make_review_fixture
 
-from reviewmatic import context, render
+from reviewmatic import context, render, tail
 from reviewmatic.cli import main
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -49,6 +49,11 @@ def test_run_content_stop_is_the_prose_surface(fixture: ReviewFixture, capsys: A
     prose = contract.read_json(Path(prose_stop["template_path"]), "prose")
     assert "findings" not in prose
     assert "target_sha" not in prose["semver_assessment"]
+    assert prose["semver_assessment"]["sources"]
+    assert (
+        "current target branch commit unavailable locally"
+        in prose["semver_assessment"]["fallback_reason"]
+    )
     assert "thread_sha256" not in prose["thread_decisions"][0]
     assert "record-prose" in prose_stop["manual_command"]
 
@@ -144,8 +149,14 @@ def fill_prose(prose: dict[str, Any]) -> dict[str, Any]:
         semver_assessment={
             **prose["semver_assessment"],
             "policy": "No release policy found.",
-            "sources": ["Fixture repository"],
-            "fallback_reason": "No confirmed release.",
+            "sources": prose["semver_assessment"]["sources"],
+            "fallback_reason": prose["semver_assessment"]["fallback_reason"],
+            "release_impact": "patch"
+            if prose["semver_assessment"]["release_impact"] is not None
+            else None,
+            "release_rationale": "Backward-compatible correction to the released retry contract."
+            if prose["semver_assessment"]["release_impact"] is not None
+            else None,
         },
         mr_metadata_assessment={
             name: {
@@ -251,8 +262,17 @@ ISSUE = {
 
 
 def complete_run(
-    fixture: ReviewFixture, capsys: Any, sequence: int, *, changed: bool = False
+    fixture: ReviewFixture,
+    capsys: Any,
+    sequence: int,
+    *,
+    changed: bool = False,
+    finding_id: str = "prior-retry",
+    include_issue: bool = True,
+    reject_candidate: bool = False,
+    basis: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    finding = {**FINDING, "id": finding_id}
     args = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo)]
     selection = fixture.tmp / "panel-selection.json"
     contract.write_json(
@@ -265,7 +285,12 @@ def complete_run(
     receipt.update(
         run_id=f"critic-native-run-{sequence}",
         session_id=f"critic-native-session-{sequence}",
-        findings=[FINDING],
+        findings=[
+            finding,
+            {**finding, "id": "unsupported", "summary": "Retention consumer duplicates writes."},
+        ]
+        if reject_candidate
+        else [finding],
     )
     contract.write_json(path, receipt)
     assert main(stop["manual_argv"][1:]) == 0
@@ -279,8 +304,12 @@ def complete_run(
     )
     for response in decision["responses"]:
         response["reason"] = "Verified the exact retry and its dependencies."
+        if response["id"] == "unsupported":
+            response.update(
+                decision="reject", reason="The current retention consumer is outside this change."
+            )
     decision["publication_intents"] = [
-        {"finding_id": FINDING["id"], "publication": {"kind": "general", "fix_mode": "patch"}}
+        {"finding_id": finding_id, "publication": {"kind": "general", "fix_mode": "patch"}}
     ]
     contract.write_json(path, decision)
     assert main(stop["manual_argv"][1:]) == 0
@@ -289,6 +318,13 @@ def complete_run(
     stop = output(capsys)
     path = Path(stop["template_path"])
     prose = fill_prose(contract.read_json(path, "prose"))
+    if basis is not None:
+        prose["semver_assessment"].update(
+            basis=basis,
+            fallback_reason=None,
+            release_impact="patch",
+            release_rationale="Backward-compatible correction on the selected maintenance line.",
+        )
     prose["finding_publications"][0].update(
         body="Keep the same retry key."
         if not changed
@@ -296,13 +332,29 @@ def complete_run(
         patch=PATCH,
         patch_reason="The policy file is new and has no existing suggestion anchor.",
     )
-    if not prose["recommended_issues"]:
+    if include_issue and not prose["recommended_issues"]:
         prose["recommended_issues"] = [ISSUE]
-    for assessment in prose["previous_finding_assessments"]:
-        assessment.update(status="active", rationale="Verified against the current snapshot.")
     contract.write_json(path, prose)
     assert main(stop["manual_argv"][1:]) == 0
     capsys.readouterr()
+    if basis is not None:
+        addressed = fixture.tmp / "semver-preserved.json"
+        contract.write_json(
+            addressed, {"summary": "The maintenance-line retry correction is bounded."}
+        )
+        assert (
+            main(
+                [
+                    "record-prose",
+                    "--artifact-root",
+                    stop["artifact_root"],
+                    "--input",
+                    str(addressed),
+                ]
+            )
+            == 0
+        )
+        capsys.readouterr()
     assert main([*args, "--resume"]) == 0
     final = output(capsys)
     assert final["stage"] == "plan_ready", final
@@ -311,6 +363,99 @@ def complete_run(
     assert progress is not None
     _, plan = contract.artifact_payload(Path(progress["plan_path"]), "review_plan")
     return plan
+
+
+def test_run_reuses_rejected_candidate_reason_and_complete_label_form(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    plan = complete_run(fixture, capsys, 1, reject_candidate=True)
+    assert (
+        plan["rejected_candidates"][0]["reason"]
+        == "The current retention consumer is outside this change."
+    )
+    assert plan["rejected_candidates"][0]["finding"]["id"] == "unsupported"
+    assert len(plan["label_review"]["assessments"]) == 4
+    source = plan["review_source"]["run_authoring"]
+    assert all(
+        set(row) == {"name", "status", "rationale"} for row in source["prose"]["label_assessments"]
+    )
+
+
+def test_run_derives_semver_basis_and_accepts_a_semantic_line_choice(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    fixture.config_path.write_text(
+        json.dumps(
+            {
+                **fixture.read_config(),
+                "targetSha": fixture.base_sha,
+                "releases": [
+                    {"tag_name": "v1.0.0", "commit": {"id": fixture.base_sha}},
+                    {"tag_name": "v2.0.0", "commit": {"id": fixture.base_sha}},
+                    {"tag_name": "maintenance-v1.0.0", "commit": {"id": fixture.base_sha}},
+                ],
+            }
+        )
+    )
+    plan = complete_run(
+        fixture, capsys, 1, basis={"name": "maintenance-v1.0.0", "source": "releases"}
+    )
+    assessment = plan["semver_assessment"]
+    assert assessment["mode"] == "release"
+    assert assessment["baseline"] == {
+        "name": "maintenance-v1.0.0",
+        "sha": fixture.base_sha,
+        "source": "releases",
+    }
+    assert assessment["fallback_reason"] is None
+    assert assessment["target_sha"] == fixture.base_sha
+    assert "baseline" not in plan["review_source"]["run_authoring"]["prose"]["semver_assessment"]
+
+
+def test_run_history_is_context_not_required_authorship(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    first = complete_run(fixture, capsys, 1)
+    advance_head(fixture, "base\nreviewed change\nsecond retry\n")
+    second = complete_run(fixture, capsys, 2, finding_id="current-retry", include_issue=False)
+    assert second["findings"][0]["id"] == "current-retry"
+    assert second["finding_publications"][0]["revision"] == 1
+    assert second["recommended_issues"] == []
+    assert second["previous_finding_assessments"] == []
+    assert first["recommended_issues"][0]["id"] == ISSUE["id"]
+    history = second["incremental"]["history_context"]
+    assert history["snapshot"]["head_sha"] == fixture.head_sha
+    assert history["findings"][0]["id"] == FINDING["id"]
+    assert history["decisions"][0]["reason"] == "Verified the exact retry and its dependencies."
+
+
+@pytest.mark.parametrize("history_kind", ["release", "contract"])
+def test_run_incompatible_history_warns_and_finishes_full(
+    fixture: ReviewFixture, capsys: Any, history_kind: str
+) -> None:
+    first = complete_run(fixture, capsys, 1)
+    root = next((fixture.tmp / "state" / "agent-skills" / "gitlab").iterdir())
+    artifacts = {path: path.read_bytes() for path in (root / "artifacts").glob("*/*.json")}
+    advance_head(fixture, "base\nreviewed change\nsecond retry\n")
+    if history_kind == "release":
+        config = fixture.read_config()
+        config["targetSha"] = fixture.base_sha
+        fixture.config_path.write_text(json.dumps(config))
+    else:
+        pointer_path = root / context.BASELINE_NAME
+        pointer = contract.read_json(pointer_path, "baseline")
+        pointer["contract_version"] = 99
+        contract.write_json(pointer_path, pointer)
+    second = complete_run(fixture, capsys, 2, finding_id="current-retry", include_issue=False)
+    assert second["incremental"]["mode"] == "full"
+    history = second["incremental"]["history_context"]
+    if history_kind == "release":
+        assert "release evidence or target branch changed" in history["warnings"]
+        assert history["recommended_issues"] == first["recommended_issues"]
+    else:
+        assert any("contract is incompatible" in warning for warning in history["warnings"])
+    assert second["previous_finding_assessments"] == []
+    assert all(path.read_bytes() == body for path, body in artifacts.items())
 
 
 def advance_head(fixture: ReviewFixture, content: str) -> str:
@@ -324,7 +469,7 @@ def advance_head(fixture: ReviewFixture, content: str) -> str:
     return head
 
 
-def test_full_incremental_run_reconfirms_and_reissues_stable_ids(
+def test_full_incremental_run_does_not_inherit_revisions(
     fixture: ReviewFixture, capsys: Any
 ) -> None:
     first = complete_run(fixture, capsys, 1)
@@ -336,17 +481,20 @@ def test_full_incremental_run_reconfirms_and_reissues_stable_ids(
     advance_head(fixture, "base\nreviewed change\nsecond retry\nthird retry\n")
     third = complete_run(fixture, capsys, 3, changed=True)
     assert third["findings"][0]["id"] == FINDING["id"]
-    assert third["finding_publications"][0]["revision"] == 2
-    assessments = {row["id"]: row for row in third["previous_finding_assessments"]}
-    assert assessments[FINDING["id"]]["status"] == "changed"
-    assert assessments[ISSUE["id"]]["publication_action"] == "no_publication"
+    assert third["finding_publications"][0]["revision"] == 1
+    assert third["previous_finding_assessments"] == []
     assert contract.finding_publications_are_valid(
         third["finding_publications"], require_fixes=True
     )
 
 
 def authored_line_run(
-    fixture: ReviewFixture, capsys: Any, *, before: str = "reviewed change"
+    fixture: ReviewFixture,
+    capsys: Any,
+    *,
+    before: str = "reviewed change",
+    existing_thread: bool = False,
+    multipart: bool = False,
 ) -> tuple[list[str], dict[str, Any], dict[str, Any], Path]:
     args = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo)]
     selection = fixture.tmp / "line-panel.json"
@@ -382,13 +530,17 @@ def authored_line_run(
         {
             "finding_id": FINDING["id"],
             "publication": {
-                "kind": "line",
+                "kind": "existing_thread"
+                if existing_thread
+                else "general"
+                if multipart
+                else "line",
                 "fix_mode": "suggestion",
                 "target": {"path": "review.txt", "before": before},
             },
             "dependencies": {
                 "paths": ["review.txt"],
-                "thread_ids": [],
+                "thread_ids": ["42"] if existing_thread else [],
                 "metadata_fields": [],
                 "ci": False,
             },
@@ -403,10 +555,31 @@ def authored_line_run(
     prose = fill_prose(contract.read_json(path, "prose"))
     prose["checks"] = [f"Inspected CI and retry code on {fixture.head_sha}."]
     prose["semver_assessment"]["sources"] = [f"Policy inspection at {fixture.head_sha}."]
-    prose["finding_publications"][0].update(
-        body="Keep the verified key across retries.",
-        replacement="base\nkeyed retry" if before == "base\nreviewed change" else "keyed retry",
-    )
+    prose["finding_publications"][0]["body"] = "Keep the verified key across retries."
+    if existing_thread:
+        prose["thread_decisions"][0].update(
+            assessment="accepted",
+            outcome="reply",
+            fix_mode="suggestion",
+            proposed_response="Keep the key on the reviewed retry path.",
+            target={"path": "review.txt", "before": before},
+            replacement="base\nkeyed retry" if before == "base\nreviewed change" else "keyed retry",
+        )
+    elif multipart:
+        prose["finding_publications"][0].update(
+            parts=[
+                {"target": {"path": "review.txt", "before": "base"}, "replacement": "safe base"},
+                {
+                    "target": {"path": "review.txt", "before": "reviewed change"},
+                    "replacement": "keyed retry",
+                },
+            ],
+            split_rationale="The independent lines remain valid when applied separately.",
+        )
+    else:
+        prose["finding_publications"][0]["replacement"] = (
+            "base\nkeyed retry" if before == "base\nreviewed change" else "keyed retry"
+        )
     contract.write_json(path, prose)
     assert main(stop["manual_argv"][1:]) == 0
     capsys.readouterr()
@@ -430,7 +603,45 @@ def test_real_run_preserves_a_multiline_goal_through_render_and_apply(
     assert "```suggestion:-1+0\nbase\nkeyed retry\n```" in body
 
 
-def confirm_delta(stop: dict[str, Any], capsys: Any, *, altered: bool = False) -> dict[str, Any]:
+def test_run_derives_multiline_thread_fix_positions_from_semantic_input(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    args, _stop, authored, _receipt = authored_line_run(
+        fixture, capsys, before="base\nreviewed change", existing_thread=True
+    )
+    assert "suggestions" not in authored["thread_decisions"][0]
+    assert main([*args, "--resume"]) == 0
+    final = output(capsys)
+    assert final["stage"] == "plan_ready"
+    progress = context.load_progress(Path(final["artifact_root"]))
+    assert progress is not None
+    _, plan = contract.artifact_payload(Path(progress["plan_path"]), "review_plan")
+    suggestion = plan["thread_decisions"][0]["suggestions"][0]
+    assert suggestion["line"] == 2
+    assert "```suggestion:-1+0\nbase\nkeyed retry\n```" in suggestion["body"]
+
+
+def test_run_addressed_update_preserves_semantic_parts(fixture: ReviewFixture, capsys: Any) -> None:
+    args, stop, authored, _receipt = authored_line_run(fixture, capsys, multipart=True)
+    patch = fixture.tmp / "parts-preserved.json"
+    contract.write_json(patch, {"summary": "Only clarified the summary."})
+    assert (
+        main(["record-prose", "--artifact-root", stop["artifact_root"], "--input", str(patch)]) == 0
+    )
+    capsys.readouterr()
+    state = tail.load(Path(stop["artifact_root"]))
+    assert state is not None
+    parts = state["prose"]["finding_publications"][0]["parts"]
+    assert [(row["target"], row["replacement"]) for row in parts] == [
+        (row["target"], row["replacement"]) for row in authored["finding_publications"][0]["parts"]
+    ]
+    assert main([*args, "--resume"]) == 0
+    assert output(capsys)["stage"] == "plan_ready"
+
+
+def confirm_delta(
+    stop: dict[str, Any], capsys: Any, *, altered: bool = False, thread_response: str | None = None
+) -> dict[str, Any]:
     path = Path(stop["template_path"])
     check = contract.read_json(path, "delta")
     check.update(run_id="delta-native-run", session_id="delta-native-session")
@@ -438,6 +649,19 @@ def confirm_delta(stop: dict[str, Any], capsys: Any, *, altered: bool = False) -
         row.update(
             verdict="confirmed", evidence="Inspected the new delta and the affected consumers."
         )
+        if thread_response is not None and row["id"] == "thread:42":
+            row["evidence"] = (
+                "Read reply 43 and checked the alternate consumer against the unchanged exact head."
+            )
+            row["prose"] = {
+                "thread_decisions": [
+                    {
+                        "id": "42",
+                        "rationale": "The alternate consumer also preserves the retry key.",
+                        "proposed_response": thread_response,
+                    }
+                ]
+            }
         if altered and row["id"] == FINDING["id"]:
             row.update(
                 verdict="changed",
@@ -474,6 +698,170 @@ def test_drift_delta_check_carries_authorship_and_preserves_original_receipt(
     assert plan["finding_publications"][0]["line"] == 3
     assert "Keep the verified key across retries." in plan["markdown"]
     context.reject_visible_raw_refs(plan["markdown"], {"head_sha": fixture.head_sha}, {})
+    for body in plan["publication_preview"]["body_files"]:
+        assert Path(body["path"]).read_text() == body["content"]
+        context.reject_visible_raw_refs(body["content"], {"head_sha": fixture.head_sha}, {})
+
+
+def test_ci_only_drift_checks_ci_without_reanalysing_code(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    fixture.config_path.write_text(
+        json.dumps({**fixture.read_config(), "pipelineStatus": "running"})
+    )
+    args, prose_stop, authored, receipt_path = authored_line_run(fixture, capsys)
+    original = receipt_path.read_bytes()
+    fixture.config_path.write_text(
+        json.dumps({**fixture.read_config(), "pipelineStatus": "success"})
+    )
+    assert main([*args, "--resume"]) == 0
+    stop = output(capsys)
+    assert stop["template_kind"] == "delta"
+    assert stop["scope"]["changed_paths"] == []
+    assert [row["id"] for row in stop["targets"]] == ["ci"]
+    assert confirm_delta(stop, capsys)["status"] == "ok"
+    assert main([*args, "--resume"]) == 0
+    final = output(capsys)
+    assert final["stage"] == "plan_ready"
+    assert receipt_path.read_bytes() == original
+    assert contract.read_json(Path(prose_stop["template_path"]), "prose") == authored
+    progress = context.load_progress(Path(final["artifact_root"]))
+    assert progress is not None
+    _, plan = contract.artifact_payload(Path(progress["plan_path"]), "review_plan")
+    assert plan["verdict"] == "ready"
+
+
+def test_run_addressed_prose_update_keeps_other_rows_and_refuses_unknown_ids(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    args, stop, authored, _receipt = authored_line_run(fixture, capsys)
+    root = Path(stop["artifact_root"])
+    before = (root / tail.NAME).read_bytes()
+    patch = fixture.tmp / "addressed.json"
+    contract.write_json(
+        patch, {"finding_publications": [{"finding_id": "forged", "body": "Replace it."}]}
+    )
+    assert main(["record-prose", "--artifact-root", str(root), "--input", str(patch)]) == 2
+    refusal = output(capsys)
+    assert "finding_publications[*].finding_id" in refusal["error"]["message"]
+    assert (root / tail.NAME).read_bytes() == before
+    contract.write_json(
+        patch,
+        {
+            "summary": "Addressed clarification only.",
+            "label_assessments": [authored["label_assessments"][0]],
+        },
+    )
+    assert main(["record-prose", "--artifact-root", str(root), "--input", str(patch)]) == 0
+    capsys.readouterr()
+    state = tail.load(root)
+    assert state is not None
+    assert len(state["prose"]["label_assessments"]) == 4
+    assert state["prose"]["finding_publications"] == authored["finding_publications"]
+    assert state["prose"]["thread_decisions"] == authored["thread_decisions"]
+    advance_head(fixture, "base\nintro\nreviewed change\n")
+    assert main([*args, "--resume"]) == 0
+    delta = output(capsys)
+    assert confirm_delta(delta, capsys)["status"] == "ok"
+    assert main([*args, "--resume"]) == 0
+    assert output(capsys)["stage"] == "plan_ready"
+
+
+def test_new_comment_is_checked_without_losing_authorship(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    args, prose_stop, authored, receipt_path = authored_line_run(fixture, capsys)
+    original = receipt_path.read_bytes()
+    fixture.config_path.write_text(
+        json.dumps(
+            {
+                **fixture.read_config(),
+                "replies": [
+                    {
+                        "id": 43,
+                        "system": False,
+                        "author": {"username": "other-reviewer"},
+                        "body": "What about the alternate retry consumer?",
+                    }
+                ],
+            }
+        )
+    )
+    assert main([*args, "--resume"]) == 0
+    stop = output(capsys)
+    assert stop["scope"]["changed_paths"] == []
+    assert [row["id"] for row in stop["targets"]] == ["thread:42"]
+    response = "The alternate consumer also keeps the same key across retries."
+    assert confirm_delta(stop, capsys, thread_response=response)["status"] == "ok"
+    assert main([*args, "--resume"]) == 0
+    final = output(capsys)
+    assert final["stage"] == "plan_ready"
+    assert receipt_path.read_bytes() == original
+    updated = contract.read_json(Path(prose_stop["template_path"]), "prose")
+    assert updated["summary"] == authored["summary"]
+    assert updated["finding_publications"] == authored["finding_publications"]
+    assert updated["thread_decisions"][0]["proposed_response"] == response
+
+
+def test_new_delta_finding_needs_only_its_missing_fix_prose(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    args, stop, authored, _receipt = authored_line_run(fixture, capsys)
+    advance_head(fixture, "base\nintro\nreviewed change\n")
+    assert main([*args, "--resume"]) == 0
+    delta = output(capsys)
+    check_path = Path(delta["template_path"])
+    check = contract.read_json(check_path, "delta")
+    check.update(run_id="novel-delta-run", session_id="novel-delta-session")
+    for row in check["checks"]:
+        row.update(verdict="confirmed", evidence="Checked the new scope and affected consumers.")
+    check["new_findings"] = [
+        {
+            **FINDING,
+            "id": "overflow-key",
+            "summary": "The overflow retry loses its key.",
+            "minimum_fix": "Specify a stable overflow key.",
+        }
+    ]
+    check["new_dispositions"] = [
+        {
+            "id": "overflow-key",
+            "decision": "accept",
+            "reason": "Confirmed the added overflow policy gap.",
+            "dependencies": {
+                "paths": ["review.txt"],
+                "thread_ids": [],
+                "metadata_fields": [],
+                "ci": False,
+            },
+            "publication": {"kind": "general", "fix_mode": "patch"},
+        }
+    ]
+    contract.write_json(check_path, check)
+    assert main(delta["manual_argv"][1:]) == 0
+    assert output(capsys)["status"] == "needs_targeted_repair"
+    assert main([*args, "--resume"]) == 0
+    repair = output(capsys)
+    assert repair["template_kind"] == "prose"
+    assert repair["template_path"] == stop["template_path"]
+    prose = contract.read_json(Path(repair["template_path"]), "prose")
+    assert prose["summary"] == authored["summary"]
+    row = next(row for row in prose["finding_publications"] if row["finding_id"] == "overflow-key")
+    row.update(
+        body="Keep a stable key for overflow retries.",
+        patch=PATCH.replace("retry-policy.txt", "overflow-policy.txt"),
+        patch_reason="The policy file is new and has no suggestion anchor.",
+    )
+    contract.write_json(Path(repair["template_path"]), prose)
+    assert main(repair["manual_argv"][1:]) == 0
+    capsys.readouterr()
+    assert main([*args, "--resume"]) == 0
+    final = output(capsys)
+    assert final["stage"] == "plan_ready"
+    progress = context.load_progress(Path(final["artifact_root"]))
+    assert progress is not None
+    _, plan = contract.artifact_payload(Path(progress["plan_path"]), "review_plan")
+    assert {row["id"] for row in plan["findings"]} == {FINDING["id"], "overflow-key"}
 
 
 def test_drift_with_changed_conclusion_and_ambiguous_position_is_addressed_only(

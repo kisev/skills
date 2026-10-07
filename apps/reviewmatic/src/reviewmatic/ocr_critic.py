@@ -90,10 +90,9 @@ def delta_scoped_previous_findings(incremental: dict[str, Any]) -> list[dict[str
         if isinstance(delta, dict)
         else set()
     )
-    findings = incremental.get("previous_findings") if isinstance(incremental, dict) else None
-    publications = (
-        incremental.get("previous_finding_publications") if isinstance(incremental, dict) else None
-    )
+    history = incremental.get("history_context") or {}
+    findings = history.get("findings", incremental.get("previous_findings"))
+    publications = history.get("publications", incremental.get("previous_finding_publications"))
     by_id = {
         str(item.get("finding_id")): item
         for item in cast("list[object]", publications or [])
@@ -210,11 +209,12 @@ def render_ocr_background(
         lines.append("## Previously reported findings")
         lines.append("")
         lines.append(
-            "These findings were reported before the reviewed delta; re-report a finding "
-            "only when the delta changes or invalidates it. Verdicts over previous "
-            "findings belong to the arbitrator."
+            "These findings are advisory context from a previous snapshot, not required "
+            "runbook entries. Report every currently observed problem even if it appeared "
+            "before; do not copy historical IDs or infer that an old verdict remains true."
         )
         lines.append("")
+
         for finding in previous_findings:
             if not isinstance(finding, dict):
                 continue
@@ -222,6 +222,24 @@ def render_ocr_background(
                 f"- {finding.get('id')} ({finding.get('severity')}): {finding.get('summary')}"
             )
         lines.append("")
+
+    history = payload.get("history_context")
+    if isinstance(history, dict):
+        lines.extend(
+            [
+                "## Advisory review history",
+                "",
+                (
+                    "Previous snapshot, findings, reasons, and decisions are consultation only. "
+                    "Do not synchronize ledgers, identities, revisions, or publications."
+                ),
+                "",
+                "```json",
+                json.dumps(history, ensure_ascii=False, sort_keys=True, indent=2),
+                "```",
+                "",
+            ]
+        )
 
     identity = package_digest[:16] + (
         f"-{contract.digest(previous_findings)[:16]}" if previous_findings else ""

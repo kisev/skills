@@ -882,3 +882,26 @@ def test_run_composes_ocr_into_an_incremental_review(
     rendered = "\n".join(path.read_text(encoding="utf-8") for path in ocr_background_files)
     assert "## Previously reported findings" in rendered
     assert "- docs-1 (low): Retry documentation omits the idempotency key" in rendered
+    assert "## Advisory review history" in rendered
+    assert "Do not synchronize ledgers" in rendered
+    assert incremental["previous_findings"] == []
+    assert incremental["history_context"]["findings"][0]["id"] == "docs-1"
+    decision = contract.read_json(Path(waiting["template_path"]), "decision template")
+    decision.update(run_id="arb-run-2", session_id="arb-session-2")
+    for response in decision["responses"]:
+        response["reason"] = "Checked the current retry policy and complete discussion."
+    contract.write_json(Path(waiting["template_path"]), decision)
+    _run_manual(capsys, waiting["manual_argv"])
+    assert cli_main([*base, "--resume", "--json"]) == 0
+    prose_stop = _stdout_json(capsys)
+    prose_path = Path(prose_stop["template_path"])
+    prose = contract.read_json(prose_path, "prose")
+    contract.write_json(prose_path, render.prose_projection(empty_content(prose)))
+    _run_manual(capsys, prose_stop["manual_argv"])
+    assert cli_main([*base, "--resume", "--json"]) == 0
+    final = _stdout_json(capsys)
+    assert final["stage"] == "plan_ready"
+    _, plan = contract.artifact_payload(Path(str(_progress(root, "plan_path"))), "review_plan")
+    assert plan["findings"] == []
+    assert plan["previous_finding_assessments"] == []
+    assert (root / "runbook.md").is_file()

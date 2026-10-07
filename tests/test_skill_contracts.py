@@ -612,7 +612,10 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     for marker in (
         "local-review.md",
         "delta-triggered scope",
-        "Revalidate every previously accepted finding",
+        "replaces mandatory",
+        "historical synchronization",
+        "incremental.history_context",
+        "currently observed defect",
         "independent critic",
     ):
         assert marker in incremental
@@ -631,6 +634,7 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
     ):
         assert marker in publication
     assert "Local WIP always receives" not in incremental
+    assert "Revalidate every previously accepted finding" not in incremental
     author_snapshot = (
         (ROOT / "tests/fixtures/code-review/author-chat.snapshot.md")
         .read_text(encoding="utf-8")

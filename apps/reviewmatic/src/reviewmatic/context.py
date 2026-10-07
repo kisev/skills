@@ -562,7 +562,7 @@ def incremental_context(
         "metadata_fields": [],
         "pipelines_changed": False,
     }
-    empty = {
+    empty: dict[str, Any] = {
         "contract_version": INCREMENTAL_CONTRACT_VERSION,
         "requested": requested,
         "mode": "full",
@@ -590,16 +590,49 @@ def incremental_context(
         "incremental_delta_digest": portable.digest(empty_delta),
         "critic_required": False,
         "fallback_reasons": [baseline_state_error] if baseline_state_error else [],
+        "history_context": {
+            "policy": "advisory",
+            "snapshot": None,
+            "findings": [],
+            "publications": [],
+            "recommended_issues": [],
+            "rejected_candidates": [],
+            "decisions": [],
+            "warnings": [baseline_state_error] if baseline_state_error else [],
+        },
     }
     if requested == "off" or baseline_state_error:
         return empty
     try:
         baseline = baseline_pointer(root)
         if baseline is None:
+            empty["history_context"]["warnings"].append("no previous finalized review is available")
             return empty
         pointer, plan = baseline
+        history = cast("dict[str, Any]", empty["history_context"])
+        history.update(
+            snapshot={
+                "plan_digest": pointer["plan_digest"],
+                "evidence_digest": plan.get("evidence_digest"),
+                "context_digest": plan.get("context_digest"),
+            },
+            findings=plan.get("findings", []),
+            publications=plan.get("finding_publications", []),
+            recommended_issues=plan.get("recommended_issues", []),
+            rejected_candidates=plan.get("rejected_candidates", []),
+        )
+        try:
+            _, previous_decision = artifact_for_digest(
+                root, "review_decision", plan.get("decision_digest")
+            )
+            history["decisions"] = previous_decision.get("responses", [])
+        except portable.WorkflowError as exc:
+            history["warnings"].append(f"previous decisions unavailable: {exc}")
         _, old_evidence = artifact_for_digest(
             root, "evidence_snapshot", plan.get("evidence_digest")
+        )
+        history["snapshot"].update(
+            {key: old_evidence.get(key) for key in ("head_sha", "base_sha", "start_sha")}
         )
         _, old_context = artifact_for_digest(root, "review_context", plan.get("context_digest"))
         failures: list[str] = []
@@ -652,6 +685,7 @@ def incremental_context(
                 if merge_base.lower() != old_head.lower():
                     failures.append("current head is not a descendant of the baseline head")
         if failures:
+            history["warnings"].extend(failures)
             return {
                 **empty,
                 "reason": "incremental review requires a full-review fallback",
@@ -733,6 +767,10 @@ def incremental_context(
             "merge_commit_sha",
             "squash_commit_sha",
             "_links",
+            "pipeline",
+            "head_pipeline",
+            "latest_build_started_at",
+            "latest_build_finished_at",
         }
         metadata_keys = sorted((set(old_object) | set(current_object)) - ignored_metadata)
         metadata_fields = [
@@ -760,25 +798,6 @@ def incremental_context(
             "metadata_fields": metadata_fields,
             "pipelines_changed": pipelines_changed,
         }
-        finding_ledger = cast("list[dict[str, Any]]", plan.get("finding_ledger", []))
-        previous_findings = [
-            cast("dict[str, Any]", item["record"])["finding"]
-            for item in finding_ledger
-            if item.get("kind") == "finding"
-        ]
-        previous_finding_publications = [
-            cast("dict[str, Any]", item["record"])["publication"]
-            for item in finding_ledger
-            if item.get("kind") == "finding"
-        ]
-        previous_recommended_issues = [
-            cast("dict[str, Any]", item["record"])["issue"]
-            for item in finding_ledger
-            if item.get("kind") == "issue"
-        ]
-        rejected_candidates = cast(
-            "list[dict[str, Any]]", plan.get("rejected_candidate_ledger", [])
-        )
         return {
             **empty,
             "mode": "incremental" if changed else "unchanged",
@@ -790,21 +809,12 @@ def incremental_context(
                 "plan_digest": pointer["plan_digest"],
                 "state_digest": baseline_state_digest,
             },
-            "previous_findings": previous_findings,
-            "previous_finding_publications": previous_finding_publications,
-            "previous_recommended_issues": previous_recommended_issues,
-            "previous_finding_ledger": finding_ledger,
-            "previous_publication_ledger": [],
-            "previous_thread_decisions": plan.get("thread_decisions", []),
-            "previous_rejected_candidates": rejected_candidates,
-            "reconsidered_rejected_candidates": [
-                item for item in rejected_candidates if rejected_candidate_is_affected(item, delta)
-            ],
             "incremental_delta": delta,
             "incremental_delta_digest": portable.digest(delta),
             "critic_required": changed,
         }
     except portable.WorkflowError as exc:
+        empty["history_context"]["warnings"].append(str(exc))
         return {
             **empty,
             "reason": "incremental review requires a full-review fallback",
@@ -2673,7 +2683,7 @@ def structured_publication_preview(
         thread: dict[str, Any] | None = None,
     ) -> None:
         mutation_value = mutation if mutation is not None else {}
-        body = f"{re.sub(r'\s+$', '', raw_body)}\n"
+        body = f"{re.sub(r'\s+$', '', render.copied_presentation(raw_body, evidence, context))}\n"
         identity_digest = hashlib.sha256(publication_id.encode()).hexdigest()[:12]
         content_digest = hashlib.sha256(body.encode()).hexdigest()[:12]
         destination = str(body_directory / f"{identity_digest}-{content_digest}.md")
@@ -3958,6 +3968,17 @@ def raw_ref_sources(
                 if isinstance(value, str) and len(value) >= 12
             )
         incremental = context.get("incremental")
+        history_snapshot = (
+            (incremental.get("history_context") or {}).get("snapshot")
+            if isinstance(incremental, dict)
+            else None
+        )
+        if isinstance(history_snapshot, dict):
+            sources.extend(
+                (value, f"history snapshot {name}")
+                for name, value in history_snapshot.items()
+                if name.endswith("_sha") and isinstance(value, str) and len(value) >= 12
+            )
         delta = incremental.get("incremental_delta") if isinstance(incremental, dict) else None
         if isinstance(delta, dict):
             sources.extend(
@@ -4665,10 +4686,17 @@ def scaffold_review(
             else f"Merge verdict: {MERGE_VERDICT_LABELS[merge_verdict]} — {merge_verdict_rationale}"
         )
     metadata = metadata_assessment(evidence, content["mr_metadata_assessment"])
+    visible_context = {
+        **context,
+        "historical_refs": [
+            *(draft or {}).get("source", {}).get("run_authoring", {}).get("historical_heads", []),
+            *(draft or {}).get("source", {}).get("run_authoring", {}).get("historical_refs", []),
+        ],
+    }
     publication, enriched_publications, enriched_issues, enriched_threads = (
         structured_publication_preview(
             evidence,
-            context,
+            visible_context,
             root,
             findings,
             finding_publications,
@@ -4691,13 +4719,6 @@ def scaffold_review(
         "recommended_issues": enriched_issues,
         "thread_decisions": enriched_threads,
         **({"review_source": draft["source"]} if draft is not None and draft.get("source") else {}),
-    }
-    visible_context = {
-        **context,
-        "historical_refs": (draft or {})
-        .get("source", {})
-        .get("run_authoring", {})
-        .get("historical_heads", []),
     }
     markdown = review_markdown(
         render.copied_presentation(evidence, evidence, visible_context),
@@ -5104,7 +5125,7 @@ def content_template(
                 "id": item_id,
                 "source": "primary" if item_id in primary_by_id else "critic",
                 "finding": finding,
-                "reason": "",
+                "reason": response["reason"],
                 "paths": [],
                 "thread_ids": [],
                 "metadata_fields": [],

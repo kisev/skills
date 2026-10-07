@@ -389,7 +389,10 @@ def ocr_background(review_context: dict[str, Any]) -> dict[str, Any]:
                 ),
             }
         )
-    return {"thread_registry": threads}
+    return {
+        "thread_registry": threads,
+        "history_context": (review_context.get("incremental") or {}).get("history_context"),
+    }
 
 
 def run_ocr_critic(

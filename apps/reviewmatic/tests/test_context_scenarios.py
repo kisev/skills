@@ -708,32 +708,7 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
     incremental_content["thread_decisions"][0]["thread_sha256"] = template_content2[
         "thread_decisions"
     ][0]["thread_sha256"]
-    incremental_content["previous_finding_assessments"] = [
-        {
-            "id": "primary-1",
-            "kind": "finding",
-            "status": "active",
-            "previous_status": "Active",
-            "current_status": "Active",
-            "rationale": "The unchanged diff still contains the retry defect.",
-            "action": "Monitor the existing discussion.",
-            "publication_action": "no_publication",
-            "publication_body": None,
-            "critic_required": False,
-        },
-        {
-            "id": "issue-1",
-            "kind": "issue",
-            "status": "active",
-            "previous_status": "Active",
-            "current_status": "Active",
-            "rationale": "The recommended issue is already published.",
-            "action": "No further publication is required.",
-            "publication_action": "no_publication",
-            "publication_body": None,
-            "critic_required": False,
-        },
-    ]
+    incremental_content["previous_finding_assessments"] = []
     incremental_file = fixture.tmp / "review-content-incremental.json"
     incremental_file.write_text(json.dumps(incremental_content))
     plan2 = review_context.scaffold_review(
@@ -743,17 +718,29 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
     actions2 = contract.read_json(Path(str(plan2["artifact_path"])), "review plan")["payload"][
         "publication_preview"
     ]["actions"]
-    assert all(item.get("publication_id") not in {"issue-1", "primary-1"} for item in actions2), (
-        "a published issue and a no_publication finding must not be re-created"
+    assert any(item.get("publication_id") == "primary-1" for item in actions2), (
+        "a confirmed current finding receives its own action independently of history"
     )
     assert any(item["kind"] == "thread" and item["operation"] == "resolve" for item in actions2)
 
     updated_issue = copy.deepcopy(incremental_content)
-    updated_issue["previous_finding_assessments"][1]["publication_action"] = "update_issue"
-    updated_issue["previous_finding_assessments"][1]["publication_body"] = (
-        "Add the observed terminal metric to the published issue."
-    )
-    with pytest.raises(contract.WorkflowError, match=r"cannot be updated"):
+    updated_issue["previous_finding_assessments"] = [
+        {
+            "id": "issue-1",
+            "kind": "issue",
+            "status": "active",
+            "previous_status": "active",
+            "current_status": "changed",
+            "rationale": "The proposal changed.",
+            "action": "Update the proposal.",
+            "publication_action": "update_issue",
+            "publication_body": "Update the proposal.",
+            "critic_required": False,
+        }
+    ]
+    with pytest.raises(
+        contract.WorkflowError, match=r"every previous finding and issue requires one assessment"
+    ):
         review_context.scaffold_review(
             evidence_path2,
             str(context2["artifact_path"]),

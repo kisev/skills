@@ -751,7 +751,8 @@ def test_render_ocr_background_renders_previous_findings_deterministically(
     rendered = first.read_text(encoding="utf-8")
     assert "## Previously reported findings" in rendered
     assert "- docs-1 (low): Retry lacks the key." in rendered
-    assert "Verdicts over previous findings belong to the arbitrator" in rendered
+    assert "advisory context from a previous snapshot" in rendered
+    assert "Report every currently observed problem" in rendered
     # The identity digest accounts for the parameter: different sets never
     # share a file, and the plain render keeps its own name.
     plain = ocr_critic.render_ocr_background(PACKAGE, tmp_path, "b" * 64)

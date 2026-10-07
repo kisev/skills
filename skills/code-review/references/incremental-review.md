@@ -1,152 +1,94 @@
 # Incremental GitLab review
 
-This document describes incremental review of one exact GitLab MR. Local WIP
-uses its own snapshot and decision ledger in `local-review.md`.
+This contract covers one exact GitLab MR. Local WIP follows `local-review.md`.
 
-## Selection
+## Selection and fallback
 
-After `prepare`, run `context` with `--incremental auto` by default. Pass
-`--incremental off` only when the user explicitly asks for no incremental
-review, asks to start from scratch, or says to ignore the previous review. The
-phrase "full review" alone does not disable incremental review and may describe
-depth instead.
+The primary `reviewmatic run` uses `--incremental auto`. Use `--incremental off`
+only when the user asks to start from scratch or ignore the previous review.
+"Full review" alone can describe depth and does not disable delta analysis.
 
-The first review after this contract is installed is full. Existing legacy
-artifacts are not imported. A successful `scaffold-review` atomically publishes
-the latest immutable plan as the only baseline for that MR.
+An eligible finalized snapshot supplies the comparison boundary for incremental
+analysis, including OCR. Target identity, authenticated user, role, complete evidence, compatible
+contracts, unchanged base/start refs, and verified head ancestry must match.
+Changed refs, incompatible or unavailable history, removed discussions/notes,
+or unavailable local objects select full analysis with `fallback_reasons`.
+Incomplete **current** evidence still blocks completion.
 
-Incremental review is independent of `fast`, `normal`, and `deep`. When a
-compatible baseline and changed current evidence exist, use mode `incremental`
-and do not ask for a depth. Full-review depth selection applies only when no
-incremental review is available.
+History and delta eligibility are separate. `incremental.history_context` gives
+critics and the arbitrator previous findings, proposed issues, rejected candidates,
+decision reasons, and their snapshot bindings as advisory context. Missing or
+incompatible history produces warnings, not a mandatory repair of old artifacts.
+Never delete or rewrite historical artifacts to make a new review pass.
 
-## Eligibility and fallback
+## Current analysis and independent runbook
 
-Use the baseline only when all of these hold:
+Use a delta-triggered scope. Start from `incremental.incremental_delta`: changed code paths, discussions,
+standalone notes, metadata, label catalog, and CI are distinct inputs. Inspect
+unchanged callers, consumers, configuration, and contracts where needed to prove
+the delta's effects. Do not repeat the complete historical diff without a reason.
+Read complete current conversations, including resolved threads and replies.
+Thread closure, approval, green CI, and "Fixed" do not prove correctness.
 
-- exact GitLab target, authenticated user, and review role match;
-- baseline evidence and context are complete and finalized;
-- incremental contract versions are compatible;
-- base and start refs are unchanged;
-- a changed head descends from the baseline head;
-- current evidence, discussions, notes, and local Git objects are complete.
+Each run builds a standalone current-snapshot runbook. This replaces mandatory
+historical synchronization: no transfer of all findings or issues, stable old IDs,
+historical revisions, `update_issue`, previous-finding assessments, or cumulative
+ledger coverage is required. A previous proposal absent from current analysis
+does not enter the new plan. Report a currently observed defect even if the same
+problem was reported before, including when its current ID differs.
 
-Changed base/start refs, non-ancestor history, missing or tampered state,
-incompatible contracts, removed baseline discussions or notes, and incomplete
-evidence select a full review. This is a normal safe fallback, not permission to
-reuse part of an incompatible result.
+A changed incremental review uses the selected independent panel. Each required
+independent critic supplies a fresh receipt. The panel uses fresh
+receipts bound to the delta digest. Model critics and the arbitrator receive
+current snapshot paths and advisory history. OCR reviews `from_head..head` and
+receives the same history with the previous findings touching changed paths in
+its background. Historical IDs in its receipt describe consultation coverage,
+not mandatory entries in the current runbook. Only a background above the OCR
+CLI limit excludes that engine. If a required critic is unavailable, block the
+current review without replacing the previous result.
 
-If code is unchanged but discussions, standalone notes, metadata, the complete
-project/inherited label catalog, or CI changed, run an incremental review of
-those changes. If nothing changed, omit the critic but still create a fresh plan
-after reading every open and resolved discussion and every reply. Never treat an
-unchanged diff as permission to reuse the previous thread decisions.
+When nothing changed, preserve mode `unchanged`, omit the panel, and produce a
+fresh decision and runbook from the current conversation audit. Never replay an
+old plan or its publication commands as a new result.
 
-## Scope
+## Authorship and freshness within a run
 
-Start technical analysis from `incremental.incremental_delta.changed_paths`, changed
-discussions and notes, changed metadata fields, and CI changes. This is a
-delta-triggered scope, not a changed-files-only boundary: inspect unchanged
-callers, consumers, configuration, and contracts when the delta can affect them.
-Do not repeat analysis of the complete historical MR diff.
+The normal tail is recorded decision, missing prose/semantic choices, then
+finalization through `run`. Return a prepared `finding_id` unchanged. Do not create
+or reconstruct machine identities, positions, ranges, bindings, or stamps.
+Unknown, duplicate, or substituted identifiers are refused. A semantic source
+target `{path,before}` plus `replacement` supports ordinary multiline fixes.
+Use structural repair only for a structural change, not for multiline text.
 
-Fetch and snapshot all current discussions and notes for freshness. Deeply read
-every complete conversation on every invocation, including resolved threads and
-unchanged replies. Do not trust `resolved=true`, an approval, green CI, or a
-short "Fixed" response as proof.
+The runtime derives the SemVer basis and bindings from complete catalogs and
+local Git proof. Address only missing policy and impact judgments. A fallback
+names the unavailable proof. Label input rows contain exactly
+`{name,status,rationale}` and retain the complete catalog. Recorded rejected
+candidates reuse their decision reason and source binding, with no repeated
+authorship or invented rationale for a validator.
 
-## Previous findings
+Resume retains filled prose. Drift checkpoints original decisions and receipts
+without replacing their digests. Pipeline completion with unchanged code asks
+for current CI assessment, not a fresh code analysis. Changed discussions require
+substantive conversation checks. Head drift requires delta and affected-conclusion
+verification, preserving ready authorship. Position mapping is not proof of truth.
+Unverified current evidence or ambiguous targets remain blocking and return a
+specific field and correction action, not an instruction to rewrite the panel.
 
-Revalidate every previously accepted finding and recommended issue against the
-current code and complete relevant conversation. Give each exactly one current
-status:
+## Publication and compatibility
 
-- `active`: still valid without a changed publication body;
-- `fixed`: the current MR removes the problem;
-- `withdrawn`: current evidence or an accepted discussion decision invalidates
-  the finding;
-- `changed`: the same underlying finding needs revised evidence or publication
-  text;
-- `unverified`: current evidence cannot confirm or reject it.
+Follow-ups remain proposals. Determine whether a current action is already
+published by reading current GitLab discussions, notes, and issues, never from
+local command markers or an old runbook. Publication stays manual under
+`publication.md`, with no automatic replay or publication receipt.
 
-An `unverified` previous finding prohibits a ready verdict. `active`, `changed`,
-and `unverified` findings remain in the current finding set with the same stable
-ID. `fixed` and `withdrawn` findings leave the active set but remain in the
-previous-finding table. Reconsider a previously rejected critic candidate or
-false positive only when the delta or discussion changes its evidence.
+Original evidence remains private JSON. User-facing copied text hides known
+current and historical SHA tokens while preserving immutable revision links,
+executable positions, and fix code. Contracts 1 through 6 remain readable as
+history and select full analysis instead of being migrated or executed.
+Release/tag or target changes can invalidate the delta basis and require full
+analysis. A next-release estimate needs current proof, not just an unchanged MR.
 
-Each previous-finding assessment also records `critic_required`. It is mandatory
-for `changed` and `unverified`, and for any other status the reviewer considers
-disputed. The incremental critic receipt includes all such IDs in
-`target_finding_ids`.
-
-An incremental OCR critic covers exactly the previously reported findings
-rendered into its background: those whose previous publication position or
-patch text references a changed path of the delta. Previous findings without a
-delta intersection are not re-targeted at the critic — they stay with the
-arbitrator's previous-finding assessments, where their verdicts live.
-
-Keep every accepted finding and recommended issue in the cumulative private
-ledger after it becomes fixed or withdrawn. Preserve its stable ID, latest
-revision, record, and status so a later reintroduction is assessed as `changed`
-rather than becoming a new finding.
-
-Keep rejected primary and critic candidates in a separate private ledger with
-their source, complete finding, rejection reason, and path, thread, metadata, and
-CI dependencies. When the incremental delta touches a dependency, assess the
-candidate as `still_rejected` or `promoted`; a promoted candidate must appear in
-the accepted finding set.
-
-Do not inherit a previous verdict, approval, thread decision, publication body,
-or label decision. Recalculate the overall necessity, relevance, architecture,
-SemVer, exhaustive label applicability and delta, metadata assessment, and
-verdict from the baseline plus current evidence.
-
-## Critic
-
-A changed incremental review requires an independent critic whose receipt binds
-the incremental-delta digest. Give the critic the delta and the unchanged
-consumers required to evaluate it, but not the primary review's previous
-findings. The primary reviewer revalidates previous findings. Ask for a targeted
-critic check only when a previous finding becomes changed or disputed.
-
-If an independent critic is unavailable, block the result and do not replace the
-baseline. A no-op review needs no critic.
-
-## Stable IDs and publication
-
-New findings and recommended issues start at revision 1. An unchanged active
-finding keeps its revision; changing `fix_mode`, suggestion content, patch
-content, or publication prose advances it. Thread replies use a stable ID
-derived from the root note and advance the revision for each new prepared reply.
-Reassess every closed thread regardless of its author or resolver. Explicitly
-choose `no_publication` after verifying an existing explanation or applied
-suggestion when a reply adds nothing. Reopen a confirmed remaining problem with
-a contextual reply and validated fix.
-
-If a prior finding was not published, revalidate it and include its current body
-in the new plan. Determine whether it is already published only by reading the
-current GitLab discussions, notes, and project issues authored by the current
-`glab` user and comparing their meaning to the finding. A post-success XDG marker
-may show that the exact command exited zero locally, but it is not publication
-state: refresh GitLab before deciding whether to suppress or repeat the action.
-Do not treat confirmation receipts or command history as publication evidence.
-New publication commands follow the direct manual flow in
-`references/publication.md`. The user checks GitLab and chooses repetition;
-there is no publication receipt, replay gate, or automatic result verification.
-
-The baseline pointer, exact refs, delta, and previous findings remain private
-technical JSON. User-facing reports omit raw SHAs. A prior manual command never
-authorizes a changed publication or label delta.
-Review-contract 1 through 6 plans remain readable as history, but
-their old guarded commands are not executed by the current runtime.
-They cannot be reused incrementally as a contract-7 baseline;
-context selection falls back to a full review instead.
-Old guarded commands are historical only and are never replayed. New plans
-contain direct manual `glab` commands; no publication receipt or marker is needed.
-Targeted repair and evidence refresh follow `references/repair.md`.
-
-Release/tag catalogs and the current target revision are part of the context
-fingerprint. A change to this evidence forces full review even if the MR head
-is unchanged. Reassess release policy and both SemVer impacts on every run;
-never reuse a next-release estimate solely because the MR diff is unchanged.
+Measure live tail duration, refusals, and repeated cycles separately. Green
+offline tests do not prove the live target of at most 15 minutes and never justify
+less analysis.

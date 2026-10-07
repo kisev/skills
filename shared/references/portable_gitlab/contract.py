@@ -1462,8 +1462,16 @@ def incremental_review_is_valid(value: object) -> bool:
         "critic_required",
         "fallback_reasons",
     }
-    if not isinstance(value, dict) or set(value) != required:
+    if not isinstance(value, dict) or set(value) - {"history_context"} != required:
         return False
+    if "history_context" in value:
+        schema = artifact_schema()
+        if not schema_valid(
+            schema["$defs"]["incremental_review"]["properties"]["history_context"],
+            value["history_context"],
+            schema,
+        ):
+            return False
     mode = value["mode"]
     delta = value["incremental_delta"]
     baseline = value["incremental_baseline"]

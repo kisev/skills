@@ -19,8 +19,15 @@ globally is automatically the correct baseline. Do not treat a tag as published
 unless the project's release policy establishes that meaning. An upcoming
 release, draft, failed publication, or unrelated component tag is not a baseline.
 
-Select the latest confirmed publication on the relevant line. Record its name,
-exact commit, and catalog source (`releases` or `tags`) in `baseline`. Explain
+Select the latest confirmed publication on the relevant line. In the primary
+prose surface the runtime prepares `baseline` and exact bindings. If the policy
+requires a different collected publication, send only
+`semver_assessment.basis: {name,source}` with source `releases` or `tags`.
+The runtime verifies the catalog and derives the commit. Never reconstruct
+`baseline`, `target_sha`, or other bindings. Its default stable-version candidate
+still needs the agent's publication-policy and relevant-line check. Use `basis=null`
+for an explicit target fallback when publication policy does not establish a
+usable release, and explain that in `fallback_reason`. Explain
 the policy, line selection, and publication evidence in `policy` and cite the
 inspected paths/revisions and publication records in `sources`. Catalog metadata
 alone does not establish publication when CI or project rules say otherwise.

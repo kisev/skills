@@ -480,10 +480,8 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
     context2_document = contract.read_json(Path(context2["artifact_path"]), "review context")
     context2_payload = context2_document["payload"]
     assert context2_payload["incremental"]["mode"] == "unchanged"
-    assert [item["id"] for item in context2_payload["incremental"]["previous_findings"]] == [
-        "primary-1"
-    ]
-    assert [
-        item["id"] for item in context2_payload["incremental"]["previous_recommended_issues"]
-    ] == ["issue-1"]
+    history = context2_payload["incremental"]["history_context"]
+    assert [item["id"] for item in history["findings"]] == ["primary-1"]
+    assert [item["id"] for item in history["recommended_issues"]] == ["issue-1"]
+    assert context2_payload["incremental"]["previous_findings"] == []
     assert "finalize" in context2["next_action"]["command"]

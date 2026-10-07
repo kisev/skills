@@ -15,7 +15,7 @@ Input is one exact MR URL or current local WIP. The Python `reviewmatic` runtime
 produces immutable evidence and decisions, a compact role-aware assessment, and
 `runbook.md`. The portable archive contains authored instructions and materialized
 references, not an embedded executable. Reviewer findings remain out of chat.
-The runbook contains findings, compact previous-finding dispositions, metadata,
+The runbook contains current findings and proposals, metadata,
 label delta, SemVer, validated fixes, body previews, and direct manual commands.
 Detailed history and exhaustive label decisions remain in private JSON.
 The input package separately supplies the exact draft schema and valid field
@@ -70,8 +70,8 @@ to an exact SHA before starting and verifies the pin with that single call. A
 resumed `--participants` answer replaces the recorded panel only while no
 critic receipt is bound; with bound receipts it is refused loudly with the
 bound names and the honest path. The panel poll renders after the mode and
-background resolve: an incremental review and a background above the OCR CLI
-limit each exclude the OCR engine with the reason, the same offline render
+background resolve: only a background above the OCR CLI limit excludes the
+OCR engine with the reason. Incremental review retains the delta-scoped engine. The same offline render
 measures the size the critic would run, the CLI invocation prefights the
 limit before spawning, and the verbatim locale-keyed poll text plus its fixed
 glossary are presented word for word. Tail refusals name the rule, the
@@ -236,8 +236,8 @@ only, never answers critic-assigned questions, and in incremental reviews runs
 scoped to the `from_head..head` delta: the receipt binds the incremental delta
 digest and `target_finding_ids` names exactly the previously reported findings
 rendered into its background (those whose previous publication position or
-patch intersects the changed paths; the rest stay with the arbitrator's
-previous-finding assessments), so with no model critic selected the arbitrator resolves every
+patch intersects the changed paths, as consultation coverage without mandatory
+historical dispositions), so with no model critic selected the arbitrator resolves every
 assigned question through `question_verifications`. When every selected receipt is imported, the runtime shall
 return the ready arbitrator task with a complete arbitration input — the
 package binding, every critic receipt verbatim, and the reported
@@ -381,12 +381,24 @@ require a recorded repair kind.
 The primary `run` tail shall invoke this renderer after recording the decision
 and expose `content-prose-<digest>.json` applied through `record-prose`. Normal
 completion shall not require structural `scaffold-review` input. Canonical
-v2 decisions shall exclude authoring-only intent fields. Re-confirmed prior
-findings and proposals shall retain stable IDs and revisions; changed content
-shall derive one revision increment from the finalized baseline through the
-same materialization functions as validation. Published follow-ups remain
-proposals: the runtime shall derive `no_publication`, never an unsupported
-issue-update action requiring the agent to guess `update_issue` semantics.
+v2 decisions shall exclude authoring-only intent fields. Each new runbook shall
+stand on the current snapshot without inherited IDs, historical revisions,
+required proposal carryover, previous-finding assessments, or ledger coverage.
+This replaces mandatory historical synchronization. Historical artifacts shall
+remain immutable. Optional `incremental.history_context` shall expose previous
+findings, reasons, decisions, proposals, and rejected candidates with snapshot
+bindings to critics and arbitration. Unavailable or incompatible history shall
+warn without blocking a complete current review. Follow-ups shall remain
+proposals without an `update_issue` action.
+
+Every generated prose row shall match its accepted input. Prepared `finding_id`
+handles shall be returned unchanged, with unknown, duplicate, or substituted
+identities refused. The runtime shall derive SemVer bases and bindings from
+catalog and local Git proof. Policy-specific selection shall accept a collected
+`{name,source}` handle and derive its SHA. Missing proof shall have an addressed
+fallback, never a guessed basis. Labels shall retain exhaustive catalog coverage
+as `{name,status,rationale}`. Recorded rejected-candidate decisions shall supply
+their existing reasons and source bindings without repeated authorship.
 
 Re-anchor shall preserve the original decision, panel receipts, and authored
 prose as private history. New evidence shall receive a separate delta check
@@ -395,7 +407,9 @@ changed paths, affected conclusions and dependencies, conversation and
 metadata changes, and current CI. Source-location mapping shall establish only
 a position, never factual confirmation. Each affected conclusion shall be
 confirmed, refuted, revised, or explicitly not verified with evidence; unresolved
-results shall block completion and request addressed work. Confirmed authorship
+results shall block completion and request addressed work. Pipeline completion
+without code change shall update CI assessment without requiring code analysis.
+New conversations shall receive substantive checks. Confirmed authorship
 shall carry automatically; refuted or changed conclusions shall revise only
 their affected judgments and fixes. New delta findings shall need addressed
 dispositions without restarting the complete review. Old receipt digests shall
@@ -404,13 +418,13 @@ separate delta verification with the original artifacts retained as provenance.
 Validated rendered drafts shall checkpoint into this same run tail; unfinished
 prose shall refuse checkpointing without discarding authorship. Rendering shall
 scrub current and historical SHA tokens from the copied Markdown/chat
-presentation, including critic, CI, and SemVer text, retaining original private
+presentation and machine-copyable body files, including critic, CI, and SemVer text, retaining original private
 evidence, immutable links, and executable fix code.
 
 Incremental analysis shall follow changed code, conversations, metadata, and CI,
-including affected unchanged consumers. Previous accepted findings and recommended
-issues retain stable IDs and explicit current dispositions; rejected candidates
-are reconsidered only when dependencies change. Changed comparison boundaries,
+including affected unchanged consumers and OCR over the delta. Analysis scope
+shall not imply runbook inheritance. A current problem shall remain reportable
+even when history contains it under another ID. Changed comparison boundaries,
 rewritten history, incompatible or incomplete state select a full review.
 `refresh-review` shall preserve findings and dispositions rather than start an
 empty draft; a panel plan keeps its selected participants without receipt

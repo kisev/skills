@@ -37,6 +37,35 @@ This rebuilds the runtime but keeps the XDG state. To regenerate a runbook after
 a repair, run `repair-review` through that same `uvx --from` source, then run
 the returned `finish-review` continuation through the same source.
 
+## Review the current snapshot
+
+Use `reviewmatic run --url <mr-url> --repo-root <checkout>` and follow its printed
+commands. After the recorded decision, fill missing prose and semantic choices
+in the returned file, apply it with `record-prose`, and resume the same run.
+Keep prepared `finding_id` values unchanged. Positions, suggestion ranges,
+bindings, patch digests, and revisions belong to the runtime. Ordinary multiline
+fixes use an exact source target and replacement text, without structural repair.
+
+Each runbook stands on the current snapshot. Previous findings, reasons, and
+decisions are advisory `history_context`, with snapshot bindings and warnings.
+They do not require old IDs, issue carryover, revision inheritance, `update_issue`,
+or ledger synchronization. An eligible prior snapshot still enables delta
+analysis, including OCR. An unusable baseline selects full analysis with a reason.
+Incomplete current evidence remains blocking.
+
+The runtime prepares the SemVer basis from catalog and local Git evidence. To
+select a policy-specific publication, use `semver_assessment.basis: {name,source}`
+from the collected catalog, never a SHA. Fill the substantive policy and impact
+assessments. Label rows contain `{name,status,rationale}` for the whole catalog.
+Rejected candidates retain their recorded reason and binding.
+
+Resume keeps filled prose. CI-only drift asks for CI assessment, changed
+conversations require substantive checks, and head drift requires delta and
+affected-conclusion verification. Old receipts retain their original digests.
+Ambiguous targets and unverified current evidence request addressed correction.
+Publication commands remain manual. Offline tests do not establish a live tail
+duration of at most 15 minutes.
+
 ## Development and build
 
 ```shell

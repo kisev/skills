@@ -161,10 +161,19 @@ def content_from_decision(
         content = context.content_template(
             evidence, review_context, decision, dummy["content"]["locale"]
         )
+        content["semver_assessment"] = review_semver.rendered_template(evidence, review_context)
         content["finding_publications"] = []
     else:
         content = render.render_content(dummy, review_context, evidence)
     if authored:
+        previous_semver = authored.get("semver_assessment") or {}
+        previous_basis = previous_semver.get("baseline")
+        if isinstance(previous_basis, dict):
+            content["semver_assessment"] = review_semver.rendered_template(
+                evidence, review_context, {key: previous_basis[key] for key in ("name", "source")}
+            )
+        elif previous_semver.get("mode") == "target_fallback":
+            content["semver_assessment"] = review_semver.template(evidence, review_context)
         for key, value in authored.items():
             if key in render.PROSE_KEYS and key not in {
                 "finding_publications",
@@ -187,15 +196,16 @@ def content_from_decision(
                 row.update(
                     {
                         key: copy.deepcopy(old[key])
-                        for key in ("body", "patch", "patch_reason", "split_rationale")
+                        for key in (
+                            "body",
+                            "patch",
+                            "patch_reason",
+                            "split_rationale",
+                            "suggestions",
+                        )
                         if key in old
                     }
                 )
-    elif review_context.get("incremental", {}).get("previous_recommended_issues"):
-        content["recommended_issues"] = [
-            {key: copy.deepcopy(value) for key, value in issue.items() if key != "revision"}
-            for issue in review_context["incremental"]["previous_recommended_issues"]
-        ]
     content["findings"] = copy.deepcopy(accepted)
     content["rejected_candidates"] = render.rejected_from_decision(
         decision, intents, review_context
@@ -252,6 +262,17 @@ def record_prose(root: Path, input_path: str) -> dict[str, Any]:
     )
     contract.reject_envelope_wrapper(incoming, "content prose")
     original_prose = copy.deepcopy(incoming)
+    rows = incoming.get("finding_publications", [])
+    known = {str(row["id"]) for row in state["content"]["findings"]}
+    if not isinstance(rows, list) or any(
+        not isinstance(row, dict)
+        or not isinstance(row.get("finding_id"), str)
+        or row["finding_id"] not in known
+        for row in rows
+    ):
+        raise contract.WorkflowError(
+            "finding_publications[*].finding_id: return a prepared finding identifier unchanged; unknown or substituted identities are forbidden"
+        )
     intents = {str(row["finding_id"]): copy.deepcopy(row) for row in state["intents"]}
     for row in incoming.get("finding_publications", []):
         publication = row.pop("publication", None)
@@ -283,7 +304,11 @@ def record_prose(root: Path, input_path: str) -> dict[str, Any]:
     content = render.apply_prose(content, resolved)
     content = render.reconcile_history(content, artifact[1], review_context)
     state.update(
-        content=content, intents=list(intents.values()), prose=original_prose, applied=True
+        content=content,
+        intents=list(intents.values()),
+        prose=render.prose_projection(content, review_context, evidence),
+        prose_input=original_prose,
+        applied=True,
     )
     save(root, state)
     return {
@@ -342,6 +367,19 @@ def delta_scope(
         or context.discussion_signature(row)
         != context.discussion_signature(old_threads[str(row["root_note_id"])])
     ]
+    old_notes = {
+        str(row["id"]): row for row in old_context.get("notes", []) if row.get("system") is not True
+    }
+    discussion_note_ids = {
+        str(note["id"]) for thread in new_context["discussions"] for note in thread.get("notes", [])
+    }
+    notes = [
+        str(row["id"])
+        for row in new_context.get("notes", [])
+        if row.get("system") is not True
+        and str(row["id"]) not in discussion_note_ids
+        and old_notes.get(str(row["id"])) != row
+    ]
     ignored = {
         "sha",
         "diff_refs",
@@ -359,6 +397,8 @@ def delta_scope(
     )
     if old_context.get("release_evidence") != new_context.get("release_evidence"):
         metadata.append("release_evidence")
+    if old.get("labels") != new.get("labels"):
+        metadata.append("label_catalog")
     boundary_changed = any(old.get(key) != new.get(key) for key in ("base_sha", "start_sha"))
     if boundary_changed:
         metadata.append("comparison_boundary")
@@ -367,6 +407,7 @@ def delta_scope(
         "to_head": new["head_sha"],
         "changed_paths": sorted(paths),
         "changed_thread_ids": sorted(threads),
+        "changed_note_ids": sorted(notes),
         "metadata_fields": metadata,
         "pipelines_changed": old["pipelines"] != new["pipelines"],
         "comparison_boundary_changed": boundary_changed,
@@ -455,10 +496,26 @@ def re_anchor(root: Path) -> dict[str, Any] | None:
         str(row["finding_id"]): row.get("dependencies") or {} for row in state["intents"]
     }
     targets = []
+    if scope["from_head"] != scope["to_head"] or scope["comparison_boundary_changed"]:
+        targets.append(
+            {
+                "id": "code_delta",
+                "kind": "metadata",
+                "conclusion": {
+                    key: copy.deepcopy(state["content"].get(key))
+                    for key in (
+                        "summary",
+                        "architecture_assessment",
+                        "semver_impact",
+                        "semver_rationale",
+                    )
+                },
+            }
+        )
     for finding in old_decision.get("accepted_findings", []):
         dep = dependencies.get(str(finding["id"])) or {
             "paths": old_context["exact_git"].get("changed_paths", []),
-            "ci": True,
+            "ci": False,
             "metadata_fields": scope["metadata_fields"],
         }
         if (
@@ -476,7 +533,7 @@ def re_anchor(root: Path) -> dict[str, Any] | None:
                     "dependencies": dep,
                 }
             )
-    if scope["changed_paths"] or scope["metadata_fields"] or scope["pipelines_changed"]:
+    if scope["changed_paths"] or scope["metadata_fields"]:
         for issue in state["content"].get("recommended_issues", []):
             targets.append({"id": issue["id"], "kind": "issue", "conclusion": copy.deepcopy(issue)})
     for identifier in scope["changed_thread_ids"]:
@@ -499,7 +556,19 @@ def re_anchor(root: Path) -> dict[str, Any] | None:
             {
                 "id": "metadata",
                 "kind": "metadata",
-                "conclusion": state["content"].get("mr_metadata_assessment", {}),
+                "conclusion": {
+                    "mr_metadata_assessment": state["content"].get("mr_metadata_assessment", {}),
+                    "label_assessments": state["content"].get("label_assessments", []),
+                    "semver_assessment": state["content"].get("semver_assessment", {}),
+                },
+            }
+        )
+    if scope["changed_note_ids"]:
+        targets.append(
+            {
+                "id": "notes",
+                "kind": "metadata",
+                "conclusion": {"changed_note_ids": scope["changed_note_ids"]},
             }
         )
     if scope["pipelines_changed"]:
@@ -557,6 +626,14 @@ def re_anchor(root: Path) -> dict[str, Any] | None:
     state["history"] = [*state.get("history", []), str(history_path)]
     state["historical_heads"] = list(
         dict.fromkeys([*state.get("historical_heads", []), old["head_sha"]])
+    )
+    state["historical_refs"] = list(
+        dict.fromkeys(
+            [
+                *state.get("historical_refs", []),
+                *(sha for sha, _source in context.raw_ref_sources(old, old_context)),
+            ]
+        )
     )
     save(root, state)
     context.begin_review(
@@ -670,6 +747,13 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
             and target_kinds[str(row["id"])] not in {"finding", "issue"}
             and not isinstance(row.get("prose"), dict)
         )
+        or (
+            target_kinds[str(row["id"])] == "thread"
+            and not next(
+                target["conclusion"] for target in pending["targets"] if target["id"] == row["id"]
+            )
+            and not isinstance(row.get("prose"), dict)
+        )
     ]
     if unresolved:
         pending["result_path"] = str(check_path)
@@ -693,12 +777,24 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
     corrections: list[dict[str, Any]] = []
     for check in checks:
         kind = target_kinds[str(check["id"])]
-        if check["verdict"] != "confirmed" and kind not in {"finding", "issue"}:
+        if (
+            check["verdict"] != "confirmed" or isinstance(check.get("prose"), dict)
+        ) and kind not in {"finding", "issue"}:
             correction = check.get("prose")
             allowed = (
                 {"thread_decisions"}
                 if kind == "thread"
-                else {"mr_metadata_assessment", "checks", "chat_assessment"}
+                else {
+                    "mr_metadata_assessment",
+                    "summary",
+                    "architecture_assessment",
+                    "label_assessments",
+                    "semver_assessment",
+                    "semver_impact",
+                    "semver_rationale",
+                    "checks",
+                    "chat_assessment",
+                }
                 if kind == "metadata"
                 else {"checks", "chat_assessment"}
             )
@@ -828,6 +924,16 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
         )
     ci_blocked = context.ci_blocks_ready(evidence, ci_assessments)
     reasons = copy.deepcopy(old_decision.get("owner_decision_reasons") or [])
+    if pending["scope"]["pipelines_changed"] and not ci_blocked:
+        reasons = [
+            reason
+            for reason in reasons
+            if reason
+            not in {
+                "Exact-head CI jobs are unsuccessful, incomplete, or not yet classified as process gates.",
+                "Current CI evidence needs addressed classification.",
+            }
+        ]
     if ci_blocked and not blocking and not reasons:
         reasons = ["Current CI evidence needs addressed classification."]
     finalize_path, finalize_digest = contract.write_artifact(
@@ -872,12 +978,16 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
     )
     decision_path, decision_digest = contract.write_artifact(root, "review_decision", decision)
     old_content = copy.deepcopy(state["content"])
-    fresh_semver = review_semver.template(evidence, review_context)
+    fresh_semver = review_semver.rendered_template(evidence, review_context)
     fresh_semver.update(
         {
             key: copy.deepcopy(old_content["semver_assessment"][key])
             for key in render.SEMVER_PROSE_KEYS
             if key in old_content["semver_assessment"]
+            and (
+                key in {"policy", "sources"}
+                or fresh_semver["mode"] == old_content["semver_assessment"]["mode"]
+            )
         }
     )
     old_content["semver_assessment"] = fresh_semver
@@ -890,6 +1000,15 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
         if str(assessment["id"]) in closed_issues:
             assessment.update(status="withdrawn", rationale=closed_issues[str(assessment["id"])])
     bindings = context.expected_thread_bindings(review_context)
+    existing_threads = {str(row["id"]): row for row in old_content["thread_decisions"]}
+    fresh_content = context.content_template(evidence, review_context, decision, progress["locale"])
+    old_content["thread_decisions"] = [
+        existing_threads.get(str(row["id"]), row) for row in fresh_content["thread_decisions"]
+    ]
+    existing_labels = {str(row["name"]): row for row in old_content["label_assessments"]}
+    old_content["label_assessments"] = [
+        existing_labels.get(str(row["name"]), row) for row in fresh_content["label_assessments"]
+    ]
     for thread in old_content["thread_decisions"]:
         binding = bindings.get(str(thread["id"]))
         if binding:
@@ -903,18 +1022,23 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
     # Locate the same semantic source excerpt again; its position proves only
     # where to publish. Truth is supplied by the separate delta check above.
     for correction in corrections:
-        old_content, errors = draft_module._apply_content(old_content, correction)
-        if errors:
-            raise contract.WorkflowError(
-                "addressed delta prose is invalid: "
-                + "; ".join(f"{row['path']}: {row['message']}" for row in errors)
-            )
+        resolved_correction = render.resolve_prose_fixes(
+            old_content, correction, review_context, evidence
+        )
+        old_content = render.apply_prose(old_content, resolved_correction)
     prose = copy.deepcopy(state.get("prose") or render.prose_projection(old_content))
+    prose["semver_assessment"] = render.prose_projection(old_content)["semver_assessment"]
     if corrections:
         projection = render.prose_projection(old_content, review_context, evidence)
         for correction in corrections:
             for key in correction:
                 prose[key] = copy.deepcopy(projection[key])
+    if (
+        pending["scope"]["metadata_fields"]
+        and "label_catalog" in pending["scope"]["metadata_fields"]
+    ):
+        prose["label_assessments"] = render.prose_projection(old_content)["label_assessments"]
+        contract.write_json(Path(state["prose_path"]), prose)
     added = []
     for row in novel:
         if row["decision"] != "accept":
@@ -948,6 +1072,7 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
     old_content["finding_publications"] = [
         row for row in old_content["finding_publications"] if str(row["finding_id"]) in ids
     ]
+    old_content["findings"] = copy.deepcopy(accepted)
     try:
         resolved = render.resolve_prose_fixes(old_content, prose, review_context, evidence)
         content = render.apply_prose(old_content, resolved)
@@ -962,7 +1087,14 @@ def record_delta(root: Path, input_path: str) -> dict[str, Any]:
         clarification = None
     except contract.WorkflowError as error:
         content, applied, clarification = old_content, False, str(error)
-    state.update(decision_digest=decision_digest, content=content, applied=applied)
+    state.update(decision_digest=decision_digest, content=content, prose=prose, applied=applied)
+    if (
+        corrections
+        or added
+        or clarification
+        or "label_catalog" in pending["scope"]["metadata_fields"]
+    ):
+        contract.write_json(Path(state["prose_path"]), prose)
     state["delta_checks"] = [*state.get("delta_checks", []), str(check_path)]
     state.pop("pending_delta", None)
     if clarification:

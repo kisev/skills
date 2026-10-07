@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import quote
@@ -137,10 +138,125 @@ def comparison_target(evidence: dict[str, Any], context: dict[str, Any]) -> tupl
     return evidence["start_sha"], "mr_snapshot"
 
 
+def rendered_template(
+    evidence: dict[str, Any], context: dict[str, Any], basis: dict[str, str] | None = None
+) -> dict[str, Any]:
+    """Derive a stable release basis from complete catalogs and local Git proof."""
+    result = template(evidence, context)
+    release = context["release_evidence"]
+    root = Path(context["exact_git"]["repo_root"])
+    reasons = list(release["errors"])
+    candidates: list[tuple[tuple[int, ...], dict[str, str]]] = []
+    for source, field in (("releases", "tag_name"), ("tags", "name")):
+        catalog = release[source]
+        if catalog["complete"] is not True:
+            reasons.append(f"{source} catalog is incomplete")
+            continue
+        for item in catalog["items"]:
+            name = str(item.get(field) or "")
+            # SIMPLIFY: automatic selection uses stable v?X.Y.Z only -> extend when a confirmed policy requires other automatic baselines.
+            match = re.fullmatch(r"v?(\d+)\.(\d+)\.(\d+)", name)
+            sha = (item.get("commit") or {}).get("id")
+            if (
+                (match is None and basis is None)
+                or not portable.is_sha(sha)
+                or item.get("upcoming_release") is True
+            ):
+                continue
+            if result["target_revision"] != "current":
+                continue
+            try:
+                resolved = str(
+                    portable.git_read(root, "rev-parse", "--verify", f"{sha}^{{commit}}")
+                ).strip()
+                if resolved != sha:
+                    raise portable.WorkflowError("release commit identity differs")
+                portable.git_read(root, "merge-base", sha, result["target_sha"])
+            except portable.WorkflowError:
+                reasons.append(f"{source} entry {name}: local comparison proof unavailable")
+                continue
+            candidates.append(
+                (
+                    tuple(int(part) for part in match.groups()) if match else (),
+                    {"name": name, "sha": sha, "source": source},
+                )
+            )
+    result["sources"] = [f"Collected {source} catalog" for source in ("releases", "tags")]
+    if basis is not None:
+        if set(basis) != {"name", "source"}:
+            raise portable.WorkflowError(
+                "semver_assessment.basis: select a collected name and source, not a SHA or binding"
+            )
+        selected = [
+            candidate
+            for _, candidate in candidates
+            if candidate["name"] == basis["name"] and candidate["source"] == basis["source"]
+        ]
+        if len(selected) != 1:
+            raise portable.WorkflowError(
+                "semver_assessment.basis: select one policy-confirmed publication from a complete catalog with locally verifiable Git proof"
+            )
+        result.update(
+            mode="release",
+            baseline=selected[0],
+            fallback_reason=None,
+            release_impact="<IMPACT: assess the complete future release>",
+            release_rationale="<RATIONALE: explain the release impact>",
+        )
+        return result
+    if (
+        candidates
+        and not reasons
+        and not any(release[source]["complete"] is not True for source in ("releases", "tags"))
+    ):
+        latest = max(version for version, _ in candidates)
+        choices = [basis for version, basis in candidates if version == latest]
+        if len({basis["sha"] for basis in choices}) == 1:
+            result.update(
+                mode="release",
+                baseline=choices[0],
+                fallback_reason=None,
+                release_impact="<IMPACT: assess the complete future release>",
+                release_rationale="<RATIONALE: explain the release impact>",
+            )
+            return result
+        reasons.append("latest stable version has conflicting commit identities")
+    if result["target_revision"] != "current":
+        reasons.append("current target branch commit unavailable locally; using MR target snapshot")
+    result["fallback_reason"] = (
+        "; ".join(dict.fromkeys(reasons)) or "no confirmed stable release or tag is available"
+    )
+    return result
+
+
 def validate(value: object, evidence: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     if not assessment_is_valid(value):
+        field, action = (
+            "basis",
+            "use the prepared basis or select {name,source} from the collected catalog",
+        )
+        if isinstance(value, dict):
+            if not portable.nonempty_string(value.get("policy")):
+                field, action = "policy", "explain the observed publication policy or its absence"
+            elif not value.get("sources"):
+                field, action = (
+                    "sources",
+                    "retain collected sources and add inspected policy evidence",
+                )
+            elif value.get("mode") == "target_fallback" and not portable.nonempty_string(
+                value.get("fallback_reason")
+            ):
+                field, action = (
+                    "fallback_reason",
+                    "explain why publication proof is unavailable or inapplicable",
+                )
+            elif value.get("mode") == "release":
+                field, action = (
+                    "release_impact/release_rationale",
+                    "assess the future release with concrete evidence",
+                )
         raise portable.WorkflowError(
-            "SemVer assessment requires a release basis or explicit target fallback"
+            f"SemVer assessment requires a release basis or explicit target fallback; semver_assessment.{field}: {action}; retain other authored fields"
         )
     result = cast("dict[str, Any]", value)
     release = context["release_evidence"]

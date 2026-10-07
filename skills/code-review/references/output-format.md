@@ -88,13 +88,13 @@ shows `code-review: <skill version> · contract: <version>`, then contains:
 4. A project-label section beside metadata with only add/remove delta and its
    command. Keep current labels, unresolved labels, and exhaustive assessment in
    private JSON.
-5. A previous-finding table with a short finding name, localized result, and
+5. When explicitly included as context, a previous-finding table with a short finding name, localized result, and
    short next action. One row per finding; no long rationale or internal ID.
 6. Open-thread actions.
 7. Closed-thread actions.
 8. Read-only local fixes for author mode.
-9. New reviewer findings and their actions; previous findings are not shown as new.
-   Each previous finding's detail and action stay together in their own section.
+9. Current reviewer findings and their actions, including repeated problems
+   confirmed on this snapshot. Advisory history does not require a separate action.
    Panel findings show who raised them and which duplicates the arbitrator
    merged into them, without losing any author or opinion difference.
 10. For a panel review, the arbitration-verdicts section: every critic finding

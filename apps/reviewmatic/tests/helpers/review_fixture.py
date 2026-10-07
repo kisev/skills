@@ -145,7 +145,14 @@ elif clean in (
     "projects/19/releases",
     "projects/19/repository/tags",
 ):
-    value = []
+    if clean.endswith("/branches/main") and config.get("targetSha"):
+        value = {"commit": {"id": config["targetSha"]}}
+    elif clean.endswith("/releases"):
+        value = config.get("releases", [])
+    elif clean.endswith("/tags"):
+        value = config.get("tags", [])
+    else:
+        value = []
 elif clean.startswith("projects/19/labels"):
     value = [
         {"name": "ship-ready", "description": "semantic-role: change_type; semantic-value: release"},

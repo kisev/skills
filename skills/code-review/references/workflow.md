@@ -70,6 +70,22 @@ The real `run` then invokes the shared renderer, materializes
 `reviewmatic record-prose --artifact-root <root> --input <prose>`.
 Edit prose, semantic choices, and fix payloads only. Do not author positions,
 range counters, patch paths/digests, revisions, or `update_issue`.
+Return the prepared `finding_id` unchanged. Never create or reconstruct machine
+identities, substitute another identifier, or send unknown rows. Use
+`target: {path,before}` and `replacement` for ordinary multiline fixes without
+structural repair. Label rows are `{name,status,rationale}` for the complete
+catalog. Recorded rejected-candidate reasons are reused, not authored again.
+Thread fixes use the same semantic `target`/`replacement` or `parts` in
+`thread_decisions`, with `fix_mode=suggestion`. The runtime derives their
+suggestion positions too. Addressed prose updates retain other filled rows.
+The runtime derives the SemVer basis and bindings. Fill only missing substantive
+policy and impact assessments, never fake reasons to satisfy validation.
+For a policy-specific basis select a collected publication with
+`semver_assessment.basis: {name,source}`, never a SHA or reconstructed baseline.
+Critics and the arbitrator read `incremental.history_context` from the returned
+context path. History is advisory and may warn without blocking current review.
+The runbook stands on current findings and proposals, without historical ledger
+coverage, inherited IDs/revisions, or manual synchronization.
 Resume the same run to finalize; `scaffold-review` is the structural repair
 path, never the normal tail. Apply the discussion, findings, SemVer, and
 metadata doctrine below to those judgments. Print the returned report through
@@ -290,10 +306,11 @@ Original digests are never overwritten. Historical checks certify the old
 snapshot; a separate current receipt and delta-result record certify what was
 checked or carried on the new snapshot.
 
-Re-publication fields are derived from the finalized baseline. Re-confirmation
-retains stable IDs and revision; changed content increments revision once,
-not once per render or head drift. Follow-ups remain proposals: the runtime
-derives `no_publication`, not an unsupported `update_issue` command. Original
+New runbooks do not inherit historical IDs, revisions, or ledger obligations.
+Follow-ups remain proposals without an `update_issue` action. Within an unfinished
+run, confirmed authorship is retained across drift. CI-only changes update CI
+assessment without requiring code analysis. New discussions are checked
+substantively, and head changes require delta and affected-conclusion checks. Original
 critic evidence and CI/SemVer texts remain in private history; their user-facing
 Markdown/chat projections scrub known current and historical SHA tokens while
 preserving revision links and executable fix code. The live ≤15-minute budget
@@ -335,7 +352,7 @@ and the arbitrator, and still complete a fresh discussion audit, decision,
 content draft, and contract-7 publication plan; never reuse the previous plan
 as the result of a new review invocation. Targeted plan repairs follow
 `references/repair.md`, not a new invocation. If it selects `incremental`,
-review the delta-triggered scope, revalidate every previous finding and recommended issue, and run the panel again: delta-scoped critic receipts
+review the delta-triggered scope, consult advisory history, and run the panel again: delta-scoped critic receipts
 with a different run/session identity and the incremental-delta digest, then a
 fresh arbitration receipt. Otherwise choose `fast`, `normal`, or `deep`; `fast`
 is only for a small confirmed low-risk change and runs without a panel, while
