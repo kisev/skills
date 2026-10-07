@@ -33,16 +33,7 @@ async function sandbox(t) {
   };
   return { base, project, home, root: join(project, ".opencode"), env, run, ok };
 }
-const subset = [
-  "--commands",
-  "askme",
-  "--agents",
-  "critic",
-  "--plugins",
-  "none",
-  "--no-core",
-  "--no-dependency",
-];
+const subset = ["--commands", "askme", "--plugins", "none", "--no-core", "--no-dependency"];
 
 test("partial install, model edits, repeat install, repair, and uninstall retain exactly the selected set", async (t) => {
   const context = await sandbox(t);
@@ -52,18 +43,23 @@ test("partial install, model edits, repeat install, repair, and uninstall retain
   await assert.rejects(readdir(root), { code: "ENOENT" });
   ok(["install", ...subset, "--yes"]);
   ok(["configure", "agent", "critic", "--model", "openai/example", "--variant", "high", "--yes"]);
-  // Saving a model for an uninstalled role must not deploy it.
+  // Install deploys the complete fixed-role package; models stay configurable.
+  assert.equal((await readdir(join(root, "agents"))).length, 6);
   ok(["configure", "agent", "worker", "--model", "openai/worker", "--yes"]);
-  assert.deepEqual(await readdir(join(root, "agents")), ["critic.md"]);
-  assert.equal(
-    ok(["agent", "list"]).inventory.profiles.find((profile) => profile.name === "worker").state,
-    "not-installed",
-  );
+  assert.deepEqual(await readdir(join(root, "agents")), [
+    "architect.md",
+    "critic.md",
+    "manager.md",
+    "mapper.md",
+    "review.md",
+    "worker.md",
+  ]);
+  assert.match(await readFile(join(root, "agents/worker.md"), "utf8"), /model: openai\/worker/);
   ok(["install", "--no-dependency", "--yes"]);
   await unlink(join(root, "agents/critic.md"));
   await unlink(join(root, "commands/askme.md"));
   ok(["maintenance", "repair", "--no-dependency", "--yes"]);
-  assert.deepEqual(await readdir(join(root, "agents")), ["critic.md"]);
+  assert.equal((await readdir(join(root, "agents"))).length, 6);
   assert.match(
     await readFile(join(root, "agents/critic.md"), "utf8"),
     /model: openai\/example#high/,
@@ -290,8 +286,6 @@ test("npm install failure reports committed components without claiming configur
     "--global",
     "--commands",
     "none",
-    "--agents",
-    "critic",
     "--plugins",
     "none",
     "--core",
@@ -395,9 +389,8 @@ test("TTY install can skip model setup and cancellation before apply leaves no f
   const context = await sandbox(t);
   const cancelled = await wizard(context, [
     ["Skill command adapters", "\r"],
-    ["Fixed agents", "\r"],
     ["Optional plugins", "\r"],
-    ["Configure application presets", "n\r"],
+    ["Configure presets for the selected agent harnesses", "n\r"],
     ["Apply the displayed changes", "n\r"],
   ]);
   assert.equal(cancelled.status, 2, cancelled.output);
@@ -421,14 +414,14 @@ exit 1
   context.env.PATH = `${bin}:${context.env.PATH}`;
   const install = await wizard(context, [
     ["Skill command adapters", "a\r"],
-    ["Fixed agents", "a\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B \r"],
     ["Optional plugins", "\x1b[B \r"],
-    ["Configure application presets", "n\r"],
+    ["Configure presets for the selected agent harnesses", "n\r"],
     ["Apply the displayed changes", "y\r"],
   ]);
   assert.equal(install.status, 0, install.output);
   assert.doesNotMatch(install.output, /Configure agent models or additional critics now\?/);
-  assert.match(install.output, /Critics:\n\s+No critics/);
+  assert.match(install.output, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
+  assert.match(install.output, /Pool: additional critics are optional specialist profiles/);
   const staged = await wizard(
     context,
     [
@@ -490,13 +483,12 @@ test("TTY install can apply with model setup skipped", async (t) => {
   const context = await sandbox(t);
   const result = await wizard(context, [
     ["Skill command adapters", "a\r"],
-    ["Fixed agents", "a\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B \r"],
     ["Optional plugins", "\x1b[B \r"],
-    ["Configure application presets", "n\r"],
+    ["Configure presets for the selected agent harnesses", "n\r"],
     ["Apply the displayed changes", "y\r"],
   ]);
   assert.equal(result.status, 0, result.output);
-  assert.deepEqual(await readdir(join(context.root, "agents")), ["critic.md"]);
+  assert.equal((await readdir(join(context.root, "agents"))).length, 6);
   assert.doesNotMatch(await readFile(join(context.root, "agents/critic.md"), "utf8"), /^model:/m);
 });
 
@@ -527,16 +519,22 @@ test("repeat TTY installation defaults to saved components, models, and disconne
     context,
     [
       ["Skill command adapters", "\r"],
-      ["Fixed agents", "\r"],
       ["Optional plugins", "\r"],
       ["Connect the OpenCode plugin", "\r"],
-      ["Configure application presets", "n\r"],
+      ["Configure presets for the selected agent harnesses", "n\r"],
     ],
     ["install", "--no-dependency"],
   );
   assert.equal(result.status, 0, result.output);
   const status = context.ok(["status"]);
-  assert.deepEqual(status.selection.agents, ["critic"]);
+  assert.deepEqual(status.selection.agents, [
+    "architect",
+    "critic",
+    "manager",
+    "mapper",
+    "review",
+    "worker",
+  ]);
   assert.equal(status.selection.core_activation, false);
   assert.equal(
     status.inventory.profiles.find((profile) => profile.name === "critic").variant,
@@ -636,7 +634,8 @@ test("invalid critic names re-prompt and an absent catalog points at the host in
   );
   assert.equal(result.status, 0, result.output);
   const clean = stripVTControlCharacters(result.output);
-  assert.match(clean, /Critics:\n  No critics/);
+  assert.match(clean, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
+  assert.match(clean, /Pool: additional critics are optional specialist profiles/);
   assert.match(
     clean,
     /Invalid critic name: use a fixed role or critic-<suffix> with lowercase letters, digits, and hyphens/,
@@ -711,7 +710,8 @@ test("install, staged applies, and configure integration all end with the critic
   // Install never prompts for critics and ends with the panel + pointers.
   const install = text(["install", ...subset, "--yes"]);
   assert.equal(install.status, 0, install.stdout + install.stderr);
-  assert.match(install.stdout, /Critics:\n\s+No critics/);
+  assert.match(install.stdout, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
+  assert.match(install.stdout, /\bcritic\s+default \(host\)/);
   assert.match(
     install.stdout,
     /Inspect any time: agentomatic agent list \| Manage critics: agentomatic configure agent/,

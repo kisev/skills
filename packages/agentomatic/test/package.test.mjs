@@ -90,19 +90,25 @@ function hostAgents() {
 
 test("installer wizard uses shared multi-select groups and keeps defaults", () => {
   const source = readFileSync(join(PACKAGE, "src", "command-cli.ts"), "utf8");
+  const wizard = readFileSync(join(PACKAGE, "src", "terminal-wizard.ts"), "utf8");
   assert.match(source, /Portable skills are installed separately through the skills CLI/);
   assert.match(source, /Selecting an adapter does not install its skill/);
+  assert.match(source, /All six fixed agent roles deploy as one package/);
   assert.match(source, /Skill command adapters/);
   assert.match(
     source,
-    /selectOptions\("Skill command adapters", SKILL_COMMANDS, defaults\.commands\)/,
+    /"Skill command adapters",\s*SKILL_COMMANDS,\s*defaults\.commands,\s*commandHints\(\),/,
   );
-  assert.match(source, /selectOptions\("Fixed agents", FIXED_AGENT_ROLES, defaults\.agents\)/);
-  assert.match(
-    source,
-    /selectOptions\("Optional plugins", SELECTABLE_PLUGINS, defaults\.plugins\)/,
-  );
+  assert.doesNotMatch(source, /selectOptions\("Fixed agents"/);
+  assert.match(source, /Optional plugins/);
+  assert.match(source, /defaults\.plugins,/);
+  assert.match(source, /SELECTABLE_PLUGINS\.map\(\(plugin\) => PLUGIN_DESCRIPTIONS\[plugin\]\)/);
+  assert.match(source, /Agent harnesses to configure/);
+  assert.match(source, /Application presets to merge/);
+  // Select-all is a documented key, never a fake selectable option value.
   assert.doesNotMatch(source, /"Select all", "Select none"/);
+  assert.match(wizard, /all\/none: a/);
+  assert.match(wizard, /hint: hints\[index\]/);
   assert.match(source, /--commands/);
   assert.doesNotMatch(source, /--skill-commands/);
   assert.doesNotMatch(source, /--package-commands/);
@@ -177,7 +183,7 @@ test("blocked reconcile apply exits with code two", async () => {
     HOME: home,
     XDG_STATE_HOME: join(home, "state"),
   };
-  const selection = ["--commands", "agents-md", "--agents", "none", "--plugins", "none"];
+  const selection = ["--commands", "agents-md", "--plugins", "none"];
   try {
     const installed = spawnSync(
       process.execPath,
@@ -423,8 +429,6 @@ test("non-TTY install accepts an explicit skill command subset", () => {
         "install",
         "--commands",
         "agents-md",
-        "--agents",
-        "none",
         "--plugins",
         "none",
         "--dry-run",
@@ -435,7 +439,7 @@ test("non-TTY install accepts an explicit skill command subset", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout).plan.selection, {
       commands: ["agents-md"],
-      agents: [],
+      agents: ["architect", "critic", "manager", "mapper", "review", "worker"],
       plugins: [],
       core_activation: true,
     });
@@ -775,7 +779,7 @@ test("uninstall dry-run prints an applicable command without selection options",
     assert.match(
       result.stdout,
       new RegExp(
-        `^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} uninstall \\(confirm interactively; add --yes outside a terminal\\)$`,
+        `^Apply \\(repeat non-interactively\\):\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} uninstall`,
         "m",
       ),
     );
@@ -1546,8 +1550,6 @@ test("global CLI is cwd-independent and prints a pinned npx apply hint", () => {
         "--global",
         "--commands",
         "none",
-        "--agents",
-        "none",
         "--plugins",
         "none",
         "--dry-run",
@@ -1562,7 +1564,10 @@ test("global CLI is cwd-independent and prints a pinned npx apply hint", () => {
     assert.match(result.stdout, new RegExp(`^Target: ${join(home, ".config", "opencode")}$`, "m"));
     assert.match(
       result.stdout,
-      new RegExp(`^Apply:\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --global `, "m"),
+      new RegExp(
+        `^Apply \\(repeat non-interactively\\):\\n  npx --yes ${escapeRegExp(PACKAGE_SPEC)} install --global `,
+        "m",
+      ),
     );
     assert.doesNotMatch(result.stdout, /npm exec -- agentomatic/);
   } finally {
@@ -1619,8 +1624,6 @@ test("install core integration wires config and dependency in one run", async ()
       "--global",
       "--commands",
       "agents-md",
-      "--agents",
-      "none",
       "--plugins",
       "none",
       "--core",
@@ -1640,8 +1643,6 @@ test("install core integration wires config and dependency in one run", async ()
       "--global",
       "--commands",
       "agents-md",
-      "--agents",
-      "none",
       "--plugins",
       "none",
       "--no-core",

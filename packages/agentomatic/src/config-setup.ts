@@ -74,6 +74,14 @@ export const CONFIG_TARGETS = ["opencode", "kilo", "mimo"] as const;
 export type ConfigTargetName = (typeof CONFIG_TARGETS)[number];
 export type TargetFileKind = "main" | "tui";
 
+// One-line descriptions for the interactive harness prompt, kept next to the
+// target list so the wizard never invents them ad hoc.
+export const TARGET_DESCRIPTIONS: Record<ConfigTargetName, string> = {
+  opencode: "OpenCode: config opencode.json(c) and terminal cli.json",
+  kilo: "Kilo Code: config kilo.json(c) and TUI settings",
+  mimo: "MiMo: config mimocode.json(c) and TUI settings",
+};
+
 export const CONFIG_FRAGMENTS = [
   {
     name: "core-disable",

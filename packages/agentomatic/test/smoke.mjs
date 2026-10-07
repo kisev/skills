@@ -7,14 +7,7 @@ import { join, resolve } from "node:path";
 
 const packageRoot = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(join(tmpdir(), "agentomatic-smoke-"));
-const selection = [
-  "--commands",
-  "agents-md",
-  "--agents",
-  "manager,architect,mapper,worker,review,critic",
-  "--plugins",
-  "none",
-];
+const selection = ["--commands", "agents-md", "--plugins", "none"];
 
 function run(command, arguments_, options = {}) {
   const result = spawnSync(command, arguments_, { encoding: "utf8", ...options });

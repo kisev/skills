@@ -314,6 +314,7 @@ test("single and multi selectors share visual controls and deterministic selecti
     "Fixed agents",
     ["manager", "review", "critic"],
     ["manager"],
+    undefined,
     multiple.stdin,
     multiple.stderr,
   );
@@ -322,13 +323,30 @@ test("single and multi selectors share visual controls and deterministic selecti
   assert.match(multiple.output(), /↑\/↓ to navigate • Space: select • Enter: confirm/);
   assert.match(multiple.output(), /◼ manager/);
   assert.match(multiple.output(), /◻ review/);
-  assert.match(multiple.output(), /◇  Fixed agents\n│  manager, review/);
+  assert.match(multiple.output(), /◇  Fixed agents.*\n│  manager, review/);
+
+  // Each multiselect states the all/none controls and prints the description
+  // of the focused option.
+  const described = fakeTTY();
+  const describedResult = selectOptions(
+    "Agent harnesses",
+    ["opencode", "kilo"],
+    [],
+    ["OpenCode: config opencode.json(c)", undefined],
+    described.stdin,
+    described.stderr,
+  );
+  described.stdin.write("\x1b[B\x1b[A\r");
+  assert.deepEqual(await describedResult, []);
+  assert.match(described.output(), /all\/none: a/);
+  assert.match(described.output(), /config opencode\.json\(c\)/);
 
   const subset = fakeTTY();
   const subsetResult = selectOptions(
     "Skill commands",
     ["askme", "goal", "humanize"],
     ["askme", "goal", "humanize"],
+    undefined,
     subset.stdin,
     subset.stderr,
   );
@@ -340,6 +358,7 @@ test("single and multi selectors share visual controls and deterministic selecti
     "Plugins",
     ["code-simplify", "rules-injector", "rtk", "zed-bell"],
     [],
+    undefined,
     all.stdin,
     all.stderr,
   );
@@ -351,6 +370,7 @@ test("single and multi selectors share visual controls and deterministic selecti
     "Plugins",
     ["rules-injector", "rtk"],
     [],
+    undefined,
     cancelled.stdin,
     cancelled.stderr,
   );
@@ -1035,8 +1055,6 @@ test("CLI defaults to a concise human plan and table", async () => {
       "install",
       "--commands",
       "none",
-      "--agents",
-      "manager,architect,mapper,worker,review,critic",
       "--plugins",
       "none",
       "--dry-run",
@@ -1051,7 +1069,7 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.match(
       previewResult.stdout,
       new RegExp(
-        `^Apply:\\n  npx --yes ${escapeRegExp(`@kisev/agentomatic@${PACKAGE_VERSION}`)} install `,
+        `^Apply \\(repeat non-interactively\\):\\n  npx --yes ${escapeRegExp(`@kisev/agentomatic@${PACKAGE_VERSION}`)} install `,
         "m",
       ),
     );
@@ -1060,19 +1078,10 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.doesNotMatch(previewResult.stdout, /^Digest: /m);
     assert.ok(previewResult.stdout.length < 2500);
 
-    const applied = invoke([
-      "install",
-      "--commands",
-      "none",
-      "--agents",
-      "manager,architect,mapper,worker,review,critic",
-      "--plugins",
-      "none",
-      "--yes",
-    ]);
+    const applied = invoke(["install", "--commands", "none", "--plugins", "none", "--yes"]);
     assert.equal(applied.status, 0, applied.stderr);
     assert.match(applied.stdout, /^Applied changes:$/m);
-    assert.match(applied.stdout, /^Restart required: yes$/m);
+    assert.match(applied.stdout, /^Restart required: yes — restart the host session/m);
     assert.doesNotMatch(applied.stdout, /"operations"/);
 
     const hostileCodes = [
@@ -1116,17 +1125,7 @@ test("CLI human plan explains exact-name conflicts", async () => {
     await writeFile(join(context.root, "agents", "manager.md"), "user-owned\n");
     const result = spawnSync(
       process.execPath,
-      [
-        executable,
-        "install",
-        "--commands",
-        "none",
-        "--agents",
-        "manager,architect,mapper,worker,review,critic",
-        "--plugins",
-        "none",
-        "--dry-run",
-      ],
+      [executable, "install", "--commands", "none", "--plugins", "none", "--dry-run"],
       {
         cwd: context.project,
         env: {
@@ -1169,8 +1168,6 @@ test("CLI human plan never truncates conflicts", async () => {
         "install",
         "--commands",
         commands.map((name) => name.slice(0, -3)).join(","),
-        "--agents",
-        "none",
         "--plugins",
         "none",
         "--dry-run",
@@ -1214,27 +1211,9 @@ test("direct CLI is a thin non-LLM profile interface", async () => {
     return JSON.parse(result.stdout);
   };
   try {
-    run([
-      "install",
-      "--commands",
-      "none",
-      "--agents",
-      "manager,architect,mapper,worker,review,critic",
-      "--plugins",
-      "none",
-      "--dry-run",
-    ]);
+    run(["install", "--commands", "none", "--plugins", "none", "--dry-run"]);
     assert.equal(
-      run([
-        "install",
-        "--commands",
-        "none",
-        "--agents",
-        "manager,architect,mapper,worker,review,critic",
-        "--plugins",
-        "none",
-        "--yes",
-      ]).requires_restart,
+      run(["install", "--commands", "none", "--plugins", "none", "--yes"]).requires_restart,
       true,
     );
     run([

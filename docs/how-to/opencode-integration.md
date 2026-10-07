@@ -133,41 +133,51 @@ command; it re-pins the dependency to the current stable release.
 
 ## Select Assets
 
-In a TTY, `install` selects command adapters, fixed agents, optional plugins,
-and core connection, then offers application presets and model/critic setup.
-All profile changes stay staged until the final confirmation. Model setup can
-be skipped without resetting saved models or variants. A repeat install starts
+In a TTY, `install` selects command adapters, optional plugins, and core
+connection, then offers presets for the chosen agent harness. The six fixed
+agents (`manager`, `architect`, `mapper`, `worker`, `review`, `critic`) deploy
+only as one complete package: `install` has no agent flag, no agent prompt, and
+never asks about models or critics — every agent decision belongs to the
+confirmed `configure agent` command afterwards. Model setup is therefore not
+part of install at all. A repeat install starts
 from the saved component selection; deselection shows owned-file removals.
-On first install, skill commands and six fixed agents start selected; `rtk`
-is the default wrapper. Skill command adapters are OpenCode
+On first install, all skill commands start selected; `rtk` is the default
+wrapper. Skill command adapters are OpenCode
 slash commands that load an already-installed same-named portable skill. A
-command adapter selection never selects or installs a skill. Each group supports
-an arbitrary subset: Up/Down moves, Space toggles, A toggles all selections,
-Enter confirms, and Escape cancels.
+command adapter selection never selects or installs a skill. Each multi-select
+shows an inline description for every option (adapters from the command
+catalog; presets from the config fragments) and names the group controls:
+Up/Down moves, Space toggles, A toggles all selections on and off, Enter
+confirms, and Escape cancels.
 
-Outside a TTY, the first install requires all three selection groups; subsequent
-runs can reuse the saved set. This example selects three
-commands, all fixed agents, and no wrapper:
+Outside a TTY, the first install requires both selection groups; subsequent
+runs can reuse the saved set. This example selects three commands and no
+wrapper:
 
 ```shell
 npx agentomatic install \
   --commands askme,code-review,goal \
-  --agents manager,architect,mapper,worker,review,critic \
   --plugins none --dry-run
 ```
 
-If any selection flag is present outside a TTY, `--commands`, `--agents`, and
-`--plugins` are all required. Query exact current names with:
+If any selection flag is present outside a TTY, `--commands` and `--plugins`
+are both required. Query exact current names with:
 
 ```shell
 npx --yes @kisev/agentomatic@latest catalog --json
 ```
 
 If a saved selection contains a command removed by an update, rerun `install`
-with all three selection flags and current names. The explicit selection
+with both selection flags and current names. The explicit selection
 replaces the saved component names before validation; the saved core connection
 choice stays unchanged unless `--core` or `--no-core` overrides it. Preview with
 `--dry-run`, then confirm the same selection. This does not migrate skill state.
+
+Target question wording: the installer calls the supported hosts agent
+harnesses — `opencode`, `kilo`, and `mimo` are the applications whose
+configuration files accept the package fragments. Preset questions explain
+themselves: presets are permission, secrets-guard, and terminal-settings
+fragments merged into each selected harness configuration.
 
 The selectable wrappers are `rules-injector`, `rtk`, `zed-bell`, and
 `code-simplify`; `rtk` is preselected by the installer. OpenCode loads deployed
@@ -320,13 +330,17 @@ npx agentomatic install --dry-run
 ```
 
 The OpenCode flow is a single install run: the wizard asks for command adapters,
-fixed agents, wrappers, core connection, optional presets, and optional models
-and additional critics. One confirmation applies owned components and profiles, wires the `core-plugin`
+wrappers, core connection, and optional harness presets. Install always deploys
+the six fixed agents as one package and never offers agent models, composition,
+or critics. One confirmation applies owned components and profiles, wires the `core-plugin`
 fragment into the user config, and provisions the persistent npm dependency in
 `~/.config/opencode` that keeps the global plugin resolvable. The dependency
 step removes a pinned legacy `@kisev/skills-opencode` in the same pass.
 Non-interactive runs pass `--core` (or `--no-core`) with the explicit selection
-flags. `configure integration` remains the full fragment manager for every target;
+flags. Install summaries list every deployed fixed role with its model (or
+`default (host)` when none is saved) and close with the critic panel; both
+epilogues point at `agent list`, the canonical overview, and `configure agent`,
+the single mutation point. `configure integration` remains the full fragment manager for every target;
 applying its `core-plugin` fragment provisions the same dependency when the
 installer skipped it. Every confirmed config apply first archives the previous
 content of each changed user file into the package archive store
@@ -443,6 +457,9 @@ nameless (or through the `configure critics` alias) it opens one staged editor
 over every agent; with a name it sets the model of an existing profile, and a
 fresh `critic-<safe-suffix>` name adds that critic. `agent` and `agent list`
 are read-only over profiles, models, ownership, collisions, and drift.
+Install deploys the fixed roles only as the whole package; the package-owned
+fixed critic `critic` always ships with it and is kept separate from the
+additional `critic-*` pool in every summary and epilogue.
 Fixed roles keep their names, prompts, and permissions; only model and variant
 change; generated delegation allowlists reflect the selected roles and critic pool.
 Saving a model for an uninstalled fixed role does not install it. Removing an
@@ -450,8 +467,8 @@ additional critic happens in the staged editor. Every mutation uses the
 same preview and confirmation contract.
 
 Nameless `configure agent` (and its alias `configure critics`) opens one staged
-editor over every agent: it first prints the additional-critic table
-(name, model, variant, provider, or `No critics`), then offers model changes,
+editor over every agent: it first prints the critic panel (every package-owned critic row and every
+additional `critic-<suffix>` pool entry, or `No critics`), then offers model changes,
 adding critics, and removal until `Done`, and applies the staged batch behind the
 usual preview and confirmation. Unsafe critic input such as `sonnet-5.5`
 converts to `critic-sonnet-5-5` after an explicit confirmation, rejected input

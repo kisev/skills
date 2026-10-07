@@ -22,6 +22,7 @@ import {
   InstallerError,
   SKILL_COMMANDS,
   SELECTABLE_PLUGINS,
+  PLUGIN_DESCRIPTIONS,
   type InstallerSelection,
 } from "./installer.js";
 import {
@@ -32,11 +33,13 @@ import {
   defaultConfigSelection,
   CONFIG_TARGETS,
   CONFIG_FRAGMENTS,
+  TARGET_DESCRIPTIONS,
   inspectIntegration,
   type ConfigSetupSelection,
   type ConfigTargetName,
   type FragmentName,
 } from "./config-setup.js";
+import { COMMAND_REGISTRY } from "./registry.js";
 import { collectDoctorFacts, doctorExitCode } from "./doctor.js";
 import { applyReconcile, previewReconcile } from "./reconcile.js";
 import { CATALOG } from "./catalog.js";
@@ -48,6 +51,7 @@ import {
   renderPlan,
   renderInventory,
   renderCriticsTable,
+  renderFixedRoles,
   renderDoctor,
   renderConfigSetup,
   renderReconcile,
@@ -82,8 +86,8 @@ let diagnosticJSON = false;
 const commands: Record<string, { description: string; options: string[]; name?: boolean }> = {
   install: {
     description:
-      "Install components, connect integration, and optionally configure models and critics.",
-    options: ["commands", "agents", "plugins", "core", "dependency", "targets", "fragments"],
+      "Deploy the fixed agent package with chosen command adapters, plugins, and harness integration; agent models stay with configure agent.",
+    options: ["commands", "plugins", "core", "dependency", "targets", "fragments"],
   },
   configure: {
     description: "Choose components, agent models, critics, or application integration.",
@@ -91,7 +95,7 @@ const commands: Record<string, { description: string; options: string[]; name?: 
   },
   "configure components": {
     description: "Change the installed component set without resetting models.",
-    options: ["commands", "agents", "plugins", "core", "dependency", "targets", "fragments"],
+    options: ["commands", "plugins", "core", "dependency", "targets", "fragments"],
   },
   "configure agent": {
     description:
@@ -245,7 +249,8 @@ function help(topic = ""): string {
       : []),
     ...(!topic || ["install", "configure components"].includes(topic)
       ? [
-          "Non-TTY component selection: --commands <list|none> --agents <list|none> --plugins <list|none>",
+          "Fixed agents deploy only as the complete six-role package; no install flag or prompt changes agent composition.",
+          "Non-TTY component selection: --commands <list|none> --plugins <list|none>",
           "Saved selection is reused on repeat runs. --no-core disconnects the plugin; npm removal is an explicit uninstall choice.",
         ]
       : []),
@@ -410,9 +415,10 @@ async function integrationSelection(
   const defaults = await defaultConfigSelection(options.scope);
   const targets = value(
     await selectOptions(
-      "Applications to configure",
+      "Agent harnesses to configure",
       options.scope === "project" ? ["opencode"] : CONFIG_TARGETS,
       defaults.targets,
+      CONFIG_TARGETS.map((target) => TARGET_DESCRIPTIONS[target]),
     ),
   ) as ConfigTargetName[];
   if (!targets.length) return { targets, fragments: [] };
@@ -435,9 +441,12 @@ async function integrationSelection(
   ).map((fragment) => fragment.name);
   const fragments = value(
     await selectOptions(
-      "Application presets",
+      "Application presets to merge",
       available,
       defaults.fragments.filter((fragment) => available.includes(fragment)),
+      available.map(
+        (name) => CONFIG_FRAGMENTS.find((fragment) => fragment.name === name)?.description,
+      ),
     ),
   ) as FragmentName[];
   return normalizeConfigSelection(options.scope, {
@@ -591,22 +600,31 @@ async function profileDraft(options: Options, names: string[]): Promise<AgentPro
   }
 }
 
-async function componentSelection(options: Options): Promise<InstallerSelection> {
-  const supplied = [options.commands, options.agents, options.plugins].some(
-    (selection) => selection !== undefined,
+// Descriptions for the adapter multiselect come from the command registry
+// (one-to-one catalog data), with an explicit note for commandless skills.
+function commandHints(): (string | undefined)[] {
+  const descriptions = new Map(
+    COMMAND_REGISTRY.filter((command) => "skill" in command).map(
+      (command) => [command.name, command.description.split(" Russian trigger:")[0]] as const,
+    ),
   );
-  if (supplied && (!options.commands || !options.agents || !options.plugins))
-    fail(
-      "invalid_input",
-      "Supply --commands, --agents, and --plugins together (none selects an empty set)",
-    );
+  return SKILL_COMMANDS.map(
+    (name) => descriptions.get(name) ?? `No adapter: ${name} loads through the native Skill tool`,
+  );
+}
+
+async function componentSelection(options: Options): Promise<InstallerSelection> {
+  const agents: InstallerSelection["agents"] = [...FIXED_AGENT_ROLES];
+  const supplied = [options.commands, options.plugins].some((selection) => selection !== undefined);
+  if (supplied && (!options.commands || !options.plugins))
+    fail("invalid_input", "Supply --commands and --plugins together (none selects an empty set)");
   const overrides: Partial<InstallerSelection> = supplied
     ? {
         commands: options.commands,
-        agents: options.agents as InstallerSelection["agents"],
+        agents,
         plugins: options.plugins as InstallerSelection["plugins"],
       }
-    : {};
+    : { agents };
   const saved = await installedSelection(options.scope, undefined, undefined, overrides);
   const defaults = saved ?? defaultSelection();
   if (supplied) {
@@ -619,21 +637,28 @@ async function componentSelection(options: Options): Promise<InstallerSelection>
     if (!saved)
       fail(
         "terminal_required",
-        "First install outside a terminal requires --commands, --agents, and --plugins",
+        "First install outside a terminal requires --commands and --plugins",
       );
-    return { ...saved, core_activation: options.core ?? saved.core_activation };
+    return { ...saved, agents, core_activation: options.core ?? saved.core_activation };
   }
   process.stderr.write(
-    `Portable skills are installed separately through the skills CLI (npx --yes ${skillsInstallerSpec()} add https://kisev.github.io/skills --agent opencode --copy). Selecting an adapter does not install its skill.\n`,
+    `Portable skills are installed separately through the skills CLI (npx --yes ${skillsInstallerSpec()} add https://kisev.github.io/skills --agent opencode --copy). Selecting an adapter does not install its skill.\nAll six fixed agent roles deploy as one package; set their models or add critics with \`agentomatic configure agent\` afterwards.\n`,
   );
   const commands = value(
-    await selectOptions("Skill command adapters", SKILL_COMMANDS, defaults.commands),
+    await selectOptions(
+      "Skill command adapters",
+      SKILL_COMMANDS,
+      defaults.commands,
+      commandHints(),
+    ),
   );
-  const agents = value(
-    await selectOptions("Fixed agents", FIXED_AGENT_ROLES, defaults.agents),
-  ) as InstallerSelection["agents"];
   const plugins = value(
-    await selectOptions("Optional plugins", SELECTABLE_PLUGINS, defaults.plugins),
+    await selectOptions(
+      "Optional plugins",
+      SELECTABLE_PLUGINS,
+      defaults.plugins,
+      SELECTABLE_PLUGINS.map((plugin) => PLUGIN_DESCRIPTIONS[plugin]),
+    ),
   ) as InstallerSelection["plugins"];
   const core_activation =
     options.core ??
@@ -645,7 +670,7 @@ async function componentSelection(options: Options): Promise<InstallerSelection>
         defaults.core_activation,
       ),
     );
-  return normalizeSelection({ commands, agents, plugins, core_activation });
+  return normalizeSelection({ commands: commands ?? [], agents, plugins, core_activation });
 }
 
 async function deploy(options: Options, repair = false): Promise<void> {
@@ -662,7 +687,12 @@ async function deploy(options: Options, repair = false): Promise<void> {
     !repair &&
     (options.targets !== undefined ||
       options.fragments !== undefined ||
-      (tty() && value(await confirmQuestion("Configure application presets as well?"))))
+      (tty() &&
+        value(
+          await confirmQuestion(
+            "Configure presets for the selected agent harnesses as well? Presets merge permission rules, the secrets guard, and terminal settings into each harness config.",
+          ),
+        )))
   ) {
     integration = await integrationSelection(options, true);
     const chosenCore = integration.fragments.includes("core-plugin")
@@ -730,8 +760,6 @@ async function deploy(options: Options, repair = false): Promise<void> {
         ? [
             "--commands",
             selection.commands.join(",") || "none",
-            "--agents",
-            selection.agents.join(",") || "none",
             "--plugins",
             selection.plugins.join(",") || "none",
             selection.core_activation ? "--core" : "--no-core",
@@ -760,7 +788,7 @@ async function deploy(options: Options, repair = false): Promise<void> {
     process.stdout.write(
       "Components, npm, and application configuration are separate stages; a later failure does not roll back completed stages.\n",
     );
-    await criticsEpilogue(options);
+    await epilogue(options, true);
   }
   if (options.dryRun) {
     if (options.json) json(report);
@@ -816,7 +844,7 @@ async function deploy(options: Options, repair = false): Promise<void> {
       process.stdout.write(
         renderPlan(applied, { applied: true }) + renderConfigSetup(connected, { applied: true }),
       );
-      await criticsEpilogue(options);
+      await epilogue(options, true);
     }
   } catch (error) {
     if (
@@ -835,12 +863,13 @@ async function deploy(options: Options, repair = false): Promise<void> {
   }
 }
 
-// The critic panel epilogue: the table plus the canonical view and mutation
-// pointers, printed wherever the panel matters (install, staged applies,
-// configure integration).
-async function criticsEpilogue(options: Options): Promise<void> {
+// The epilogue: install adds the fixed-role package overview first, then the
+// critic panel, and every variant points at the canonical `agent list` view
+// plus the configure agent mutation point.
+async function epilogue(options: Options, overview: boolean): Promise<void> {
   if (options.json) return;
   const inventory = await listAgentProfiles(options.scope);
+  if (overview) process.stdout.write(renderFixedRoles(inventory));
   process.stdout.write(renderCriticsTable(inventory));
   process.stdout.write(
     "Inspect any time: agentomatic agent list | Manage critics: agentomatic configure agent\n",
@@ -924,7 +953,7 @@ async function configureIntegration(options: Options): Promise<void> {
       });
     else {
       process.stdout.write(renderConfigSetup(result, { applied: true }));
-      await criticsEpilogue(options);
+      await epilogue(options, false);
     }
   } catch (error) {
     partial(
@@ -982,7 +1011,7 @@ async function profileChange(options: Options, request: AgentProfileRequest): Pr
   else {
     process.stdout.write(renderPlan(result.plan, { applied: true }));
     // After a panel mutation the fresh table closes the loop.
-    await criticsEpilogue(options);
+    await epilogue(options, false);
   }
 }
 

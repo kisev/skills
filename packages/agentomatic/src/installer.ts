@@ -128,6 +128,15 @@ export const SELECTABLE_PLUGINS = [...CATALOG.plugins] as SelectablePlugin[];
 export const SKILL_COMMANDS = [...CATALOG.skills] as string[];
 const PACKAGE_COMMANDS = [...CATALOG.package_commands] as string[];
 
+// One-line descriptions for the interactive wrappers prompt, kept next to the
+// selectable set so the wizard never invents them ad hoc.
+export const PLUGIN_DESCRIPTIONS: Record<SelectablePlugin, string> = {
+  "code-simplify": "Injects the code-simplify prevention ladder into agent sessions",
+  "rules-injector": "Injects AGENTS.md rules into the session on demand",
+  rtk: "Compresses verbose shell tool output through the RTK CLI",
+  "zed-bell": "Plays a terminal bell on session events (Zed integrated)",
+};
+
 export function defaultSelection(): InstallerSelection {
   return {
     commands: [...SKILL_COMMANDS].sort(),

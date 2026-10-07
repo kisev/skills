@@ -110,8 +110,9 @@ npx agentomatic configure integration --global --dry-run
 }
 ```
 
-Restart OpenCode after activation or asset changes. A confirmed `install` can
-apply its core config step and stage optional models and additional critics.
+Restart OpenCode after activation or asset changes. A confirmed `install`
+deploys the six fixed agents only as one complete package; agent models and
+critics live in the confirmed `configure agent` command.
 `configure` provides one settings menu; `status` shows the installed set and models.
 `uninstall` proposes plugin disconnection, retains models, and removes the npm
 dependency only with an explicit selection (`--remove-dependency`). Other

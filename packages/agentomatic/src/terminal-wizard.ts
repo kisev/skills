@@ -42,10 +42,15 @@ export async function selectOption(
   return value as number;
 }
 
+// The multiselect contract: each option carries a data-driven description and
+// the message states the all/none controls, so every group is self-explanatory.
+const MULTISELECT_CONTROLS = " (move: up/down; toggle: space; all/none: a; enter confirms)";
+
 export async function selectOptions(
   label: string,
   options: readonly string[],
   initialSelected: readonly string[] = [],
+  hints?: readonly (string | undefined)[],
   stdin: Readable = process.stdin,
   stderr: Writable = process.stderr,
 ): Promise<string[] | null> {
@@ -57,8 +62,12 @@ export async function selectOptions(
       throw new InstallerError("invalid_input", `Unknown initial selector option: ${value}`);
   }
   const value = await clack.multiselect({
-    message: label,
-    options: options.map((option) => ({ value: option, label: option })),
+    message: `${label}${MULTISELECT_CONTROLS}`,
+    options: options.map((option, index) => ({
+      value: option,
+      label: option,
+      ...(hints?.[index] ? { hint: hints[index] } : {}),
+    })),
     initialValues: [...initialSelected],
     required: false,
     input: stdin,

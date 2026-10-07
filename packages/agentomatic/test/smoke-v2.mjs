@@ -54,8 +54,6 @@ try {
       "install",
       "--commands",
       "none",
-      "--agents",
-      "manager,mapper,worker,review,architect,critic",
       "--plugins",
       "rtk,rules-injector,zed-bell",
       "--no-core",

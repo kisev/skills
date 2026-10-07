@@ -142,8 +142,6 @@ test("applying an upgrade migrates legacy namespaces before installing", () => {
     const selection = [
       "--commands",
       "agents-md",
-      "--agents",
-      "manager,architect,mapper,worker,review,critic",
       "--plugins",
       "none",
       "--no-dependency",

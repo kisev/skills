@@ -1,4 +1,4 @@
-import type { AgentInventory, AgentProfilePlan } from "./agent-profiles.js";
+import { FIXED_AGENT_ROLES, type AgentInventory, type AgentProfilePlan } from "./agent-profiles.js";
 import { CATALOG } from "./catalog.js";
 import type { ConfigSetupPlan } from "./config-setup.js";
 import type { Plan as InstallerPlan } from "./installer.js";
@@ -131,12 +131,14 @@ export function renderPlan(
   if (details.length) lines.push("", "Details:", ...details);
   const conflicts = plan.operations.filter((item) => item.operation === "conflict").length;
   lines.push("", `Conflicts: ${conflicts || "none"}`);
+  const restartNote = "restart the host session so the deployed roles and settings load";
   lines.push(
-    options.applied
-      ? `Restart required: ${plan.requires_restart ? "yes" : "no"}`
-      : `Restart after apply: ${plan.requires_restart ? "yes" : "no"}`,
+    plan.requires_restart
+      ? `${options.applied ? "Restart required" : "Restart after apply"}: yes — ${restartNote}`
+      : `${options.applied ? "Restart required" : "Restart after apply"}: no`,
   );
-  if (!options.applied && options.applyHint) lines.push("", "Apply:", `  ${options.applyHint}`);
+  if (!options.applied && options.applyHint)
+    lines.push("", "Apply (repeat non-interactively):", `  ${options.applyHint}`);
   if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
 }
@@ -185,13 +187,14 @@ export function renderConfigSetup(
   const conflicts = plan.operations.filter((item) => item.operation === "conflict");
   lines.push("", `Conflicts: ${conflicts.length || "none"}`);
   lines.push(
-    options.applied
-      ? `Restart required: ${plan.requires_restart ? "yes" : "no"}`
-      : `Restart after apply: ${plan.requires_restart ? "yes" : "no"}`,
+    plan.requires_restart
+      ? `${options.applied ? "Restart required" : "Restart after apply"}: yes — restart the host session so the merged presets load`
+      : `${options.applied ? "Restart required" : "Restart after apply"}: no`,
   );
   if (!options.applied) {
     if (!plan.confirmable) lines.push("", "No configuration changes are required.");
-    else if (options.applyHint) lines.push("", "Apply:", `  ${options.applyHint}`);
+    else if (options.applyHint)
+      lines.push("", "Apply (repeat non-interactively):", `  ${options.applyHint}`);
   }
   if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
@@ -210,20 +213,51 @@ function table(rows: string[][]): string[] {
 }
 
 export function renderCriticsTable(inventory: AgentInventory): string {
+  // The panel keeps the package-owned fixed critic (`critic`) apart from the
+  // additional `critic-*` pool entries and points at the canonical overview.
   const critics = inventory.profiles.filter(
-    (profile) => profile.name.startsWith("critic-") && profile.ownership !== "user-owned",
+    (profile) =>
+      profile.ownership !== "user-owned" &&
+      (profile.name === "critic" || profile.name.startsWith("critic-")),
   );
   if (!critics.length) return "Critics:\n  No critics\n";
+  const pool = critics.filter((profile) => profile.name !== "critic");
   const rows = [
     ["NAME", "MODEL", "VARIANT", "PROVIDER"],
     ...critics.map((profile) => [
       terminalSafe(profile.name),
-      terminalSafe(profile.model ?? "default"),
+      terminalSafe(profile.model ?? "default (host)"),
       terminalSafe(profile.variant ?? "-"),
       terminalSafe(profile.model?.split("/", 1)[0] ?? "-"),
     ]),
   ];
-  return `Critics:\n${table(rows).join("\n")}\n`;
+  return (
+    `Critics:\n${table(rows).join("\n")}\n` +
+    `Pool: additional critics are optional specialist profiles (` +
+    `${pool.length ? pool.map((profile) => terminalSafe(profile.name)).join(", ") : "none"}); ` +
+    "the fixed critic always deploys with the package.\n"
+  );
+}
+
+export function renderFixedRoles(inventory: AgentInventory): string {
+  const roles = inventory.profiles.filter(
+    (profile) =>
+      profile.ownership !== "user-owned" &&
+      FIXED_AGENT_ROLES.includes(profile.name as (typeof FIXED_AGENT_ROLES)[number]),
+  );
+  const rows = [
+    ["NAME", "MODEL", "VARIANT"],
+    ...roles.map((profile) => [
+      terminalSafe(profile.name),
+      terminalSafe(profile.model ?? "default (host)"),
+      terminalSafe(profile.variant ?? "-"),
+    ]),
+  ];
+  return [
+    "Fixed roles (all six belong to the package; models and critic composition: agentomatic configure agent):",
+    ...table(rows),
+    "",
+  ].join("\n");
 }
 
 export function renderInventory(inventory: AgentInventory): string {
@@ -343,7 +377,7 @@ export function renderReconcile(
     } else if (!plan.confirmable) {
       lines.push("", "No cleanup changes are required.");
     } else if (options.applyHint) {
-      lines.push("", "Apply:", `  ${options.applyHint}`);
+      lines.push("", "Apply (repeat non-interactively):", `  ${options.applyHint}`);
     }
   }
   return `${lines.join("\n")}\n`;

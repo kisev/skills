@@ -295,7 +295,7 @@ test("CLI help is structured and explains commands options workflow and scope", 
     help.stdout,
     /Usage:[\s\S]*install[\s\S]*configure[\s\S]*status[\s\S]*doctor[\s\S]*uninstall[\s\S]*Common:[\s\S]*Mutations:/,
   );
-  assert.match(help.stdout, /^  install\s{2,}Install components/m);
+  assert.match(help.stdout, /^  install\s{2,}Deploy the fixed agent package/m);
   assert.match(help.stdout, /^  doctor\s{2,}Diagnose versions, ownership, drift/m);
   assert.doesNotMatch(help.stdout, /agent model-set|agent reconcile|critic remove/);
   for (const option of [
@@ -303,7 +303,7 @@ test("CLI help is structured and explains commands options workflow and scope", 
     "--dry-run",
     "--yes",
     "--commands <list|none>",
-    "--agents <list|none>",
+    "--plugins <list|none>",
   ]) {
     assert.ok(help.stdout.includes(option), option);
   }
@@ -508,8 +508,6 @@ test("explicit CLI selection replaces retired saved commands without resetting c
             "install",
             "--commands",
             commands,
-            "--agents",
-            "none",
             "--plugins",
             "none",
             "--no-dependency",
