@@ -355,7 +355,7 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             "--no-audit",
             "--no-fund",
             *(f"{entry['name']}@{entry['version']}" for entry in entries),
-            "@opencode/plugin@2.0.19",
+            "@opencode/plugin@2.0.24",
             cwd=root,
             env=env,
         )

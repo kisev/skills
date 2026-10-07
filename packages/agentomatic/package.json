@@ -55,7 +55,7 @@
     "zod": "4.1.8"
   },
   "devDependencies": {
-    "@opencode/plugin": "2.0.19",
+    "@opencode/plugin": "2.0.24",
     "@types/node": "22.15.30",
     "typescript": "7.0.2"
   },
@@ -70,5 +70,5 @@
   "engines": {
     "node": ">=22.13"
   },
-  "skillsInstallerVersion": "1.7.0"
+  "skillsInstallerVersion": "1.7.1"
 }

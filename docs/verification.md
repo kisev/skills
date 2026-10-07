@@ -216,7 +216,7 @@ audit outcomes. Offline results use `observation_mode: hostless-contract`; only
 trusted-live results use `observation_mode: trusted-live` and may satisfy case
 outcome assertions.
 
-Compatibility checks exercise OpenCode `2.0.19` inside
+Compatibility checks exercise OpenCode `2.0.24` inside
 `>=2.0.0 <2.1.0` without credentials: installed-tarball package smoke, native
 server permission evaluation, and the memomatic V2 HTTP and read-only database
 contract.

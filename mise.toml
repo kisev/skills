@@ -13,33 +13,33 @@ min_version = "2026.9.11"
 # tombi: format.rules.table-keys-order = "ascending"
 [tools]
   "aqua:BurntSushi/ripgrep" = "15.2.0"
-  "aqua:astral-sh/uv" = "0.12.19"
-  "aqua:evilmartians/lefthook" = "2.1.14"
+  "aqua:astral-sh/uv" = "0.12.23"
+  "aqua:evilmartians/lefthook" = "2.1.17"
   "aqua:gitleaks/gitleaks" = "8.30.1"
-  "aqua:go-task/task" = "3.53.1"
+  "aqua:go-task/task" = "3.54.0"
   "aqua:jqlang/jq" = "1.8.2"
   "aqua:koalaman/shellcheck" = "0.11.0"
-  "aqua:mikefarah/yq" = "4.53.6"
+  "aqua:mikefarah/yq" = "4.54.1"
   "aqua:mvdan/sh" = "3.14.1"
   "aqua:rhysd/actionlint" = "1.7.12"
   "aqua:sharkdp/fd" = "10.5.0"
-  "aqua:tombi-toml/tombi" = "1.5.5"
+  "aqua:tombi-toml/tombi" = "1.7.3"
   "core:node" = "26.10.0"
   "core:python" = [
-    "3.12.14",
-    "3.13.14",
-    "3.14.7",
+    "3.12.15",
+    "3.13.16",
+    "3.14.8",
   ]
-  "github:agent-sh/agnix" = "0.54.0"
+  "github:agent-sh/agnix" = "0.56.6"
   "github:editorconfig-checker/editorconfig-checker" = "4.0.2"
-  "glab" = "1.120.0"
+  glab = "1.121.0"
   "npm:@commitlint/cli" = "21.2.3"
-  "npm:@opencode/cli" = { version = "2.0.19", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
-  "npm:agent-browser" = "0.38.1"
+  "npm:@opencode/cli" = { version = "2.0.24", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
+  "npm:agent-browser" = "0.38.2"
   "npm:markdownlint-cli2" = "0.23.3"
-  "npm:oxfmt" = "0.70.0"
-  "npm:oxlint" = "1.85.0"
+  "npm:oxfmt" = "0.72.0"
+  "npm:oxlint" = "1.87.0"
   "npm:remark-cli" = { version = "12.0.1", npm_args = "remark-gfm@4.0.1 remark-frontmatter@5.0.0" }
-  "npm:skills" = "1.7.0"
+  "npm:skills" = "1.7.1"
   "npm:typescript" = "7.0.2"
   "pipx:yamllint" = "1.38.0"

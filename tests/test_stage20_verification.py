@@ -47,7 +47,7 @@ def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts()
 def test_stage20_compatibility_inventory_is_explicit_and_hostless() -> None:
     validate_compatibility_inventory(ROOT)
     inventory = json.loads((ROOT / "evals/contracts/opencode-compatibility.json").read_text())
-    assert inventory["versions"] == ["2.0.19"]
+    assert inventory["versions"] == ["2.0.24"]
     assert inventory["range"] == ">=2.0.0 <2.1.0"
     assert inventory["credentials"] is False
     assert inventory["network"] is False

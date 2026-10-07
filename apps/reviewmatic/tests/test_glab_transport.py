@@ -45,7 +45,7 @@ def test_real_glab_serializes_positioned_bodies_as_nested_json_without_bracket_f
         )
 
     version = run("glab", "version")
-    assert re.search(r"glab 1\.120\.0\b", version.stdout)
+    assert re.search(r"glab 1\.121\.0\b", version.stdout)
 
     requests: list[dict[str, Any]] = []
 

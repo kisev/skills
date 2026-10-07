@@ -75,7 +75,7 @@ def test_repository_version_contract_is_centralized() -> None:
     result = check_versions.validate(ROOT)
     assert result["status"] == "passed"
     assert result["portable_skills"] == 44
-    assert result["skills_installer"] == "1.7.0"
+    assert result["skills_installer"] == "1.7.1"
 
 
 def test_version_contract_rejects_release_mirror_drift(tmp_path: Path) -> None:
