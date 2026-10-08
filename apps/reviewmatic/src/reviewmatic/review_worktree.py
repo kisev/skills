@@ -11,7 +11,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import unquote
 
 from reviewmatic import context, worktree
@@ -383,11 +383,204 @@ def _is_worktree_at(path: str) -> bool:
     return inside and toplevel
 
 
+# --- Managed repository clone (XDG runtime cache) ---
+#
+# Every remote-MR preparation works on a repository that contains the exact
+# base/start/head objects. A user-provided `--repo-root` checkout is used as an
+# optimization when it has a matching remote and can provide those objects;
+# otherwise the runtime creates or updates one clone per host+project under the
+# XDG cache and shares it across merge requests with an incremental fetch.
+
+
+def _cache_home() -> Path:
+    configured = os.environ.get("XDG_CACHE_HOME")
+    path = Path(configured) if configured else Path.home() / ".cache"
+    if not path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts[1:]):
+        raise contract.WorkflowError("XDG_CACHE_HOME must be an absolute normalized path")
+    return path
+
+
+def repositories_root() -> Path:
+    return _cache_home() / "agent-skills" / "reviewmatic" / "repositories"
+
+
+def clone_slug(host: str, project: str) -> str:
+    """Stable cache key for one host+project, independent of any merge request."""
+    readable = re.sub(r"[^A-Za-z0-9._-]+", "-", f"repo-{host}-{project}")[:96]
+    digest = hashlib.sha256(f"{host}\n{project}\n".encode()).hexdigest()[:8]
+    return f"{readable}-{digest}"
+
+
+def repository_clone_path(host: str, project: str) -> str:
+    return str(repositories_root() / clone_slug(host, project))
+
+
+def _clone_url(host: str, project: str) -> str:
+    return f"https://{host}/{project}.git"
+
+
+def _is_managed_clone(path: str, host: str, project: str) -> bool:
+    return bool(_remotes_for(path, host, [project]))
+
+
+def ensure_clone(host: str, project: str) -> str:
+    """Create or incrementally update the shared clone for one project."""
+    host = host.lower()
+    path = repository_clone_path(host, project)
+    lock_base = str(repositories_root())
+
+    def update() -> None:
+        if _path_exists(path):
+            if not _is_managed_clone(path, host, project):
+                raise contract.WorkflowError(
+                    f"the managed clone {path} does not point at {host}/{project}; remove it "
+                    "manually and start the review again"
+                )
+            worktree.git(path, ["fetch", "--prune", "--no-tags", "origin"], None, FETCH_TIMEOUT_S)
+            return
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        worktree.git(
+            Path(path).parent,
+            ["clone", "--no-checkout", "--no-tags", _clone_url(host, project), path],
+            None,
+            600.0,
+        )
+        if not _is_managed_clone(path, host, project):
+            raise contract.WorkflowError(
+                f"the managed clone {path} does not match {host}/{project}"
+            )
+
+    _with_preparation_lock(lock_base, clone_slug(host, project), update)
+    return path
+
+
+def _evidence_identity(
+    evidence: dict[str, Any],
+) -> tuple[str, str, dict[str, Any], dict[str, Any]]:
+    raw_target = evidence.get("target")
+    raw_object = evidence.get("object")
+    target: dict[str, Any] = (
+        cast("dict[str, Any]", raw_target) if isinstance(raw_target, dict) else {}
+    )
+    object_value: dict[str, Any] = (
+        cast("dict[str, Any]", raw_object) if isinstance(raw_object, dict) else {}
+    )
+    host = str(target.get("hostname") or "").lower()
+    project = str(target.get("project_path") or "")
+    if host == "" or project == "":
+        raise contract.WorkflowError("merge request project identity is incomplete")
+    return host, project, target, object_value
+
+
+def _object_attempts(
+    remotes: list[RemoteTarget], iid: int | None, source_branch: str
+) -> tuple[list[FetchAttempt], list[FetchAttempt]]:
+    head = (
+        [
+            FetchAttempt(remote.name, f"refs/merge_requests/{iid}/head", "merge request head ref")
+            for remote in remotes
+        ]
+        + [
+            FetchAttempt(
+                remote.name, f"refs/heads/{source_branch}", f"source branch {source_branch}"
+            )
+            for remote in remotes
+        ]
+        + [FetchAttempt(remote.name, None, "exact revision fetch") for remote in remotes]
+    )
+    base = [FetchAttempt(remote.name, None, "exact revision fetch") for remote in remotes]
+    return head, base
+
+
+def _ensure_exact_objects(
+    main: str,
+    evidence: dict[str, Any],
+    target_remotes: list[RemoteTarget],
+    source_remotes: list[RemoteTarget],
+    iid: int | None,
+    source_branch: str,
+) -> str:
+    object_value = cast("dict[str, Any]", evidence.get("object") or {})
+    diff_refs = (
+        object_value.get("diff_refs") if isinstance(object_value.get("diff_refs"), dict) else {}
+    )
+    base_sha = _revision_value(
+        diff_refs.get("base_sha") if diff_refs else None, "merge request diff base"
+    )
+    start_sha = _revision_value(
+        diff_refs.get("start_sha") if diff_refs else None, "merge request diff start"
+    )
+    head_source = diff_refs.get("head_sha") if diff_refs else None
+    if head_source is None:
+        head_source = evidence.get("head_sha")
+    head_sha = _revision_value(head_source, "merge request head")
+    all_remotes = _unique_remotes([*source_remotes, *target_remotes])
+    head_attempts, base_attempts = _object_attempts(all_remotes, iid, source_branch)
+    head_remote = _fetch_revision(main, head_sha, "merge request head", head_attempts)
+    _fetch_revision(main, base_sha, "merge request diff base", base_attempts)
+    _fetch_revision(main, start_sha, "merge request diff start", head_attempts)
+    return head_remote
+
+
+def resolve_main_checkout(evidence: dict[str, Any], repo_root: str | None) -> tuple[str, str]:
+    """Resolve the repository that holds the exact MR objects.
+
+    A user-provided checkout is used when it has a matching remote and can
+    provide the objects; every other case creates or updates the shared clone.
+    Returns the repository path and the remote that provided the MR head ("" when
+    the head object was already present or unavailable from the checkout).
+    """
+    host, project, target, object_value = _evidence_identity(evidence)
+    project_id = _plain_int(target.get("project_id"))
+    iid = _plain_int(target.get("iid"))
+    source_branch = (
+        str(object_value["source_branch"])
+        if contract.nonempty_string(object_value.get("source_branch"))
+        else ""
+    )
+    checkout_error: str | None = None
+    if repo_root is not None:
+        try:
+            toplevel = checkout_root(repo_root)
+            main = worktree.main_checkout_root(toplevel)
+            target_remotes = sorted(_remotes_for(main, host, [project]), key=lambda item: item.name)
+            source_remotes: list[RemoteTarget] = []
+            source_project_id = _plain_int(object_value.get("source_project_id"))
+            if (
+                source_project_id is not None
+                and project_id is not None
+                and source_project_id != project_id
+            ):
+                source_project_path = _source_project_path_for(host, source_project_id)
+                source_remotes = sorted(
+                    _remotes_for(main, host, [source_project_path]), key=lambda item: item.name
+                )
+            if target_remotes or source_remotes:
+                head_remote = _ensure_exact_objects(
+                    main, evidence, target_remotes, source_remotes, iid, source_branch
+                )
+                return main, head_remote
+        except contract.WorkflowError as error:
+            checkout_error = str(error)
+    try:
+        clone = ensure_clone(host, project)
+        target_remotes = sorted(_remotes_for(clone, host, [project]), key=lambda item: item.name)
+        head_remote = _ensure_exact_objects(clone, evidence, target_remotes, [], iid, source_branch)
+    except contract.WorkflowError as error:
+        detail = error if checkout_error is None else f"{checkout_error}; managed clone: {error}"
+        raise contract.WorkflowError(
+            "the exact merge request objects are unavailable from --repo-root and from the "
+            f"managed clone for {host}/{project}: {detail}"
+        ) from error
+    return clone, head_remote
+
+
 def prepare_review_worktree(
     repo_root: str,
     evidence: dict[str, Any],
     evidence_digest: str,
     supersede_root: str | None = None,
+    prefetched_head_remote: str | None = None,
 ) -> dict[str, Any]:
     target = evidence["target"] if isinstance(evidence.get("target"), dict) else None
     evidence_object = evidence["object"] if isinstance(evidence.get("object"), dict) else None
@@ -459,8 +652,8 @@ def prepare_review_worktree(
         raise contract.WorkflowError(
             f"no remote of {main} points at {host}/{project_path}"
             + ("" if source_project_path is None else f" or {host}/{source_project_path}")
-            + "; run from the merge request checkout or pass it with --repo-root; "
-            "cloning is not performed"
+            + "; the managed clone for this project is unavailable and --repo-root has no "
+            "matching remote; verify Git access to the project and start the review again"
         )
 
     head_attempts = (
@@ -480,6 +673,10 @@ def prepare_review_worktree(
         FetchAttempt(remote.name, None, "exact revision fetch") for remote in all_remotes
     ]
     head_remote = _fetch_revision(main, head_sha, "merge request head", head_attempts)
+    if head_remote == "" and prefetched_head_remote:
+        # The caller already fetched the head from this remote (resolve as
+        # optimization); keep its attribution instead of reporting the target.
+        head_remote = prefetched_head_remote
 
     # Refuse retired layouts before any mutation: a managed tree of the old
     # path scheme is never replaced, moved, or shadowed by a second directory.

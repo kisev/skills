@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 from urllib.parse import quote as url_quote
 
-from reviewmatic import context, ocr_critic, run_panel, tail, workflow
+from reviewmatic import context, ocr_critic, review_worktree, run_panel, tail, workflow
 from reviewmatic.portable.portable_gitlab import contract
 
 if TYPE_CHECKING:
@@ -96,7 +96,7 @@ class ReviewRun:
 
     def __init__(self, namespace: argparse.Namespace) -> None:
         self.url = str(getattr(namespace, "url", ""))
-        self.repo_root: str | None = getattr(namespace, "repoRoot", None) or str(Path.cwd())
+        self.repo_root: str | None = getattr(namespace, "repoRoot", None)
         self.mode: str = getattr(namespace, "reviewMode", None) or "normal"
         self.locale: str = getattr(namespace, "locale", None) or "en"
         self.incremental: str = getattr(namespace, "incremental", None) or "auto"
@@ -131,7 +131,7 @@ class ReviewRun:
     def execute(self) -> dict[str, Any]:
         if self.participants is not None and self.mode == "fast":
             raise contract.WorkflowError(
-                "the run panel applies to normal, deep, and incremental reviews; a fast review "
+                "the run panel applies to normal and incremental reviews; a fast review "
                 "runs without critics, so --participants has no stage to apply to"
             )
         if self.resume:
@@ -151,6 +151,14 @@ class ReviewRun:
                 ),
             )
             self.root = Path(str(bundle["artifact_root"]))
+            resolved_repo, _head_remote = cast(
+                "tuple[str, str]",
+                self.step(
+                    "resolve-repo",
+                    lambda: review_worktree.resolve_main_checkout(bundle, self.repo_root),
+                ),
+            )
+            self.repo_root = resolved_repo
             self.step(
                 "begin",
                 lambda: workflow.prepared(

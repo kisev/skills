@@ -8,9 +8,11 @@ installed runtime's source to discover input fields.
 ## One editable draft
 
 1. Run `reviewmatic start-review --url MR_URL --review-mode MODE --locale LOCALE --incremental INCREMENTAL`.
-   Modes are `fast|normal|deep`, locales `en|ru`, incremental policies `auto|off`.
-   `--repo-root CHECKOUT` is optional and only needed when the current directory's
-   repository does not host or source the merge request. The runner prepares a
+   Modes are `fast|normal`, locales `en|ru`, incremental policies `auto|off`.
+   `--repo-root CHECKOUT` is optional: a matching checkout is used as an
+   optimization, and a missing or object-less checkout falls back to one managed
+   clone per host and project under the XDG cache, so the invocation does not
+   depend on the current directory. The runner prepares a
    managed review worktree at the exact MR head and returns it in `review_worktree`
    with the source repository and exact base/start/head/target refs; pass these
    exact paths to critics and read all code there without recollection.
@@ -91,7 +93,7 @@ inside it.
 
 ## Review panel: critics and arbitrator
 
-Normal, deep, and incremental reviews run as a panel: one recorded selection,
+Normal and incremental reviews run as a panel: one recorded selection,
 parallel independent critics, and one separate arbitrator. Unchanged mode
 skips the panel but still audits every discussion. Fast mode runs without a
 panel and requires explicit `low_risk=true` justified by the inspected change.

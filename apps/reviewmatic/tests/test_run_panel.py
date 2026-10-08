@@ -702,12 +702,19 @@ def test_engine_offering_and_poll_exclude_ocr_for_oversized_background(
 
 
 def test_poll_presents_the_verbatim_locale_keyed_text() -> None:
-    poll = run_panel.poll("en", "deep", 500)
+    poll = run_panel.poll("en", "normal", 500)
     assert poll["ocr"] is True
     assert poll["exclusion"] is None
-    for line in ("Critics:", "Arbitrator:", "Mode: deep review."):
+    for line in (
+        "Critics:",
+        "Depth: choose it through the critic composition",
+        "Arbitrator:",
+        "Mode: normal review.",
+    ):
         assert line in poll["text"]
     assert "OCR critics are not offered" not in poll["text"]
+    russian = run_panel.poll("ru", "normal", 500)
+    assert "Глубина: выбирай её составом критиков" in russian["text"]
     assert run_panel.poll_rules("ru").startswith("Предъяви текст опроса дословно")
     assert run_panel.poll_rules("en").startswith("Present the poll text verbatim")
 

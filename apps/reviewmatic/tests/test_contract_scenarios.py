@@ -509,17 +509,17 @@ def test_validate_critic_binds_evidence_and_scope() -> None:
 def test_validate_decision_accounts_for_findings_and_threads() -> None:
     report = decision_payload()
     receipt = critic_payload()
-    contract.validate_decision(report, DIGEST, receipt, "deep", DIGEST, DIGEST)
+    contract.validate_decision(report, DIGEST, receipt, "normal", DIGEST, DIGEST)
     with workflow_error(
         r"the verdict names a decided state; path: \$\.verdict; valid form: one of "
         "ready, not_ready, blocked"
     ):
         contract.validate_decision(
-            {**report, "verdict": "unknown"}, DIGEST, receipt, "deep", DIGEST, DIGEST
+            {**report, "verdict": "unknown"}, DIGEST, receipt, "normal", DIGEST, DIGEST
         )
     with workflow_error("every finding and unresolved thread gets exactly one answer"):
         contract.validate_decision(
-            {**report, "responses": []}, DIGEST, receipt, "deep", DIGEST, DIGEST
+            {**report, "responses": []}, DIGEST, receipt, "normal", DIGEST, DIGEST
         )
     no_critic_report = decision_payload()
     del no_critic_report["critic_receipt_digest"]
@@ -537,7 +537,7 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
     )
     with workflow_error("blocking findings prohibit ready"):
         contract.validate_decision(
-            {**report, "blocking_findings": True}, DIGEST, receipt, "deep", DIGEST, DIGEST
+            {**report, "blocking_findings": True}, DIGEST, receipt, "normal", DIGEST, DIGEST
         )
     with_threads = {
         **report,
@@ -547,10 +547,10 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
             {"id": "thread:note-1", "decision": "reject", "reason": "stale"},
         ],
     }
-    contract.validate_decision(with_threads, DIGEST, receipt, "deep", DIGEST, DIGEST)
+    contract.validate_decision(with_threads, DIGEST, receipt, "normal", DIGEST, DIGEST)
     bad_namespace = {**with_threads, "unresolved_threads": [{"id": "finding-1"}]}
     with workflow_error("findings and threads never share identities"):
-        contract.validate_decision(bad_namespace, DIGEST, receipt, "deep", DIGEST, DIGEST)
+        contract.validate_decision(bad_namespace, DIGEST, receipt, "normal", DIGEST, DIGEST)
     duplicates = {
         **report,
         "findings": [detailed_finding(), detailed_finding(id="finding-2")],
@@ -560,7 +560,7 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
         ],
     }
     with workflow_error("accepted findings are structurally distinct"):
-        contract.validate_decision(duplicates, DIGEST, receipt, "deep", DIGEST, DIGEST)
+        contract.validate_decision(duplicates, DIGEST, receipt, "normal", DIGEST, DIGEST)
 
 
 def test_finalize_payload_binds_the_evidence_fingerprint_and_validates(

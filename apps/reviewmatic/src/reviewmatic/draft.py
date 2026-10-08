@@ -630,9 +630,7 @@ def resume_review(root_value: str) -> dict[str, Any]:
                 "run_id": "",
                 "session_id": "",
                 "low_risk": False,
-                "critic_count": 1
-                if str(progress["mode"]) in {"normal", "deep", "incremental"}
-                else 0,
+                "critic_count": 1 if str(progress["mode"]) in {"normal", "incremental"} else 0,
                 "findings": [],
                 "critics": [],
                 "dispositions": [],
@@ -677,7 +675,7 @@ def resume_review(root_value: str) -> dict[str, Any]:
         "mode": progress["mode"],
         "locale": progress["locale"],
         "role": review_context["role"],
-        "critic_required": str(progress["mode"]) in {"normal", "deep", "incremental"},
+        "critic_required": str(progress["mode"]) in {"normal", "incremental"},
         "critic_receipt_template": _critic_receipt(review_context, str(progress["mode"])),
         "participants": draft.get("participants"),
         "panel": _panel_summary(draft, str(progress["mode"])),
@@ -785,7 +783,7 @@ def resume_review(root_value: str) -> dict[str, Any]:
             "exact head file. Run check-review once the analysis is complete."
         ),
         "critic_task": {
-            "required": str(progress["mode"]) in {"normal", "deep", "incremental"},
+            "required": str(progress["mode"]) in {"normal", "incremental"},
             "launch_when": "evidence_ready",
             "preferred_execution": "native_background",
             "join_before": "check-review",
@@ -950,7 +948,7 @@ def _panel_summary(draft: dict[str, Any], mode: str) -> dict[str, Any]:
     if "participants" not in draft:
         return {
             "recorded": False,
-            "required": mode in {"normal", "deep", "incremental"},
+            "required": mode in {"normal", "incremental"},
             "record_command": context.runner_action(
                 "record-participants",
                 "--draft",
@@ -1357,9 +1355,9 @@ def record_draft_participants(
 ) -> dict[str, Any]:
     draft, _root, progress, _evidence, review_context = _selected_draft(path)
     mode = str(progress["mode"])
-    if mode not in {"normal", "deep", "incremental"}:
+    if mode not in {"normal", "incremental"}:
         raise contract.WorkflowError(
-            "record-participants applies to normal, deep, and incremental reviews; fast and "
+            "record-participants applies to normal and incremental reviews; fast and "
             "unchanged reviews run without a panel"
         )
     if len(_records(draft.get("critics"))) > 0:
@@ -2211,20 +2209,11 @@ def start_review(
     user_locale = locale or "en"
     user_incremental = incremental or "auto"
     if (
-        mode not in {"fast", "normal", "deep"}
+        mode not in {"fast", "normal"}
         or user_locale not in {"en", "ru"}
         or user_incremental not in {"auto", "off"}
     ):
         raise contract.WorkflowError("Invalid mode, locale, or incremental policy")
-    try:
-        resolved_repo_root = review_worktree.checkout_root(repo_root or Path.cwd())
-    except contract.WorkflowError as error:
-        return {
-            "status": "blocked",
-            "reason": "review requires a suitable local Git checkout",
-            "errors": [str(error)],
-            "external_mutations": False,
-        }
     target = contract.parse_target(url, {"merge_requests"})
     bundle = contract.collect(target, "code-review", locale=user_locale)
     collected = time.monotonic()
@@ -2237,11 +2226,24 @@ def start_review(
             "external_mutations": False,
         }
     try:
+        resolved_repo_root, head_remote = review_worktree.resolve_main_checkout(
+            cast("dict[str, Any]", bundle), repo_root
+        )
+    except contract.WorkflowError as error:
+        return {
+            "status": "blocked",
+            "reason": "review requires a usable repository",
+            "errors": [str(error)],
+            "artifact_root": str(bundle["artifact_root"]),
+            "external_mutations": False,
+        }
+    try:
         review = review_worktree.prepare_review_worktree(
             repo_root=resolved_repo_root,
             evidence=cast("dict[str, Any]", bundle),
             evidence_digest=str(bundle["preview_digest"]),
             supersede_root=supersede_root,
+            prefetched_head_remote=head_remote or None,
         )
     except contract.WorkflowError as error:
         return {
@@ -2319,7 +2321,7 @@ def _merged_critics(
     )
     if (
         len(receipts) != count
-        or (mode in {"normal", "deep", "incremental"} and count < 1)
+        or (mode in {"normal", "incremental"} and count < 1)
         or (mode == "unchanged" and count != 0 and repair_kind != "decision")
     ):
         raise contract.WorkflowError(
@@ -3329,9 +3331,7 @@ def refresh_review(path: str) -> dict[str, Any]:
         url=str(cast("dict[str, Any]", evidence_snapshot["target"])["url"]),
         repo_root=str(progress["repo_root"]) if progress.get("repo_root") else None,
         review_mode=(
-            str(progress["mode"])
-            if str(progress["mode"]) in {"fast", "normal", "deep"}
-            else "normal"
+            str(progress["mode"]) if str(progress["mode"]) in {"fast", "normal"} else "normal"
         ),
         locale=str(progress["locale"]),
         supersede_root=str(root),

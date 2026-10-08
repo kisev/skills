@@ -2147,7 +2147,7 @@
                 "decision_digest": { "$ref": "#/$defs/digest" },
                 "target": { "type": "object" },
                 "role": { "enum": ["author", "reviewer"] },
-                "mode": { "enum": ["fast", "normal", "deep", "incremental", "unchanged"] },
+                "mode": { "enum": ["fast", "normal", "incremental", "unchanged"] },
                 "locale": { "enum": ["en", "ru"] },
                 "incremental": { "$ref": "#/$defs/incremental_review" },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },
@@ -2655,7 +2655,7 @@
                 "critic_receipt_digest": {
                   "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }]
                 },
-                "mode": { "enum": ["fast", "normal", "deep", "incremental", "unchanged"] },
+                "mode": { "enum": ["fast", "normal", "incremental", "unchanged"] },
                 "external_mutations": { "const": false },
                 "run_id": { "type": "string", "minLength": 1 },
                 "session_id": { "type": "string", "minLength": 1 },

@@ -20,13 +20,14 @@ clear, ask the user; do not silently choose a source. On the moving `dev`
 channel resolve the tip first — `git ls-remote https://github.com/kisev/skills.git refs/heads/dev`
 prints the current commit — and pin it:
 `REVIEWMATIC_FROM='git+https://github.com/kisev/skills.git@<sha>#subdirectory=apps/reviewmatic'`.
-Keep that exact pinned value for the whole review. Invoke every runtime
-command, including each returned continuation action, as
-`uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`; never depend on a globally
-installed binary. Immediately after the first invocation, run
-`reviewmatic runtime-info` once and check the printed `commit` against the
-pinned SHA: a mismatch or `unknown` means a stale uvx cache or an unpinned
-install — re-pin with the exact `@<sha>` (adding
+Keep that exact pinned value for the whole review. Treat every `reviewmatic`
+found on `PATH` as a foreign, possibly outdated binary and ignore it; the only
+runtime is the pinned `uvx --from "$REVIEWMATIC_FROM"` install. Invoke every
+runtime command, including each returned continuation action, as
+`uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`. Immediately after the first
+invocation, run `reviewmatic runtime-info` once and compare the printed `commit`
+to the pinned SHA: a mismatch or `unknown` means a stale uvx cache or an
+unpinned install — re-pin with the exact `@<sha>` (adding
 `--refresh-package reviewmatic` to the `uvx` invocation when the cache is
 stale) before continuing the review. If the user requests a fresh checkout of
 the moving `dev` ref, resolve a new tip and repeat the same pin.
@@ -37,13 +38,13 @@ When this skill is invoked directly and the request leaves the task goal, constr
 
 A release MR — one that publishes or tags a version — routes to the `release-review` skill, which owns the release verdict and its SemVer, compatibility, migration, rollback, and CI gates. Review such an MR here only when the user explicitly requests this skill in addition.
 
-For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `reviewmatic start-review --url <mr-url> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto`. `--repo-root <checkout>` is optional: without it the runner uses the repository of the current directory, and a subdirectory of the checkout works too. The runner collects evidence and context together and returns one editable draft and exact-commit inspection snapshots. It also prepares one managed review worktree per MR under `<repo>.worktrees/reviewmatic/`: a detached checkout at the exact MR head outside the user's working tree, with base/start/head objects and the fixed target revision fetched from the matching remote (any remote name, forks included). The returned `review_worktree` names that path, the original `source_repo_root`, and exact `base_sha`, `start_sha`, `head_sha`, `target_sha`, and `target_ref`; primary analysis and critics read all code from that worktree with local Git, never through per-file GitLab content requests. Preparation never touches the user's HEAD, branch, index, files, or local branches; it only fetches missing objects, writes `refs/reviewmatic/...` service refs, and manages that worktree. The worktree directory name ends with a short hash of the full host, project, and MR identity, so colliding readable names (such as `group/a-b` and `group-a/b`), different IIDs, and truncated long project paths never share a tree. A managed tree under the retired layout without that hash is never reused, moved, or shadowed by a second directory: preparation stops with a concrete manual migration instruction, and the hashed path is created only after that tree has been removed by hand. Parallel preparations of different merge requests keep both registry records. When the MR head advanced, the same worktree switches only when no review is active there, the tree is clean, and it holds no unexpected commits; otherwise preparation blocks and reports the concrete blocker — finish or refresh the active review, or resolve the reported state manually. If no remote points at the MR's source or target project, preparation blocks: rerun with the correct `--repo-root`; never clone. Use `--incremental off` only for an explicit request such as "without incremental review", "start from scratch", or "ignore the previous review"; "full review" alone is not an opt-out. The context must bind the numeric ID and username of the current GitLab user, MR author, role, all paginated discussions and notes, project issue templates from the exact MR head, exact note permalinks, and the local base/start/head revisions. Do not duplicate canonical collection with direct `glab mr view` or parallel MR reads. Follow the critic-selection and fallback rules in `references/review-state-machine.md`: use selected installed specialists when available, otherwise ordinary independent native subagents of the current agent. Do not treat an absent specialist profile as unavailable independent review.
+For GitLab, accept exactly one MR URL. Reject multiple URLs, project/list/filter URLs, and branch inference before any API call or artifact creation. Run `reviewmatic start-review --url <mr-url> --review-mode <fast|normal> --locale <en|ru> --incremental auto`. `--repo-root <checkout>` is optional: with it the runner uses that checkout as an optimization when it has a matching remote and can provide the exact objects, and a subdirectory of the checkout works too; without it, or when the checkout cannot provide the objects, the runner creates or incrementally updates one managed clone per host and project under the XDG cache, shared across that project's merge requests. The runner collects evidence and context together and returns one editable draft and exact-commit inspection snapshots. It also prepares one managed review worktree per MR under the resolved repository's `.worktrees/reviewmatic/`: a detached checkout at the exact MR head outside the user's working tree, with base/start/head objects and the fixed target revision fetched from the matching remote (any remote name, forks included). The returned `review_worktree` names that path, the original `source_repo_root`, and exact `base_sha`, `start_sha`, `head_sha`, `target_sha`, and `target_ref`; primary analysis and critics read all code from that worktree with local Git, never through per-file GitLab content requests. Preparation never touches the user's HEAD, branch, index, files, or local branches; it only fetches missing objects, writes `refs/reviewmatic/...` service refs, and manages that worktree. The worktree directory name ends with a short hash of the full host, project, and MR identity, so colliding readable names (such as `group/a-b` and `group-a/b`), different IIDs, and truncated long project paths never share a tree. A managed tree under the retired layout without that hash is never reused, moved, or shadowed by a second directory: preparation stops with a concrete manual migration instruction, and the hashed path is created only after that tree has been removed by hand. Parallel preparations of different merge requests keep both registry records. When the MR head advanced, the same worktree switches only when no review is active there, the tree is clean, and it holds no unexpected commits; otherwise preparation blocks and reports the concrete blocker — finish or refresh the active review, or resolve the reported state manually. If neither the provided checkout nor the managed clone can fetch the exact base, start, and head objects, preparation blocks with the concrete fetch failure instead of a silent fallback. Use `--incremental off` only for an explicit request such as "without incremental review", "start from scratch", or "ignore the previous review"; "full review" alone is not an opt-out. The context must bind the numeric ID and username of the current GitLab user, MR author, role, all paginated discussions and notes, project issue templates from the exact MR head, exact note permalinks, and the local base/start/head revisions. Do not duplicate canonical collection with direct `glab mr view` or parallel MR reads. Follow the critic-selection and fallback rules in `references/review-state-machine.md`: use selected installed specialists when available, otherwise ordinary independent native subagents of the current agent. Do not treat an absent specialist profile as unavailable independent review.
 
 For local WIP, use only the current existing checkout and `prepare-local --incremental auto`; do not clone, fetch, checkout, stash, reset, clean, or create a worktree. The role is `author`, there is no GitLab publication target, and unavailable remote context must remain explicit. A repeated review starts from the previous finalized local report and snapshot, not from a new zero-context audit.
 
 ## Run path: the primary remote-MR review
 
-Drive a remote-MR review with one process: `reviewmatic run --url <mr-url> --review-mode <fast|normal|deep> --locale <en|ru> --incremental auto --repo-root <checkout>`. The checkout must contain the exact base and head objects of the MR; the run verifies them during context collection and stops with a concrete error otherwise. The run owns every mechanical step — evidence collection, context, finalization, scaffolding, and the final report — and stops only where an agent must author an artifact. Every stop prints the ready template path and the exact next command; execute each returned command as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`.
+Drive a remote-MR review with one process: `reviewmatic run --url <mr-url> --review-mode <fast|normal> --locale <en|ru> --incremental auto`. `--repo-root <checkout>` is optional and uses the same resolution as `start-review`: a matching checkout is an optimization, and a missing or object-less checkout falls back to the managed clone. The run verifies the exact base and head objects during context collection and stops with a concrete error otherwise. The run owns every mechanical step — evidence collection, context, finalization, scaffolding, and the final report — and stops only where an agent must author an artifact. Every stop prints the ready template path and the exact next command; execute each returned command as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`.
 
 The run stops once for the panel poll. The stop carries the complete poll
 presentation under `poll`: `poll.text` is the verbatim question, keyed to the
@@ -136,8 +137,10 @@ action before anything else; `check-review` rejects an unrecorded package.
 
 ## Review panel
 
-For `normal`, `deep`, and `incremental` reviews the review runs as a panel and
-you orchestrate it; you never add a full review pass of your own. First record
+For `normal` and `incremental` reviews the review runs as a panel and
+you orchestrate it; you never add a full review pass of your own. The panel
+composition is the depth control: a deeper review is requested by adding more
+independent critics, and there is no separate depth mode. First record
 the panel with `reviewmatic record-participants --draft <draft-path> --input <participants.json>`: the critic count and composition, then the arbitrator.
 Each role is either an installed specialist profile (`critic-*` agents) or one
 ordinary independent subagent running with the current session's agent,
@@ -354,9 +357,9 @@ as the result of a new review invocation. Targeted plan repairs follow
 `references/repair.md`, not a new invocation. If it selects `incremental`,
 review the delta-triggered scope, consult advisory history, and run the panel again: delta-scoped critic receipts
 with a different run/session identity and the incremental-delta digest, then a
-fresh arbitration receipt. Otherwise choose `fast`, `normal`, or `deep`; `fast`
+fresh arbitration receipt. Otherwise choose `fast` or `normal`; `fast`
 is only for a small confirmed low-risk change and runs without a panel, while
-`normal`, `deep`, and `incremental` require the recorded panel. Fast mode keeps
+`normal` and `incremental` require the recorded panel. Fast mode keeps
 the full `references/architecture-checklist.md` decision groups and the
 `references/simplification-criteria.md` complexity rules without critics. Size
 the change by the real merge-base delta in the context's `exact_git.delta` —

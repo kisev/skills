@@ -38,10 +38,16 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
     root = Path(str(bundle["artifact_root"]))
 
     review_context.begin_review(
-        str(evidence_path), str(evidence_digest), str(root), str(fixture.repo), "deep", "en", "auto"
+        str(evidence_path),
+        str(evidence_digest),
+        str(root),
+        str(fixture.repo),
+        "normal",
+        "en",
+        "auto",
     )
     context_result: dict[str, Any] = review_context.prepare_context(
-        str(evidence_path), str(fixture.repo), "auto", "deep", "en"
+        str(evidence_path), str(fixture.repo), "auto", "normal", "en"
     )
     assert context_result["status"] == "ok"
     assert context_result["stage"] == "context_ready"
@@ -158,7 +164,7 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
 
     decision_report = {
         "schema": "portable-gitlab/review-decision/v2",
-        "mode": "deep",
+        "mode": "normal",
         "external_mutations": False,
         "evidence_digest": evidence_digest,
         "finalize_digest": finalize_digest,
@@ -467,12 +473,12 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
         str(bundle2["preview_digest"]),
         str(root),
         str(fixture.repo),
-        "deep",
+        "normal",
         "en",
         "auto",
     )
     context2: dict[str, Any] = review_context.prepare_context(
-        str(bundle2["preview_artifact_path"]), str(fixture.repo), "auto", "deep", "en"
+        str(bundle2["preview_artifact_path"]), str(fixture.repo), "auto", "normal", "en"
     )
     assert context2["incremental"]["mode"] == "unchanged"
     assert context2["incremental"]["critic_required"] is False

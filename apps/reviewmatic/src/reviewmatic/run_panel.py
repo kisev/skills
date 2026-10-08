@@ -30,6 +30,8 @@ _POLL_TEXT = {
         "- Critics: which critics review this change, and the engine of each - a model "
         'subagent ("engine": "model") or the mechanical OpenCodeReview CLI '
         '("engine": "ocr").\n'
+        "- Depth: choose it through the critic composition - more independent critics give "
+        "a deeper review; there is no separate depth mode.\n"
         "- Arbitrator: one separate participant that merges every critic finding into a "
         "single verdict.\n"
         "- Mode: {mode} review.{ocr_note}\n"
@@ -41,6 +43,8 @@ _POLL_TEXT = {
         "- Критики: какие критики ревьюят это изменение и движок каждого - модельный "
         'субагент ("engine": "model") или механический OpenCodeReview CLI '
         '("engine": "ocr").\n'
+        "- Глубина: выбирай её составом критиков - больше независимых критиков даёт более "
+        "глубокое ревью; отдельного режима глубины нет.\n"
         "- Арбитр: отдельный участник, сводящий все находки критиков в один вердикт.\n"
         "- Режим: ревью в режиме {mode}.{ocr_note}\n"
         "Можешь приложить свою рекомендацию; выбор за пользователем. Ответь в шаблоне "

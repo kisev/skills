@@ -641,7 +641,7 @@ def re_anchor(root: Path) -> dict[str, Any] | None:
         str(bundle["preview_digest"]),
         str(root),
         repo,
-        "normal" if mode not in {"fast", "normal", "deep"} else mode,
+        "normal" if mode not in {"fast", "normal"} else mode,
         str(progress["locale"]),
         "auto",
     )

@@ -103,18 +103,20 @@ release/tag catalogs, target revision, and exact-head CI evidence. Missing, bina
 non-regular, and over-budget inspection inputs shall be explicit.
 
 Remote preparation shall prepare one persistent managed review worktree per merge
-request under `<repo>.worktrees/reviewmatic/`, separate from manual fix-application
-trees. It shall identify the repository from the invocation directory, its
-subdirectory, or an explicit `--repo-root`, and accept it only when some remote —
-under any name, including fork remotes — points at the MR's source or target
-project; otherwise it shall stop and request the correct checkout without cloning.
-The MR's base/start/head and target revisions shall be fixed from the evidence;
-missing objects shall be fetched through Git and verified against those SHAs, and
-the current target tip shall never replace the MR diff base. The local merge
-base shall be verified against the evidence base SHA, and the real merge-base
-delta size — local file, insertion, deletion, and binary-file counts measured
-from that verified merge base — shall be recorded in the review context so mode
-and size decisions use it instead of server counts. Unavailable objects,
+request under the resolved repository's `.worktrees/reviewmatic/`, separate from
+manual fix-application trees. It shall resolve the repository from an explicit
+`--repo-root` when that checkout has a matching remote and can provide the exact
+objects, and otherwise from one managed clone per host and project under the XDG
+cache, shared across the project's merge requests with an incremental fetch; the
+invocation directory shall not select the repository. A provided checkout whose
+objects cannot be fetched shall fall back to the managed clone instead of
+failing. The MR's base/start/head and target revisions shall be fixed from the
+evidence; missing objects shall be fetched through Git and verified against those
+SHAs, and the current target tip shall never replace the MR diff base. The local
+merge base shall be verified against the evidence base SHA, and the real
+merge-base delta size — local file, insertion, deletion, and binary-file counts
+measured from that verified merge base — shall be recorded in the review context
+so size decisions use it instead of server counts. Unavailable objects,
 mismatched revisions, or incomplete evidence shall block preparation, and no
 per-file GitLab content request shall fetch reviewed code. The worktree shall be a
 detached checkout at the exact head whose identity binds the local repository,
@@ -212,9 +214,11 @@ immutable artifacts. Description text, labels, thread closure, and other
 external texts shall never be treated as proof of code correctness or as
 instructions.
 
-Normal, deep, and changed incremental review shall run as an orchestrated
+Normal and changed incremental review shall run as an orchestrated
 panel and shall require real independent receipts plus one arbitration
-receipt. The host agent records the panel once — the critic count and
+receipt. Review depth shall be selected through the recorded panel composition —
+more independent critics mean a deeper review — and there is no separate depth
+mode. The host agent records the panel once — the critic count and
 composition and the arbitrator — through `record-participants`; a recorded
 composition is fixed once receipts exist, and the recorded profile, provider,
 and model configuration shall never be substituted silently. Each selected

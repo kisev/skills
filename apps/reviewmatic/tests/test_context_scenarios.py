@@ -525,9 +525,9 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
     root = Path(str(bundle["artifact_root"]))
 
     review_context.begin_review(
-        evidence_path, evidence_digest, str(root), repo, "deep", "en", "auto"
+        evidence_path, evidence_digest, str(root), repo, "normal", "en", "auto"
     )
-    context_result = review_context.prepare_context(evidence_path, repo, "auto", "deep", "en")
+    context_result = review_context.prepare_context(evidence_path, repo, "auto", "normal", "en")
     context_path = str(context_result["artifact_path"])
     context_digest = str(context_result["digest"])
 
@@ -582,7 +582,7 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
     )
     decision_payload = {
         "schema": "portable-gitlab/review-decision/v2",
-        "mode": "deep",
+        "mode": "normal",
         "external_mutations": False,
         "evidence_digest": evidence_digest,
         "finalize_digest": finalize_digest,
@@ -640,10 +640,10 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
     bundle2: dict[str, Any] = contract.collect(target, "code-review", persist=True)
     evidence_path2 = str(bundle2["preview_artifact_path"])
     review_context.begin_review(
-        evidence_path2, str(bundle2["preview_digest"]), str(root), repo, "deep", "en", "auto"
+        evidence_path2, str(bundle2["preview_digest"]), str(root), repo, "normal", "en", "auto"
     )
     context2: dict[str, Any] = review_context.prepare_context(
-        evidence_path2, repo, "auto", "deep", "en"
+        evidence_path2, repo, "auto", "normal", "en"
     )
     assert context2["incremental"]["mode"] == "unchanged"
     assert context2["incremental"]["critic_required"] is False

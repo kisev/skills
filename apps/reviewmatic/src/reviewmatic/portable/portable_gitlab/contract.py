@@ -2780,9 +2780,9 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
             or not isinstance(payload["target"], dict)
             or payload["role"] not in {"author", "reviewer"}
             or not (
-                payload["mode"] in {"fast", "normal", "deep"}
+                payload["mode"] in {"fast", "normal"}
                 if legacy_plan
-                else payload["mode"] in {"fast", "normal", "deep", "incremental", "unchanged"}
+                else payload["mode"] in {"fast", "normal", "incremental", "unchanged"}
             )
             or (not legacy_plan and not incremental_review_is_valid(payload["incremental"]))
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
@@ -3038,7 +3038,7 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                 and payload["critic_receipt_digest"] is not None
                 and not is_digest(payload["critic_receipt_digest"])
             )
-            or payload["mode"] not in {"fast", "normal", "deep", "incremental", "unchanged"}
+            or payload["mode"] not in {"fast", "normal", "incremental", "unchanged"}
             or payload["verdict"] not in {"ready", "not_ready", "blocked"}
             or not all(nonempty_string(payload[key]) for key in ("run_id", "session_id"))
             or not findings_are_valid(payload["findings"])
@@ -5574,10 +5574,8 @@ def validate_decision(
                 "accepted finding",
             )
         )
-    if mode in {"normal", "deep", "incremental"} and receipt is None:
-        raise WorkflowError(
-            "normal, deep, and incremental review require an independent critic receipt"
-        )
+    if mode in {"normal", "incremental"} and receipt is None:
+        raise WorkflowError("normal and incremental review require an independent critic receipt")
     if mode == "fast" and report.get("low_risk") is not True and receipt is None:
         raise WorkflowError("fast review without critic requires confirmed low-risk scope")
     if report.get("verdict") == "ready" and report.get("blocking_findings") is True:

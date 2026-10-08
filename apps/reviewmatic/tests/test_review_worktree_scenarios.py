@@ -157,6 +157,22 @@ def add_project(fixture: ReviewFixture, remote: str, url: str) -> None:
     fixture.git("config", "--add", f"url.{fixture.origin}.insteadOf", url)
 
 
+def use_clone_cache(
+    monkeypatch: pytest.MonkeyPatch, fixture: ReviewFixture, tmp_path: Path
+) -> Path:
+    """Redirect the managed clone's HTTPS URL to the fixture's local origin.
+
+    The fixture already isolates ``XDG_CACHE_HOME`` under its temporary tree;
+    this wires the clone URL through an environment-level ``insteadOf`` so the
+    clone runs without network access.
+    """
+    cache = Path(os.environ["XDG_CACHE_HOME"])
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{fixture.origin}.insteadOf")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", fixture.origin_url)
+    return cache
+
+
 def start(fixture: ReviewFixture, url: str | None = None) -> dict[str, Any]:
     return draft_module.start_review(url=url or fixture.url, repo_root=str(fixture.repo))
 
@@ -169,7 +185,7 @@ def ok(result: dict[str, Any]) -> dict[str, Any]:
 def test_start_review_prepares_one_managed_worktree_from_a_subdirectory(
     fixture: ReviewFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    subdir = fixture.repo / "docs" / "deep"
+    subdir = fixture.repo / "docs" / "nested"
     subdir.mkdir(parents=True)
     monkeypatch.chdir(subdir)
     (fixture.repo / "scratch.txt").write_text("untracked work\n", encoding="utf-8")
@@ -179,7 +195,7 @@ def test_start_review_prepares_one_managed_worktree_from_a_subdirectory(
     status_before = fixture.git("status", "--porcelain")
     branches_before = fixture.git("branch", "--list")
 
-    result = ok(draft_module.start_review(url=fixture.url))
+    result = ok(draft_module.start_review(url=fixture.url, repo_root=str(subdir)))
     worktree = result["review_worktree"]
     assert worktree["source_repo_root"] == str(fixture.repo)
     assert worktree["reused"] is False
@@ -208,6 +224,9 @@ def test_start_review_prepares_one_managed_worktree_from_a_subdirectory(
     assert fixture.git("branch", "--list") == branches_before
     assert not (fixture.repo / ".worktrees").exists()
     assert not (Path(worktree["path"]) / "scratch.txt").exists()
+    # A matching --repo-root is used in place: no managed clone is created.
+    repositories = Path(os.environ["XDG_CACHE_HOME"]) / "agent-skills" / "reviewmatic"
+    assert not (repositories / "repositories").exists()
 
     repeated = ok(start(fixture))
     assert repeated["review_worktree"]["path"] == worktree["path"]
@@ -245,19 +264,40 @@ def test_a_fork_merge_request_is_fetched_from_the_fork_remote_under_any_name(
     assert_no_code_fetches(fixture)
 
 
-def test_an_unrelated_repository_stops_the_review_and_asks_for_the_correct_checkout(
-    fixture: ReviewFixture, tmp_path: Path
+def test_an_unrelated_repository_falls_back_to_the_managed_clone(
+    fixture: ReviewFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture.git("remote", "set-url", "origin", "https://gitlab.example/other/project.git")
-    result = start(fixture)
-    assert result["status"] == "blocked"
-    assert "--repo-root" in json.dumps(result["errors"])
+    cache = use_clone_cache(monkeypatch, fixture, tmp_path)
+    result = ok(start(fixture))
+    source = result["review_worktree"]["source_repo_root"]
+    assert source.startswith(str(cache))
+    assert source != str(fixture.repo)
+    assert result["review_worktree"]["remote"] == "origin"
     assert not Path(f"{fixture.repo}.worktrees").exists()
+    assert Path(source, ".git").exists()
+
+
+def test_a_non_git_repo_root_falls_back_to_the_managed_clone(
+    fixture: ReviewFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    cache = use_clone_cache(monkeypatch, fixture, tmp_path)
     plain = tmp_path / "plain"
     plain.mkdir()
-    missing = draft_module.start_review(url=fixture.url, repo_root=str(plain))
-    assert missing["status"] == "blocked"
-    assert "not a Git checkout" in json.dumps(missing["errors"])
+    result = ok(draft_module.start_review(url=fixture.url, repo_root=str(plain)))
+    assert result["review_worktree"]["source_repo_root"].startswith(str(cache))
+
+
+def test_start_review_without_repo_root_uses_the_managed_clone(
+    fixture: ReviewFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    cache = use_clone_cache(monkeypatch, fixture, tmp_path)
+    result = ok(draft_module.start_review(url=fixture.url))
+    source = result["review_worktree"]["source_repo_root"]
+    assert source.startswith(str(cache))
+    assert Path(source, ".git").exists()
+    assert Path(result["review_worktree"]["path"], "review.txt").exists()
 
 
 def test_fetch_failures_block_preparation_and_a_later_run_recovers(

@@ -154,7 +154,7 @@ REVIEW_STAGES = {
     "plan_ready",
     "stale",
 }
-REVIEW_MODES = {"fast", "normal", "deep", "incremental", "unchanged"}
+REVIEW_MODES = {"fast", "normal", "incremental", "unchanged"}
 SUPPORTED_LOCALES = {"en", "ru"}
 SUGGESTION_RE = re.compile(
     r"^```suggestion(?::-(?P<before>[0-9]+)\+(?P<after>[0-9]+))?\r?\n"
@@ -295,7 +295,7 @@ def begin_review(
     if source != expected or hashlib.sha256(source.read_bytes()).hexdigest() != evidence_digest:
         raise portable.WorkflowError("review evidence cannot initialize progress")
     if (
-        mode not in {"fast", "normal", "deep"}
+        mode not in {"fast", "normal"}
         or locale not in SUPPORTED_LOCALES
         or incremental not in {"auto", "off"}
     ):
@@ -1164,8 +1164,8 @@ def prepare_context(
     review_mode: str = "normal",
     locale: str = "en",
 ) -> dict[str, object]:
-    if review_mode not in {"fast", "normal", "deep"}:
-        raise portable.WorkflowError("review mode must be fast, normal, or deep")
+    if review_mode not in {"fast", "normal"}:
+        raise portable.WorkflowError("review mode must be fast or normal")
     if locale not in SUPPORTED_LOCALES:
         raise portable.WorkflowError("review locale must be en or ru")
     evidence_path, evidence, root, evidence_digest = evidence_context(evidence_value)
@@ -1181,7 +1181,7 @@ def prepare_context(
         if incremental_value["mode"] in {"incremental", "unchanged"}
         else review_mode
     )
-    critic_required = selected_mode in {"normal", "deep", "incremental"}
+    critic_required = selected_mode in {"normal", "incremental"}
     exact_git = cast("dict[str, Any]", context["exact_git"])
     resolved_repo = cast("str", exact_git["repo_root"])
     if context["complete"]:
@@ -4928,7 +4928,7 @@ def restart_action(
     arguments.extend(
         (
             "--review-mode",
-            cast("str", mode) if mode in {"fast", "normal", "deep"} else "normal",
+            cast("str", mode) if mode in {"fast", "normal"} else "normal",
             "--locale",
             cast("str", locale) if locale in SUPPORTED_LOCALES else "en",
             "--incremental",
@@ -4968,7 +4968,7 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
             actual_stage = "context_ready"
             reason = "review mode has not been selected"
         else:
-            critic_required = mode in {"normal", "deep", "incremental"}
+            critic_required = mode in {"normal", "incremental"}
             critic_artifact = progress_artifact(root, progress, "critic_receipt", "critic_receipt")
             if critic_required and critic_artifact is None:
                 actual_stage = "critic_missing"

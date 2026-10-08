@@ -275,9 +275,11 @@ class ReviewFixture:
         self.config_path = tmp / "glab-config.json"
         self.config_path.write_text(json.dumps(self.config))
         self._previous = {
-            key: os.environ.get(key) for key in ("XDG_STATE_HOME", "PATH", "FAKE_GLAB_CONFIG")
+            key: os.environ.get(key)
+            for key in ("XDG_STATE_HOME", "XDG_CACHE_HOME", "PATH", "FAKE_GLAB_CONFIG")
         }
         os.environ["XDG_STATE_HOME"] = str(tmp / "state")
+        os.environ["XDG_CACHE_HOME"] = str(tmp / "cache")
         os.environ["FAKE_GLAB_CONFIG"] = str(self.config_path)
         os.environ["PATH"] = f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}"
         self.url = "https://gitlab.example/group/project/-/merge_requests/7"

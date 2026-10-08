@@ -85,7 +85,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "review-mode",
                 "review depth",
                 default="normal",
-                choices=("fast", "normal", "deep"),
+                choices=("fast", "normal"),
             ),
             OptionSpec("locale", "response language", default="en", choices=("en", "ru")),
             OptionSpec(
@@ -122,7 +122,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "review-mode",
                 "review depth",
                 default="normal",
-                choices=("fast", "normal", "deep"),
+                choices=("fast", "normal"),
             ),
             OptionSpec("locale", "response language", default="en", choices=("en", "ru")),
             OptionSpec(
@@ -149,7 +149,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "review-mode",
                 "review depth",
                 default="normal",
-                choices=("fast", "normal", "deep"),
+                choices=("fast", "normal"),
             ),
             OptionSpec("locale", "response language", default="en", choices=("en", "ru")),
         ),
@@ -354,7 +354,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "mode",
                 "requested review mode",
                 required=True,
-                choices=("fast", "normal", "deep"),
+                choices=("fast", "normal"),
             ),
             OptionSpec("critic-available", "an independent critic is available", flag=True),
         ),
@@ -369,7 +369,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "mode",
                 "review mode",
                 required=True,
-                choices=("fast", "normal", "deep", "incremental", "unchanged"),
+                choices=("fast", "normal", "incremental", "unchanged"),
             ),
             OptionSpec("critic-receipt", "critic receipt path"),
             OptionSpec("finalize-report", "finalize report path", required=True),
@@ -400,7 +400,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "review-mode",
                 "review depth",
                 default="normal",
-                choices=("fast", "normal", "deep"),
+                choices=("fast", "normal"),
             ),
             OptionSpec("locale", "response language", default="en", choices=("en", "ru")),
             OptionSpec(
@@ -789,7 +789,7 @@ def runtime_info() -> dict[str, Any]:
 
 def run_assess_mode(namespace: argparse.Namespace) -> int:
     mode: str = namespace.mode
-    if mode in ("normal", "deep") and namespace.criticAvailable is not True:
+    if mode == "normal" and namespace.criticAvailable is not True:
         contract.emit(
             {
                 "status": "unsupported",
@@ -802,7 +802,7 @@ def run_assess_mode(namespace: argparse.Namespace) -> int:
         {
             "status": "ok",
             "mode": mode,
-            "independent_critic_required": mode in ("normal", "deep"),
+            "independent_critic_required": mode == "normal",
         }
     )
     return EXIT_OK

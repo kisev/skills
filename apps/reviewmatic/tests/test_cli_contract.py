@@ -222,7 +222,7 @@ def test_subcommand_global_flag_prints_capabilities() -> None:
     [
         (("--mode", "fast"), 0, "ok"),
         (("--mode", "normal"), 4, "unsupported"),
-        (("--mode", "deep", "--critic-available"), 0, "ok"),
+        (("--mode", "normal", "--critic-available"), 0, "ok"),
     ],
 )
 def test_assess_mode_contract(
@@ -233,8 +233,54 @@ def test_assess_mode_contract(
     assert result.returncode == expected_code, result.stdout
     assert payload["status"] == expected_status
     if expected_code == 0:
-        required = arguments[1] in ("normal", "deep")
+        required = arguments[1] == "normal"
         assert payload["independent_critic_required"] is required
+
+
+def test_review_modes_are_fast_and_normal_only() -> None:
+    """`deep` is gone from every accepted surface; depth is a panel choice."""
+    from reviewmatic.context import REVIEW_MODES
+
+    assert {"fast", "normal", "incremental", "unchanged"} == REVIEW_MODES
+
+    parser = build_parser()
+    url = "https://gitlab.com/g/p/-/merge_requests/1"
+    for arguments in (
+        ["start-review", "--url", url, "--review-mode", "deep"],
+        ["run", "--url", url, "--review-mode", "deep"],
+        ["assess-mode", "--mode", "deep"],
+    ):
+        with pytest.raises(SystemExit):
+            parser.parse_args(arguments)
+    rejected = run_cli("start-review", "--url", url, "--review-mode", "deep")
+    assert rejected.returncode == 2
+
+    schema_path = (
+        ROOT.parent.parent
+        / "shared"
+        / "references"
+        / "portable_gitlab"
+        / "artifact-contracts-v2.schema.json"
+    )
+    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+    enums = _mode_enums(schema)
+    assert enums, "the artifact schema must constrain the review mode"
+    assert all("deep" not in enum for enum in enums)
+    assert ["fast", "normal", "incremental", "unchanged"] in enums
+
+
+def _mode_enums(node: Any) -> list[list[str]]:
+    found: list[list[str]] = []
+    if isinstance(node, dict):
+        mode = node.get("mode")
+        if isinstance(mode, dict) and isinstance(mode.get("enum"), list):
+            found.append(mode["enum"])
+        for value in node.values():
+            found.extend(_mode_enums(value))
+    elif isinstance(node, list):
+        for value in node:
+            found.extend(_mode_enums(value))
+    return found
 
 
 def test_publication_is_a_blocked_historical_stub() -> None:
@@ -296,7 +342,7 @@ def test_configuration_file_must_be_a_json_object(tmp_path: Path) -> None:
 
 def test_apply_config_respects_cli_env_and_choices() -> None:
     namespace = build_parser().parse_args(["assess-mode", "--mode", "fast"])
-    apply_config(namespace, {"mode": "deep", "logLevel": "debug"}, all_specs())
+    apply_config(namespace, {"mode": "normal", "logLevel": "debug"}, all_specs())
     # CLI-provided values win over the configuration file.
     assert namespace.mode == "fast"
     assert namespace.logLevel == "debug"

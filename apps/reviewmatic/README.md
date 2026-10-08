@@ -39,8 +39,13 @@ the returned `finish-review` continuation through the same source.
 
 ## Review the current snapshot
 
-Use `reviewmatic run --url <mr-url> --repo-root <checkout>` and follow its printed
-commands. After the recorded decision, fill missing prose and semantic choices
+Use `reviewmatic run --url <mr-url>` and follow its printed commands. Review
+depth is either `fast` (no panel) or `normal` (panel); a deeper review is chosen
+by adding more critics to the panel, not by a separate mode. The optional
+`--repo-root <checkout>` is used as an optimization when it matches, and a
+missing or object-less checkout falls back to a managed per-project clone under
+the XDG cache, so the invocation does not depend on the current directory. After
+the recorded decision, fill missing prose and semantic choices
 in the returned file, apply it with `record-prose`, and resume the same run.
 Keep prepared `finding_id` values unchanged. Positions, suggestion ranges,
 bindings, patch digests, and revisions belong to the runtime. Ordinary multiline

@@ -177,6 +177,23 @@ def test_runtime_pin_and_self_report_are_documented() -> None:
     )
 
 
+def test_the_single_pinned_runtime_ignores_any_path_binary() -> None:
+    """REVIEWMATIC_FROM is the one runtime; a PATH reviewmatic is foreign."""
+    entry = " ".join((SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8").split())
+    workflow = " ".join(
+        (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8").split()
+    )
+    pinned = "git+https://github.com/kisev/skills.git@<sha>#subdirectory=apps/reviewmatic"
+    for text in (entry, workflow):
+        assert "REVIEWMATIC_FROM" in text
+        assert pinned in text, "the pin is a git+URL with an exact @<sha>"
+        assert "found on `PATH` as a foreign, possibly outdated binary and ignore it" in text
+        assert 'uvx --from "$REVIEWMATIC_FROM"' in text
+        assert "runtime-info" in text
+    assert "compare the printed resolved commit to the pinned SHA" in entry
+    assert "compare the printed `commit` to the pinned SHA" in workflow
+
+
 def test_the_contract_test_reads_the_authored_sources() -> None:
     sources: dict[str, Any] = {"SKILL.source.md": SKILL_DIR / "SKILL.source.md"}
     assert sources["SKILL.source.md"].is_file()
