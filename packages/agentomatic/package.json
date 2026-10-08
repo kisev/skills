@@ -55,7 +55,7 @@
     "zod": "4.1.8"
   },
   "devDependencies": {
-    "@opencode/plugin": "2.0.24",
+    "@opencode/plugin": "2.0.25",
     "@types/node": "22.15.30",
     "typescript": "7.0.2"
   },
