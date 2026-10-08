@@ -144,11 +144,14 @@ from the saved component selection; deselection shows owned-file removals.
 On first install, all skill commands start selected; `rtk` is the default
 wrapper. Skill command adapters are OpenCode
 slash commands that load an already-installed same-named portable skill. A
-command adapter selection never selects or installs a skill. Each multi-select
-shows an inline description for every option (adapters from the command
-catalog; presets from the config fragments) and names the group controls:
-Up/Down moves, Space toggles, A toggles all selections on and off, Enter
-confirms, and Escape cancels.
+command adapter selection never selects or installs a skill. Each option carries
+its description inline in the label, visible on every line rather than only under
+the cursor (adapters from the command catalog; presets from the config
+fragments), and long descriptions are cut to the terminal width with an
+ellipsis. Every option screen after the first offers `← Back`; choosing it (Space
+then Enter in a multi-select) returns to the previous screen with the earlier
+selection restored. The group controls read: Up/Down moves, Space toggles, A
+toggles all selections on and off, Enter confirms, and Escape cancels.
 
 Outside a TTY, the first install requires both selection groups; subsequent
 runs can reuse the saved set. This example selects three commands and no
@@ -342,7 +345,12 @@ flags. Install summaries list every deployed fixed role with its model (or
 epilogues point at `agent list`, the canonical overview, and `configure agent`,
 the single mutation point. `configure integration` remains the full fragment manager for every target;
 applying its `core-plugin` fragment provisions the same dependency when the
-installer skipped it. Every confirmed config apply first archives the previous
+installer skipped it. Before showing its first screen, `configure integration`
+compares the default selection with the current files: a fully satisfied state
+asks nothing and prints the header, `No configuration changes are required.`,
+and the critic panel, while a partial state asks only about divergent targets and
+presets and leaves merged presets out. The plan is rendered once, and the run
+closes with an explicit `Done:` line. Every confirmed config apply first archives the previous
 content of each changed user file into the package archive store
 (`~/.local/share/opencode/agentomatic/archive`), content-addressed and
 deduplicated; `doctor --json` reports the latest snapshot under

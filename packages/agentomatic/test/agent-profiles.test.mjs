@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { PassThrough } from "node:stream";
 import test from "node:test";
+import { stripVTControlCharacters } from "node:util";
 
 import {
   AgentProfileError,
@@ -24,7 +25,13 @@ import {
   listAgentProfiles,
   previewAgentProfileChange,
 } from "../dist/agent-profiles.js";
-import { promptText, selectOption, selectOptions } from "../dist/terminal-wizard.js";
+import {
+  BACK,
+  optionLabel,
+  promptText,
+  selectOption,
+  selectOptions,
+} from "../dist/terminal-wizard.js";
 import { apply, preview } from "../dist/installer.js";
 import { recoverConfigSetup } from "../dist/config-setup.js";
 import {
@@ -395,6 +402,59 @@ test("keyboard selector supports cancel and text prompt only for critic identity
   assert.equal(await name, "security");
   assert.match(namePrompt.output(), /◆  Critic name/);
   assert.match(namePrompt.output(), /◇  Critic name\n│  security/);
+});
+
+test("selector labels carry every description and truncate to the terminal width", async () => {
+  const { stdin, stderr, output } = fakeTTY();
+  stderr.columns = 40;
+  const result = selectOptions(
+    "Skill commands",
+    ["askme", "goal"],
+    [],
+    ["Clarify a task with dependency-bounded questions", "Turn an objective into a checkable goal"],
+    stdin,
+    stderr,
+  );
+  stdin.write("\r");
+  assert.deepEqual(await result, []);
+  const rendered = stripVTControlCharacters(output());
+  // Every description is visible, not only the focused one.
+  assert.match(rendered, /askme — Clarify a task/);
+  assert.match(rendered, /goal — Turn an objective/);
+  // The long description is cut to the terminal width with an ellipsis.
+  assert.match(rendered, /…/);
+  assert.doesNotMatch(rendered, /dependency-bounded questions/);
+  assert.equal(optionLabel("name", "a very long description", 20).endsWith("…"), true);
+});
+
+test("select and multiselect expose Back and return the sentinel", async () => {
+  const single = fakeTTY();
+  const singleResult = selectOption(
+    "Step",
+    ["Alpha", "Beta"],
+    single.stdin,
+    single.stderr,
+    0,
+    undefined,
+    true,
+  );
+  single.stdin.write("\x1b[B\x1b[B\r");
+  assert.equal(await singleResult, BACK);
+  assert.match(stripVTControlCharacters(single.output()), /← Back/);
+
+  const multiple = fakeTTY();
+  const multipleResult = selectOptions(
+    "Step",
+    ["Alpha", "Beta"],
+    [],
+    undefined,
+    multiple.stdin,
+    multiple.stderr,
+    true,
+  );
+  multiple.stdin.write("\x1b[B\x1b[B \r");
+  assert.equal(await multipleResult, BACK);
+  assert.match(stripVTControlCharacters(multiple.output()), /← Back/);
 });
 
 test("model and variant configuration survives package install", async () => {
@@ -1063,9 +1123,9 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.ok(
       previewResult.stdout.startsWith(`Install @kisev/agentomatic ${PACKAGE_VERSION} (project)\n`),
     );
-    assert.match(previewResult.stdout, /^  Agents: create 6$/m);
-    assert.match(previewResult.stdout, /^  State: create 3$/m);
-    assert.match(previewResult.stdout, /^Conflicts: none$/m);
+    assert.match(previewResult.stdout, /^  Agents: ▸ create 6$/m);
+    assert.match(previewResult.stdout, /^  State: ▸ create 3$/m);
+    assert.match(previewResult.stdout, /^Conflicts: ✓ none$/m);
     assert.match(
       previewResult.stdout,
       new RegExp(
@@ -1081,7 +1141,7 @@ test("CLI defaults to a concise human plan and table", async () => {
     const applied = invoke(["install", "--commands", "none", "--plugins", "none", "--yes"]);
     assert.equal(applied.status, 0, applied.stderr);
     assert.match(applied.stdout, /^Applied changes:$/m);
-    assert.match(applied.stdout, /^Restart required: yes — restart the host session/m);
+    assert.match(applied.stdout, /^Restart required: ✓ yes — restart the host session/m);
     assert.doesNotMatch(applied.stdout, /"operations"/);
 
     const hostileCodes = [
@@ -1137,10 +1197,10 @@ test("CLI human plan explains exact-name conflicts", async () => {
       },
     );
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^Conflicts: 1$/m);
+    assert.match(result.stdout, /^Conflicts: ✗ 1$/m);
     assert.match(
       result.stdout,
-      /^  Agents\/conflict: manager \(exact-name user-owned collision\)$/m,
+      /^  ✗ Agents\/conflict: manager \(exact-name user-owned collision\)$/m,
     );
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
@@ -1183,7 +1243,7 @@ test("CLI human plan never truncates conflicts", async () => {
       },
     );
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^Conflicts: 25$/m);
+    assert.match(result.stdout, /^Conflicts: ✗ 25$/m);
     assert.doesNotMatch(result.stdout, /Commands\/conflict: .*\(\+\d+ more\)/);
     for (const name of commands) {
       assert.ok(result.stdout.includes(name.slice(0, -3)), name);

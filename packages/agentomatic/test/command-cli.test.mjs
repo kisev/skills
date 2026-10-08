@@ -378,7 +378,6 @@ async function wizard(context, answers, args = ["install", "--no-dependency", "-
   };
   child.stdout.on("data", receive);
   child.stderr.on("data", receive);
-  child.stderr.on("data", receive);
   const status = await new Promise((resolve) => child.on("close", resolve));
   clearTimeout(timeout);
   assert.equal(index, answers.length, output);
@@ -745,4 +744,177 @@ test("install, staged applies, and configure integration all end with the critic
   assert.equal(integration.status, 0, integration.stdout + integration.stderr);
   assert.match(integration.stdout, /Critics:\n/);
   assert.match(integration.stdout, /critic-security/);
+});
+
+test("configure integration diffs before prompting: full, partial, and no-op forms", async (t) => {
+  const args = ["configure", "integration", "--global", "--no-dependency"];
+  const context = await sandbox(t);
+  // Full: a fresh state asks every divergent screen and applies once.
+  const full = await wizard(
+    context,
+    [
+      ["Agent harnesses to configure", "\r"],
+      ["OpenCode plugin connection", "\x1b[B\r"],
+      ["Application presets to merge", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    args,
+  );
+  assert.equal(full.status, 0, full.output);
+  assert.match(full.output, /▸ opencode\/core-plugin: create/);
+  assert.match(full.output, /Done: configuration applied/);
+  // One render only: the planned preview, never an applied re-render.
+  assert.match(full.output, /Planned fragments:/);
+  assert.doesNotMatch(full.output, /Applied fragments:/);
+
+  // No-op: a satisfied state asks nothing at all.
+  const noop = await wizard(context, [], args);
+  assert.equal(noop.status, 0, noop.output);
+  assert.match(noop.output, /No configuration changes are required\./);
+  assert.match(noop.output, /Done: nothing to apply\./);
+  assert.doesNotMatch(noop.output, /Agent harnesses to configure/);
+  assert.doesNotMatch(noop.output, /OpenCode plugin connection/);
+  assert.doesNotMatch(noop.output, /Application presets to merge/);
+
+  // Partial: only the missing fragments are offered; the satisfied
+  // connection screen is skipped and the applied preset is not listed.
+  const partial = await sandbox(t);
+  partial.ok([
+    "configure",
+    "integration",
+    "--global",
+    "--targets",
+    "opencode",
+    "--fragments",
+    "core-plugin,tui-schema",
+    "--no-dependency",
+    "--yes",
+  ]);
+  const diff = await wizard(
+    partial,
+    [
+      ["Agent harnesses to configure", "\r"],
+      ["Application presets to merge", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    args,
+  );
+  assert.equal(diff.status, 0, diff.output);
+  assert.doesNotMatch(diff.output, /OpenCode plugin connection/);
+  assert.match(diff.output, /skills-state-permissions/);
+  assert.match(diff.output, /secrets-guard/);
+  assert.doesNotMatch(diff.output, /tui-schema/);
+
+  // Connection-only diff: every preset is already merged, so only the
+  // connection screen is asked; the preset screen is skipped entirely.
+  const connectionOnly = await sandbox(t);
+  connectionOnly.ok([
+    "configure",
+    "integration",
+    "--global",
+    "--targets",
+    "opencode",
+    "--fragments",
+    "core-disable,skills-state-permissions,secrets-guard,tui-schema",
+    "--no-dependency",
+    "--yes",
+  ]);
+  const reconnect = await wizard(
+    connectionOnly,
+    [
+      ["Agent harnesses to configure", "\r"],
+      ["OpenCode plugin connection", "\x1b[B\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    args,
+  );
+  assert.equal(reconnect.status, 0, reconnect.output);
+  assert.doesNotMatch(reconnect.output, /Application presets to merge/);
+  assert.match(reconnect.output, /opencode\/core-plugin: (create|update)/);
+  assert.doesNotMatch(reconnect.output, /opencode\/skills-state-permissions/);
+});
+
+test("configure integration Back returns to the previous screen with its selection intact", async (t) => {
+  const context = await sandbox(t);
+  const result = await wizard(
+    context,
+    [
+      ["Agent harnesses to configure", "\r"],
+      ["OpenCode plugin connection", "\x1b[B\r"],
+      ["Application presets to merge", "a\r"],
+      ["OpenCode plugin connection", "\x1b[B\x1b[B\r"],
+      ["Agent harnesses to configure", "\r"],
+      ["OpenCode plugin connection", "\r"],
+      ["Application presets to merge", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "integration", "--global", "--no-dependency"],
+  );
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Done: configuration applied/);
+  // Both Back returns rendered the earlier screens again.
+  assert.ok((result.output.match(/◇  Agent harnesses to configure/g) ?? []).length >= 2);
+  assert.ok((result.output.match(/◇  OpenCode plugin connection/g) ?? []).length >= 2);
+  // The restored selection survived: the connection choice is still applied.
+  assert.match(result.output, /▸ opencode\/core-plugin: create/);
+});
+
+test("install Back returns to the adapter selection with the choice preserved", async (t) => {
+  const context = await sandbox(t);
+  const result = await wizard(
+    context,
+    [
+      ["Skill command adapters", "\r"],
+      ["Optional plugins", "a\r"],
+      ["Skill command adapters", "\r"],
+      ["Optional plugins", "\r"],
+      ["Configure presets for the selected agent harnesses", "n\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["install", "--no-dependency", "--no-core"],
+  );
+  assert.equal(result.status, 0, result.output);
+  assert.ok((result.output.match(/Skill command adapters/g) ?? []).length >= 2);
+});
+
+test("configure agent Back returns from a sub-screen to the action menu", async (t) => {
+  const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
+  const result = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A\x1b[A\x1b[A"],
+      ["● Configure model", "\r"],
+      ["● architect", "\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\r"],
+      ["changes are staged", "\r"],
+    ],
+    ["configure", "agent"],
+  );
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /No profile changes selected\./);
+  assert.ok((result.output.match(/Agent models and critics/g) ?? []).length >= 2);
+});
+
+test("configure integration prints a single plan render and an explicit final line", async (t) => {
+  const context = await sandbox(t);
+  const result = spawnSync(
+    process.execPath,
+    [
+      cli,
+      "configure",
+      "integration",
+      "--global",
+      "--targets",
+      "opencode",
+      "--fragments",
+      "core-plugin,skills-state-permissions",
+      "--no-dependency",
+      "--yes",
+    ],
+    { cwd: context.project, env: context.env, encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  assert.match(result.stdout, /Planned fragments:/);
+  assert.doesNotMatch(result.stdout, /Applied fragments:/);
+  assert.match(result.stdout, /Done: configuration applied/);
 });

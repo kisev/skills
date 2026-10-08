@@ -38,6 +38,41 @@ export function terminalSafe(value: string): string {
     .join("");
 }
 
+// ANSI styling is opt-in per call so tests can force either form; the CLI uses
+// the environment default, which disables color on non-TTY output and NO_COLOR.
+export function colorEnabled(
+  env: NodeJS.ProcessEnv = process.env,
+  isTTY: boolean | undefined = process.stdout.isTTY,
+): boolean {
+  if (env.NO_COLOR !== undefined && env.NO_COLOR !== "") return false;
+  if (env.FORCE_COLOR !== undefined && env.FORCE_COLOR !== "") return env.FORCE_COLOR !== "0";
+  return Boolean(isTTY);
+}
+
+function paint(color: boolean, code: string | undefined, text: string): string {
+  return color && code ? `\u001b[${code}m${text}\u001b[0m` : text;
+}
+
+// One glyph per operation keeps the summary readable even with color off; the
+// matching ANSI code is applied only when color is enabled.
+const OPERATION_STYLES: Record<(typeof OPERATIONS)[number], { symbol: string; code?: string }> = {
+  create: { symbol: "▸", code: "32" },
+  update: { symbol: "●", code: "36" },
+  remove: { symbol: "■", code: "31" },
+  "archive-pending": { symbol: "■", code: "33" },
+  conflict: { symbol: "✗", code: "31" },
+  missing: { symbol: "✗", code: "33" },
+  unchanged: { symbol: "◻", code: "2" },
+};
+
+const MARKS = {
+  ok: "✓",
+  bad: "✗",
+  change: "▸",
+  item: "●",
+  pending: "◻",
+};
+
 function groupFor(path: string): (typeof GROUPS)[number] {
   if (path.startsWith("agents/")) return "Agents";
   if (path.startsWith("commands/")) return "Commands";
@@ -58,10 +93,12 @@ function actionName(action: DisplayPlan["action"]): string {
   )[action];
 }
 
-function operationSummary(operations: readonly DisplayOperation[]): string {
+function operationSummary(operations: readonly DisplayOperation[], color: boolean): string {
   return OPERATIONS.map((operation) => {
     const count = operations.filter((item) => item.operation === operation).length;
-    return count ? `${operation} ${count}` : undefined;
+    if (!count) return undefined;
+    const spec = OPERATION_STYLES[operation];
+    return paint(color, spec.code, `${spec.symbol} ${operation} ${count}`);
   })
     .filter(Boolean)
     .join(", ");
@@ -73,7 +110,7 @@ function shortPath(path: string, group: (typeof GROUPS)[number]): string {
   return terminalSafe(value.endsWith(".md") || value.endsWith(".js") ? value.slice(0, -3) : value);
 }
 
-function detailLines(operations: readonly DisplayOperation[]): string[] {
+function detailLines(operations: readonly DisplayOperation[], color: boolean): string[] {
   const lines: string[] = [];
   for (const group of GROUPS) {
     const grouped = operations.filter(
@@ -91,7 +128,10 @@ function detailLines(operations: readonly DisplayOperation[]): string[] {
         );
       const visible = operation === "conflict" ? values : values.slice(0, 8);
       const rest = values.length - visible.length;
-      lines.push(`  ${group}/${operation}: ${visible.join(", ")}${rest ? ` (+${rest} more)` : ""}`);
+      const spec = OPERATION_STYLES[operation];
+      lines.push(
+        `  ${paint(color, spec.code, spec.symbol)} ${group}/${operation}: ${visible.join(", ")}${rest ? ` (+${rest} more)` : ""}`,
+      );
     }
   }
   return lines;
@@ -106,11 +146,12 @@ function migrationSummary(operations: readonly DisplayOperation[]): string | und
 
 export function renderPlan(
   plan: DisplayPlan,
-  options: { applied: boolean; applyHint?: string; hint?: string },
+  options: { applied: boolean; applyHint?: string; hint?: string; color?: boolean },
 ): string {
+  const color = options.color ?? colorEnabled();
   const version = "package_version" in plan ? ` @kisev/agentomatic ${plan.package_version}` : "";
   const lines = [
-    `${actionName(plan.action)}${version} (${plan.scope})`,
+    paint(color, "1", `${actionName(plan.action)}${version} (${plan.scope})`),
     `Target: ${terminalSafe(plan.root)}`,
     ...("selection" in plan
       ? [
@@ -119,45 +160,73 @@ export function renderPlan(
         ]
       : []),
     "",
-    options.applied ? "Applied changes:" : "Planned changes:",
+    paint(color, "1", options.applied ? "Applied changes:" : "Planned changes:"),
   ];
   for (const group of GROUPS) {
     const operations = plan.operations.filter((item) => groupFor(item.path) === group);
-    if (operations.length) lines.push(`  ${group}: ${operationSummary(operations)}`);
+    if (operations.length)
+      lines.push(`  ${paint(color, "1", group)}: ${operationSummary(operations, color)}`);
   }
   const migration = migrationSummary(plan.operations);
   if (migration) lines.push(migration);
-  const details = detailLines(plan.operations);
-  if (details.length) lines.push("", "Details:", ...details);
+  const details = detailLines(plan.operations, color);
+  if (details.length) lines.push("", paint(color, "1", "Details:"), ...details);
   const conflicts = plan.operations.filter((item) => item.operation === "conflict").length;
-  lines.push("", `Conflicts: ${conflicts || "none"}`);
+  lines.push(
+    "",
+    `Conflicts: ${conflicts ? paint(color, "31", `${MARKS.bad} ${conflicts}`) : paint(color, "32", `${MARKS.ok} none`)}`,
+  );
   const restartNote = "restart the host session so the deployed roles and settings load";
   lines.push(
     plan.requires_restart
-      ? `${options.applied ? "Restart required" : "Restart after apply"}: yes — ${restartNote}`
-      : `${options.applied ? "Restart required" : "Restart after apply"}: no`,
+      ? `${options.applied ? "Restart required" : "Restart after apply"}: ${paint(color, "33", `${MARKS.ok} yes`)} — ${restartNote}`
+      : `${options.applied ? "Restart required" : "Restart after apply"}: ${paint(color, "2", `${MARKS.pending} no`)}`,
   );
   if (!options.applied && options.applyHint)
-    lines.push("", "Apply (repeat non-interactively):", `  ${options.applyHint}`);
-  if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
+    lines.push(
+      "",
+      paint(color, "1", "Apply (repeat non-interactively):"),
+      `  ${options.applyHint}`,
+    );
+  if (options.applied && options.hint)
+    lines.push("", paint(color, "1", "Next:"), `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
+}
+
+export function renderConfigNoop(plan: ConfigSetupPlan, color = colorEnabled()): string {
+  return [
+    paint(
+      color,
+      "1",
+      `Integration configuration @kisev/agentomatic ${plan.package_version} (${plan.scope})`,
+    ),
+    `Root: ${terminalSafe(plan.root)}`,
+    "",
+    paint(color, "32", `${MARKS.ok} No configuration changes are required.`),
+    "",
+  ].join("\n");
 }
 
 export function renderConfigSetup(
   plan: ConfigSetupPlan,
-  options: { applied: boolean; applyHint?: string; hint?: string },
+  options: { applied: boolean; applyHint?: string; hint?: string; color?: boolean },
 ): string {
+  const color = options.color ?? colorEnabled();
   const lines = [
-    `Integration configuration @kisev/agentomatic ${plan.package_version} (${plan.scope})`,
+    paint(
+      color,
+      "1",
+      `Integration configuration @kisev/agentomatic ${plan.package_version} (${plan.scope})`,
+    ),
     `Root: ${terminalSafe(plan.root)}`,
     "",
   ];
   if (plan.targets.length)
     lines.push(
-      "Targets:",
+      paint(color, "1", "Targets:"),
       ...plan.targets.map(
         (item) =>
-          `  ${item.target}: ${terminalSafe(item.path)} (${item.exists ? "existing" : "new"})`,
+          `  ${item.target}: ${terminalSafe(item.path)} ${paint(color, "2", `(${item.exists ? "existing" : "new"})`)}`,
       ),
     );
   else lines.push("Targets: none");
@@ -171,48 +240,64 @@ export function renderConfigSetup(
   if (fragments.length) {
     lines.push(
       "",
-      options.applied ? "Applied fragments:" : "Planned fragments:",
-      ...fragments.map(
-        (item) =>
-          `  ${item.target}/${item.fragment}: ${item.operation}${item.reason ? ` (${terminalSafe(item.reason)})` : ""}`,
-      ),
+      paint(color, "1", options.applied ? "Applied fragments:" : "Planned fragments:"),
+      ...fragments.map((item) => {
+        const spec = OPERATION_STYLES[item.operation];
+        const badge = spec
+          ? `${paint(color, spec.code, spec.symbol)} `
+          : `${paint(color, "33", MARKS.change)} `;
+        return `  ${badge}${item.target}/${item.fragment}: ${item.operation}${item.reason ? ` (${terminalSafe(item.reason)})` : ""}`;
+      }),
     );
   }
   if (plan.skipped_fragments.length)
     lines.push(
       "",
-      "Skipped fragments:",
+      paint(color, "1", "Skipped fragments:"),
       ...plan.skipped_fragments.map((item) => `  ${item.fragment}: ${terminalSafe(item.reason)}`),
     );
-  const conflicts = plan.operations.filter((item) => item.operation === "conflict");
-  lines.push("", `Conflicts: ${conflicts.length || "none"}`);
+  const conflicts = plan.operations.filter((item) => item.operation === "conflict").length;
+  lines.push(
+    "",
+    `Conflicts: ${conflicts ? paint(color, "31", `${MARKS.bad} ${conflicts}`) : paint(color, "32", `${MARKS.ok} none`)}`,
+  );
   lines.push(
     plan.requires_restart
-      ? `${options.applied ? "Restart required" : "Restart after apply"}: yes — restart the host session so the merged presets load`
-      : `${options.applied ? "Restart required" : "Restart after apply"}: no`,
+      ? `${options.applied ? "Restart required" : "Restart after apply"}: ${paint(color, "33", `${MARKS.ok} yes`)} — restart the host session so the merged presets load`
+      : `${options.applied ? "Restart required" : "Restart after apply"}: ${paint(color, "2", `${MARKS.pending} no`)}`,
   );
   if (!options.applied) {
-    if (!plan.confirmable) lines.push("", "No configuration changes are required.");
+    if (!plan.confirmable)
+      lines.push("", paint(color, "32", "No configuration changes are required."));
     else if (options.applyHint)
-      lines.push("", "Apply (repeat non-interactively):", `  ${options.applyHint}`);
+      lines.push(
+        "",
+        paint(color, "1", "Apply (repeat non-interactively):"),
+        `  ${options.applyHint}`,
+      );
   }
-  if (options.applied && options.hint) lines.push("", "Next:", `  ${options.hint}`);
+  if (options.applied && options.hint)
+    lines.push("", paint(color, "1", "Next:"), `  ${options.hint}`);
   return `${lines.join("\n")}\n`;
 }
 
-function table(rows: string[][]): string[] {
+function table(rows: string[][], color = false): string[] {
   const widths = rows[0].map((_, column) =>
     Math.max(...rows.map((row) => row[column]?.length ?? 0)),
   );
-  return rows.map((row) =>
-    row
-      .map((value, column) => value.padEnd(widths[column]))
-      .join("  ")
-      .trimEnd(),
+  return rows.map((row, index) =>
+    paint(
+      color && index === 0,
+      "1",
+      row
+        .map((value, column) => value.padEnd(widths[column]))
+        .join("  ")
+        .trimEnd(),
+    ),
   );
 }
 
-export function renderCriticsTable(inventory: AgentInventory): string {
+export function renderCriticsTable(inventory: AgentInventory, color = colorEnabled()): string {
   // The panel keeps the package-owned fixed critic (`critic`) apart from the
   // additional `critic-*` pool entries and points at the canonical overview.
   const critics = inventory.profiles.filter(
@@ -225,21 +310,22 @@ export function renderCriticsTable(inventory: AgentInventory): string {
   const rows = [
     ["NAME", "MODEL", "VARIANT", "PROVIDER"],
     ...critics.map((profile) => [
-      terminalSafe(profile.name),
+      `${profile.name === "critic" ? MARKS.item : MARKS.change} ${terminalSafe(profile.name)}`,
       terminalSafe(profile.model ?? "default (host)"),
       terminalSafe(profile.variant ?? "-"),
       terminalSafe(profile.model?.split("/", 1)[0] ?? "-"),
     ]),
   ];
+  const head = paint(color, "1", "Critics:");
   return (
-    `Critics:\n${table(rows).join("\n")}\n` +
+    `${head}\n${table(rows, color).join("\n")}\n` +
     `Pool: additional critics are optional specialist profiles (` +
     `${pool.length ? pool.map((profile) => terminalSafe(profile.name)).join(", ") : "none"}); ` +
     "the fixed critic always deploys with the package.\n"
   );
 }
 
-export function renderFixedRoles(inventory: AgentInventory): string {
+export function renderFixedRoles(inventory: AgentInventory, color = colorEnabled()): string {
   const roles = inventory.profiles.filter(
     (profile) =>
       profile.ownership !== "user-owned" &&
@@ -248,14 +334,18 @@ export function renderFixedRoles(inventory: AgentInventory): string {
   const rows = [
     ["NAME", "MODEL", "VARIANT"],
     ...roles.map((profile) => [
-      terminalSafe(profile.name),
+      `${MARKS.item} ${terminalSafe(profile.name)}`,
       terminalSafe(profile.model ?? "default (host)"),
       terminalSafe(profile.variant ?? "-"),
     ]),
   ];
   return [
-    "Fixed roles (all six belong to the package; models and critic composition: agentomatic configure agent):",
-    ...table(rows),
+    paint(
+      color,
+      "1",
+      "Fixed roles (all six belong to the package; models and critic composition: agentomatic configure agent):",
+    ),
+    ...table(rows, color),
     "",
   ].join("\n");
 }

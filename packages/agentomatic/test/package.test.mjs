@@ -43,7 +43,16 @@ import {
   normalizeSelection,
   preview,
 } from "../dist/installer.js";
-import { renderReconcile } from "../dist/cli-output.js";
+import {
+  colorEnabled,
+  renderConfigNoop,
+  renderConfigSetup,
+  renderCriticsTable,
+  renderFixedRoles,
+  renderPlan,
+  renderReconcile,
+} from "../dist/cli-output.js";
+import { stripVTControlCharacters } from "node:util";
 import { applyReconcile, previewReconcile, ReconcileError } from "../dist/reconcile.js";
 import {
   readPackageVersion,
@@ -97,18 +106,20 @@ test("installer wizard uses shared multi-select groups and keeps defaults", () =
   assert.match(source, /Skill command adapters/);
   assert.match(
     source,
-    /"Skill command adapters",\s*SKILL_COMMANDS,\s*defaults\.commands,\s*commandHints\(\),/,
+    /"Skill command adapters",\s*SKILL_COMMANDS,\s*current\.commands,\s*commandHints\(\),/,
   );
   assert.doesNotMatch(source, /selectOptions\("Fixed agents"/);
   assert.match(source, /Optional plugins/);
-  assert.match(source, /defaults\.plugins,/);
+  assert.match(source, /current\.plugins,/);
   assert.match(source, /SELECTABLE_PLUGINS\.map\(\(plugin\) => PLUGIN_DESCRIPTIONS\[plugin\]\)/);
   assert.match(source, /Agent harnesses to configure/);
   assert.match(source, /Application presets to merge/);
   // Select-all is a documented key, never a fake selectable option value.
   assert.doesNotMatch(source, /"Select all", "Select none"/);
   assert.match(wizard, /all\/none: a/);
-  assert.match(wizard, /hint: hints\[index\]/);
+  // Descriptions live in the label of every option, not only the focused hint.
+  assert.match(wizard, /optionLabel\(option, descriptions\?\.\[index\]/);
+  assert.doesNotMatch(wizard, /hint: hints\[index\]/);
   assert.match(source, /--commands/);
   assert.doesNotMatch(source, /--skill-commands/);
   assert.doesNotMatch(source, /--package-commands/);
@@ -1654,4 +1665,91 @@ test("install core integration wires config and dependency in one run", async ()
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("summary renderers carry symbols and colors, and disabling color is byte-identical", () => {
+  const configPlan = {
+    schema_version: 1,
+    action: "config-setup",
+    scope: "global",
+    root: "/tmp/example",
+    package_version: "1.2.3",
+    selection: { targets: ["opencode"], fragments: ["core-plugin", "secrets-guard"] },
+    targets: [{ target: "opencode", path: "/tmp/example/opencode.jsonc", exists: false }],
+    operations: [
+      {
+        target: "opencode",
+        path: "/tmp/example/opencode.jsonc",
+        fragment: "core-plugin",
+        operation: "create",
+      },
+      {
+        target: "opencode",
+        path: "/tmp/example/opencode.jsonc",
+        fragment: "secrets-guard",
+        operation: "unchanged",
+      },
+    ],
+    skipped_fragments: [],
+    requires_restart: true,
+    confirmable: true,
+  };
+  const installPlan = {
+    action: "install",
+    scope: "global",
+    root: "/tmp/example",
+    package_version: "1.2.3",
+    selection: { core_activation: true, plugins: ["rtk"] },
+    operations: [
+      { path: "agents/manager.md", operation: "create" },
+      { path: "commands/askme.md", operation: "unchanged" },
+    ],
+    requires_restart: true,
+  };
+  const inventory = {
+    scope: "global",
+    root: "/tmp/example",
+    profiles: [
+      {
+        name: "manager",
+        model: "openai/x",
+        variant: "high",
+        ownership: "package-owned",
+        state: "current",
+      },
+      { name: "critic", ownership: "package-owned", state: "current" },
+      {
+        name: "critic-security",
+        model: "anthropic/y",
+        ownership: "managed",
+        state: "current",
+      },
+    ],
+  };
+  const plain = [
+    renderPlan(installPlan, { applied: false, color: false }),
+    renderConfigSetup(configPlan, { applied: false, color: false }),
+    renderConfigNoop(configPlan, false),
+    renderCriticsTable(inventory, false),
+    renderFixedRoles(inventory, false),
+  ];
+  const colored = [
+    renderPlan(installPlan, { applied: false, color: true }),
+    renderConfigSetup(configPlan, { applied: false, color: true }),
+    renderConfigNoop(configPlan, true),
+    renderCriticsTable(inventory, true),
+    renderFixedRoles(inventory, true),
+  ];
+  for (let index = 0; index < plain.length; index += 1) {
+    assert.doesNotMatch(plain[index], /\u001b\[/);
+    assert.match(plain[index], /[✓✗▸●■◻]/);
+    assert.match(colored[index], /\u001b\[/);
+    // NO_COLOR (or a non-TTY) yields exactly the plain bytes.
+    assert.equal(stripVTControlCharacters(colored[index]), plain[index]);
+  }
+  assert.match(colored[1], /\u001b\[2m◻/);
+  assert.equal(colorEnabled({ NO_COLOR: "1" }, true), false);
+  assert.equal(colorEnabled({}, true), true);
+  assert.equal(colorEnabled({}, false), false);
+  assert.equal(colorEnabled({ FORCE_COLOR: "0" }, true), false);
 });

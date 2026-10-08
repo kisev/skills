@@ -35,6 +35,7 @@ import {
   CONFIG_FRAGMENTS,
   TARGET_DESCRIPTIONS,
   inspectIntegration,
+  type ConfigSetupPlan,
   type ConfigSetupSelection,
   type ConfigTargetName,
   type FragmentName,
@@ -46,7 +47,16 @@ import { CATALOG } from "./catalog.js";
 import { skillsInstallerSpec } from "./package-metadata.js";
 import { LifecycleError, type Scope } from "./lifecycle.js";
 import { previewDependencyRemoval, removeDependency, planDependency } from "./self-install.js";
-import { selectOption, selectOptions, promptText, confirmQuestion } from "./terminal-wizard.js";
+import {
+  selectOption,
+  selectOptions,
+  promptText,
+  confirmQuestion,
+  runWizard,
+  isBack,
+  type BackSignal,
+  type WizardStep,
+} from "./terminal-wizard.js";
 import {
   renderPlan,
   renderInventory,
@@ -54,6 +64,7 @@ import {
   renderFixedRoles,
   renderDoctor,
   renderConfigSetup,
+  renderConfigNoop,
   renderReconcile,
   terminalSafe,
   shellCommand,
@@ -400,9 +411,56 @@ function conflicts(operations: Array<{ operation: string; path: string }>): void
     );
 }
 
+const CONNECTION_CHOICES = [
+  "Keep current connection",
+  "Connect and pin this package version",
+  "Disconnect agentomatic",
+] as const;
+
+type IntegrationState = {
+  targets: ConfigTargetName[];
+  connection: number;
+  fragments: FragmentName[];
+};
+
+// Narrowing for the diff-driven `configure integration` wizard: only the
+// divergent screens are offered, so a partial state asks nothing about the
+// fragments and targets already in place.
+type IntegrationFilter = {
+  targets?: readonly ConfigTargetName[];
+  fragments?: readonly FragmentName[];
+  connection?: boolean;
+};
+
+function presetFragments(
+  targets: readonly ConfigTargetName[],
+  filter?: Set<FragmentName>,
+): FragmentName[] {
+  return CONFIG_FRAGMENTS.filter(
+    (fragment) =>
+      !["core-plugin", "core-disable"].includes(fragment.name) &&
+      fragment.targets.some((target) => targets.includes(target)) &&
+      (!filter || filter.has(fragment.name)),
+  ).map((fragment) => fragment.name);
+}
+
+function applicablePresets(
+  fragments: readonly FragmentName[],
+  targets: readonly ConfigTargetName[],
+): FragmentName[] {
+  return fragments.filter(
+    (name) =>
+      !["core-plugin", "core-disable"].includes(name) &&
+      CONFIG_FRAGMENTS.find((fragment) => fragment.name === name)?.targets.some((target) =>
+        targets.includes(target),
+      ),
+  );
+}
+
 async function integrationSelection(
   options: Options,
   presetsOnly = false,
+  filter?: IntegrationFilter,
 ): Promise<ConfigSetupSelection> {
   if (options.targets !== undefined || options.fragments !== undefined) {
     if (options.targets === undefined || options.fragments === undefined)
@@ -413,53 +471,102 @@ async function integrationSelection(
     });
   }
   const defaults = await defaultConfigSelection(options.scope);
-  const targets = value(
-    await selectOptions(
-      "Agent harnesses to configure",
-      options.scope === "project" ? ["opencode"] : CONFIG_TARGETS,
-      defaults.targets,
-      CONFIG_TARGETS.map((target) => TARGET_DESCRIPTIONS[target]),
-    ),
-  ) as ConfigTargetName[];
-  if (!targets.length) return { targets, fragments: [] };
+  const scopedTargets: ConfigTargetName[] =
+    options.scope === "project" ? ["opencode"] : [...CONFIG_TARGETS];
+  const targetChoices = filter?.targets
+    ? scopedTargets.filter((target) => filter.targets!.includes(target))
+    : scopedTargets;
+  const fragmentFilter = filter?.fragments ? new Set(filter.fragments) : undefined;
+  const steps: WizardStep<IntegrationState>[] = [
+    {
+      run: async (state, back) => {
+        const result = await selectOptions(
+          "Agent harnesses to configure",
+          targetChoices,
+          state.targets.filter((target) => targetChoices.includes(target)),
+          targetChoices.map((target) => TARGET_DESCRIPTIONS[target]),
+          process.stdin,
+          process.stderr,
+          back,
+        );
+        if (isBack(result)) return result;
+        return { ...state, targets: value(result) as ConfigTargetName[] };
+      },
+    },
+    {
+      enabled: (state) =>
+        !presetsOnly && state.targets.includes("opencode") && (filter?.connection ?? true),
+      run: async (state, back) => {
+        const result = await selectOption(
+          "OpenCode plugin connection",
+          CONNECTION_CHOICES,
+          process.stdin,
+          process.stderr,
+          state.connection,
+          undefined,
+          back,
+        );
+        if (isBack(result)) return result;
+        return { ...state, connection: value(result) as number };
+      },
+    },
+    {
+      enabled: (state) => presetFragments(state.targets, fragmentFilter).length > 0,
+      run: async (state, back) => {
+        const available = presetFragments(state.targets, fragmentFilter);
+        const result = await selectOptions(
+          "Application presets to merge",
+          available,
+          state.fragments.filter((fragment) => available.includes(fragment)),
+          available.map(
+            (name) => CONFIG_FRAGMENTS.find((fragment) => fragment.name === name)?.description,
+          ),
+          process.stdin,
+          process.stderr,
+          back,
+        );
+        if (isBack(result)) return result;
+        return { ...state, fragments: value(result) as FragmentName[] };
+      },
+    },
+  ];
+  const state = await runWizard(
+    {
+      targets: filter?.targets ? [...filter.targets] : defaults.targets,
+      connection: 0,
+      fragments: filter?.fragments
+        ? [...filter.fragments]
+        : applicablePresets(defaults.fragments, defaults.targets),
+    },
+    steps,
+  );
+  if (!state.targets.length) return { targets: [], fragments: [] };
   const connection: FragmentName[] = [];
-  if (!presetsOnly && targets.includes("opencode")) {
-    const choice = value(
-      await selectOption("OpenCode plugin connection", [
-        "Keep current connection",
-        "Connect and pin this package version",
-        "Disconnect agentomatic",
-      ]),
-    );
-    if (choice === 1) connection.push("core-plugin");
-    if (choice === 2) connection.push("core-disable");
-  }
-  const available = CONFIG_FRAGMENTS.filter(
-    (fragment) =>
-      !["core-plugin", "core-disable"].includes(fragment.name) &&
-      fragment.targets.some((target) => targets.includes(target)),
-  ).map((fragment) => fragment.name);
-  const fragments = value(
-    await selectOptions(
-      "Application presets to merge",
-      available,
-      defaults.fragments.filter((fragment) => available.includes(fragment)),
-      available.map(
-        (name) => CONFIG_FRAGMENTS.find((fragment) => fragment.name === name)?.description,
-      ),
-    ),
-  ) as FragmentName[];
+  if (state.connection === 1) connection.push("core-plugin");
+  if (state.connection === 2) connection.push("core-disable");
   return normalizeConfigSelection(options.scope, {
-    targets,
-    fragments: [...connection, ...fragments],
+    targets: state.targets,
+    fragments: [...connection, ...applicablePresets(state.fragments, state.targets)],
   });
 }
+
+type ModelSelectionState = {
+  choice: string;
+  provider: number;
+  model: number;
+  variant: number;
+  models: string[];
+  providers: string[];
+  variants: string[] | null;
+  manual: { model: string; variant: string | null } | null;
+};
 
 async function modelSelection(
   options: Options,
   name: string,
   current?: AgentProfileRecord,
-): Promise<AgentProfileRequest> {
+  allowBack = false,
+): Promise<AgentProfileRequest | BackSignal> {
   validateAgentName(name);
   if (options.model) {
     const model = validateModel(
@@ -484,57 +591,144 @@ async function modelSelection(
         ...(current.variant ? ["Clear variant"] : []),
       ]
     : ["Change model"];
-  const choice = choices[value(await selectOption(`Agent: ${name}`, choices))];
-  if (choice.startsWith("Keep current"))
+  const changing = (state: ModelSelectionState): boolean =>
+    state.manual === null && state.choice === "Change model";
+  const candidates = (state: ModelSelectionState): string[] =>
+    state.models.filter((model) => model.startsWith(`${state.providers[state.provider]}/`));
+  const state = await runWizard<ModelSelectionState>(
+    {
+      choice: choices[0],
+      provider: 0,
+      model: 0,
+      variant: 0,
+      models: [],
+      providers: [],
+      variants: null,
+      manual: null,
+    },
+    [
+      {
+        run: async (current_, canBack) => {
+          const result = await selectOption(
+            `Agent: ${name}`,
+            choices,
+            process.stdin,
+            process.stderr,
+            Math.max(0, choices.indexOf(current_.choice)),
+            undefined,
+            allowBack || canBack,
+          );
+          if (isBack(result)) return result;
+          return { ...current_, choice: choices[value(result)] };
+        },
+      },
+      {
+        // The catalog is fetched on the provider screen (after the model
+        // choice), so the catalog-unavailable fallback keeps its exact order.
+        enabled: changing,
+        run: async (current_, canBack) => {
+          const fallback = async (): Promise<ModelSelectionState> => {
+            process.stderr.write(
+              "Start opencode in another terminal to browse models, or enter provider/model manually\n",
+            );
+            const model = validateModel(value(await promptText("Model (provider/model)")));
+            const answer = await promptText(
+              current?.variant ? "Variant (empty keeps current)" : "Variant (optional)",
+            );
+            const variant = (answer ? validateVariant(answer) : current?.variant) ?? null;
+            return { ...current_, manual: { model, variant } };
+          };
+          let providers = current_.providers;
+          let models = current_.models;
+          if (!models.length) {
+            try {
+              models = await availableModels();
+            } catch (error) {
+              if (!(error instanceof LifecycleError && error.code === "catalog_unavailable"))
+                throw error;
+              return fallback();
+            }
+            providers = [...new Set(models.map((model) => model.split("/", 1)[0]))].sort();
+          }
+          const result = await selectOption(
+            "Provider",
+            providers,
+            process.stdin,
+            process.stderr,
+            Math.min(current_.provider, providers.length - 1),
+            undefined,
+            canBack,
+          );
+          if (isBack(result)) return result;
+          const provider = value(result);
+          return { ...current_, models, providers, provider, model: 0, variants: null };
+        },
+      },
+      {
+        enabled: (current_) => changing(current_) && current_.models.length > 0,
+        run: async (current_, canBack) => {
+          const available = candidates(current_);
+          const result = await selectOption(
+            "Model",
+            available,
+            process.stdin,
+            process.stderr,
+            Math.min(current_.model, available.length - 1),
+            undefined,
+            canBack,
+          );
+          if (isBack(result)) return result;
+          const model = value(result);
+          const variants = await availableModelVariants(available[model]);
+          const variant =
+            variants && current?.variant ? Math.max(0, variants.indexOf(current.variant) + 1) : 0;
+          return { ...current_, model, variants, variant };
+        },
+      },
+      {
+        enabled: (current_) =>
+          changing(current_) && current_.variants !== null && current_.variants.length > 0,
+        run: async (current_, canBack) => {
+          const variants = current_.variants as string[];
+          const labels = variants.map((item) =>
+            item === current?.variant ? `${item} (default)` : item,
+          );
+          const result = await selectOption(
+            "Variant",
+            ["(none)", ...labels],
+            process.stdin,
+            process.stderr,
+            Math.min(current_.variant, labels.length),
+            undefined,
+            canBack,
+          );
+          if (isBack(result)) return result;
+          return { ...current_, variant: value(result) };
+        },
+      },
+    ],
+  );
+  if (state.manual) return { action: "model-set", name, ...state.manual };
+  if (state.choice.startsWith("Keep current"))
     return { action: "model-set", name, model: current!.model, variant: current!.variant ?? null };
-  if (choice === "Clear variant")
+  if (state.choice === "Clear variant")
     return { action: "model-set", name, model: current!.model, variant: null };
-  try {
-    const models = await availableModels();
-    const providers = [...new Set(models.map((model) => model.split("/", 1)[0]))].sort();
-    const provider = providers[value(await selectOption("Provider", providers))];
-    const candidates = models.filter((model) => model.startsWith(`${provider}/`));
-    const model = candidates[value(await selectOption("Model", candidates))];
-    const variants = await availableModelVariants(model);
-    let variant: string | null = null;
-    if (variants === null) {
-      // The variants metadata is unavailable: say so honestly and accept a
-      // manual variant instead of degrading the whole model selection.
-      process.stderr.write(
-        "Model variants are unknown (variants metadata unavailable); enter one manually or leave it empty.\n",
-      );
-      const answer = await promptText(
-        current?.variant ? "Variant (empty keeps current)" : "Variant (optional)",
-      );
-      variant = (answer ? validateVariant(answer) : current?.variant) ?? null;
-    } else if (variants.length) {
-      const labels = variants.map((item) =>
-        item === current?.variant ? `${item} (default)` : item,
-      );
-      const choice = value(
-        await selectOption(
-          "Variant",
-          ["(none)", ...labels],
-          undefined,
-          undefined,
-          current?.variant ? variants.indexOf(current.variant) + 1 : 0,
-        ),
-      );
-      variant = choice === 0 ? null : (variants[choice - 1] ?? null);
-    }
-    return { action: "model-set", name, model, variant };
-  } catch (error) {
-    if (!(error instanceof LifecycleError && error.code === "catalog_unavailable")) throw error;
+  const chosen = candidates(state)[state.model];
+  let variant: string | null = null;
+  if (state.variants === null) {
+    // The variants metadata is unavailable: say so honestly and accept a
+    // manual variant instead of degrading the whole model selection.
     process.stderr.write(
-      "Start opencode in another terminal to browse models, or enter provider/model manually\n",
+      "Model variants are unknown (variants metadata unavailable); enter one manually or leave it empty.\n",
     );
-    const model = validateModel(value(await promptText("Model (provider/model)")));
     const answer = await promptText(
       current?.variant ? "Variant (empty keeps current)" : "Variant (optional)",
     );
-    const variant = (answer ? validateVariant(answer) : current?.variant) ?? null;
-    return { action: "model-set", name, model, variant };
+    variant = (answer ? validateVariant(answer) : current?.variant) ?? null;
+  } else if (state.variants.length) {
+    variant = state.variant === 0 ? null : (state.variants[state.variant - 1] ?? null);
   }
+  return { action: "model-set", name, model: chosen, variant };
 }
 
 async function profileDraft(options: Options, names: string[]): Promise<AgentProfileRequest[]> {
@@ -547,24 +741,24 @@ async function profileDraft(options: Options, names: string[]): Promise<AgentPro
   const changes: AgentProfileRequest[] = [];
   while (true) {
     const actions = ["Configure model", "Add critic", "Remove additional critic", "Done"];
-    const action =
-      actions[
-        value(
-          await selectOption(
-            "Agent models and critics (changes are staged until confirmation)",
-            actions,
-            process.stdin,
-            process.stderr,
-            3,
-          ),
-        )
-      ];
+    const actionIndex = value(
+      await selectOption(
+        "Agent models and critics (changes are staged until confirmation)",
+        actions,
+        process.stdin,
+        process.stderr,
+        3,
+      ),
+    );
+    if (isBack(actionIndex)) fail("cancelled", "Wizard cancelled; no changes applied");
+    const action = actions[actionIndex];
     if (action === "Done") return changes;
     if (action === "Add critic") {
       const name = await promptCriticName();
       if (records.has(name)) fail("profile_exists", `Profile already exists: ${name}`);
-      const request = { ...(await modelSelection(options, name)), action: "critic-add" as const };
-      changes.push(request);
+      const request = await modelSelection(options, name, undefined, true);
+      if (isBack(request)) continue;
+      changes.push({ ...request, action: "critic-add" as const });
       names.push(name);
       records.set(name, {
         name,
@@ -582,13 +776,24 @@ async function profileDraft(options: Options, names: string[]): Promise<AgentPro
         process.stderr.write("No eligible profiles; choose another action.\n");
         continue;
       }
-      const name = candidates[value(await selectOption("Agent", candidates))];
+      const selected = await selectOption(
+        "Agent",
+        candidates,
+        process.stdin,
+        process.stderr,
+        0,
+        undefined,
+        true,
+      );
+      if (isBack(selected)) continue;
+      const name = candidates[value(selected)];
       if (action === "Remove additional critic") {
         changes.push({ action: "critic-remove", name });
         names = names.filter((candidate) => candidate !== name);
         records.delete(name);
       } else {
-        const request = await modelSelection(options, name, records.get(name));
+        const request = await modelSelection(options, name, records.get(name), true);
+        if (isBack(request)) continue;
         changes.push(request);
         records.set(name, {
           ...records.get(name)!,
@@ -644,33 +849,71 @@ async function componentSelection(options: Options): Promise<InstallerSelection>
   process.stderr.write(
     `Portable skills are installed separately through the skills CLI (npx --yes ${skillsInstallerSpec()} add https://kisev.github.io/skills --agent opencode --copy). Selecting an adapter does not install its skill.\nAll six fixed agent roles deploy as one package; set their models or add critics with \`agentomatic configure agent\` afterwards.\n`,
   );
-  const commands = value(
-    await selectOptions(
-      "Skill command adapters",
-      SKILL_COMMANDS,
-      defaults.commands,
-      commandHints(),
-    ),
+  type ComponentState = {
+    commands: string[];
+    plugins: InstallerSelection["plugins"];
+    core_activation: boolean;
+  };
+  const state = await runWizard<ComponentState>(
+    {
+      commands: defaults.commands,
+      plugins: defaults.plugins,
+      core_activation: defaults.core_activation,
+    },
+    [
+      {
+        run: async (current, back) => {
+          const result = await selectOptions(
+            "Skill command adapters",
+            SKILL_COMMANDS,
+            current.commands,
+            commandHints(),
+            process.stdin,
+            process.stderr,
+            back,
+          );
+          if (isBack(result)) return result;
+          return { ...current, commands: value(result) };
+        },
+      },
+      {
+        run: async (current, back) => {
+          const result = await selectOptions(
+            "Optional plugins",
+            SELECTABLE_PLUGINS,
+            current.plugins,
+            SELECTABLE_PLUGINS.map((plugin) => PLUGIN_DESCRIPTIONS[plugin]),
+            process.stdin,
+            process.stderr,
+            back,
+          );
+          if (isBack(result)) return result;
+          return { ...current, plugins: value(result) as InstallerSelection["plugins"] };
+        },
+      },
+      {
+        run: async (current) => ({
+          ...current,
+          core_activation:
+            options.core ??
+            value(
+              await confirmQuestion(
+                "Connect the OpenCode plugin and pin its npm dependency?",
+                process.stdin,
+                process.stderr,
+                current.core_activation,
+              ),
+            ),
+        }),
+      },
+    ],
   );
-  const plugins = value(
-    await selectOptions(
-      "Optional plugins",
-      SELECTABLE_PLUGINS,
-      defaults.plugins,
-      SELECTABLE_PLUGINS.map((plugin) => PLUGIN_DESCRIPTIONS[plugin]),
-    ),
-  ) as InstallerSelection["plugins"];
-  const core_activation =
-    options.core ??
-    value(
-      await confirmQuestion(
-        "Connect the OpenCode plugin and pin its npm dependency?",
-        process.stdin,
-        process.stderr,
-        defaults.core_activation,
-      ),
-    );
-  return normalizeSelection({ commands: commands ?? [], agents, plugins, core_activation });
+  return normalizeSelection({
+    commands: state.commands ?? [],
+    agents,
+    plugins: state.plugins,
+    core_activation: state.core_activation,
+  });
 }
 
 async function deploy(options: Options, repair = false): Promise<void> {
@@ -904,9 +1147,75 @@ function partial(
 }
 class ReportedError extends Error {}
 
+function configDivergence(plan: ConfigSetupPlan): {
+  targets: ConfigTargetName[];
+  fragments: FragmentName[];
+  connection: boolean;
+  conflicts: boolean;
+  changes: number;
+} {
+  const changed = plan.operations.filter(
+    (operation) => operation.operation === "create" || operation.operation === "update",
+  );
+  const conflicts = plan.operations.some((operation) => operation.operation === "conflict");
+  const targets = CONFIG_TARGETS.filter((target) =>
+    changed.some((operation) => operation.target === target),
+  );
+  const fragments = CONFIG_FRAGMENTS.map((fragment) => fragment.name).filter((name) =>
+    changed.some((operation) => operation.fragment === name),
+  );
+  const connection = changed.some(
+    (operation) => operation.fragment === "core-plugin" || operation.fragment === "core-disable",
+  );
+  return { targets, fragments, connection, conflicts, changes: changed.length };
+}
+
 async function configureIntegration(options: Options): Promise<void> {
   requireApply(options);
-  const selection = await integrationSelection(options);
+  const supplied = options.targets !== undefined || options.fragments !== undefined;
+  let selection: ConfigSetupSelection;
+  if (supplied) {
+    selection = await integrationSelection(options);
+  } else {
+    if (!tty())
+      fail(
+        "terminal_required",
+        "configure integration outside a terminal requires --targets and --fragments",
+      );
+    // Diff before the first screen: an already-satisfied state asks nothing.
+    const defaults = await defaultConfigSelection(options.scope);
+    const baseline = await previewConfigSetup(
+      defaults,
+      options.scope,
+      undefined,
+      undefined,
+      false,
+      false,
+    );
+    const divergence = configDivergence(baseline);
+    const dependency =
+      !options.noDependency &&
+      defaults.targets.includes("opencode") &&
+      defaults.fragments.includes("core-plugin")
+        ? planDependency(options.scope)
+        : undefined;
+    const settled =
+      !dependency || dependency.status === "satisfied" || dependency.status === "manual";
+    if (divergence.changes === 0 && !divergence.conflicts && settled) {
+      if (options.json) json({ status: "ok", applied: false, plan: baseline, noop: true });
+      else {
+        process.stdout.write(renderConfigNoop(baseline));
+        await epilogue(options, false);
+        process.stdout.write("Done: nothing to apply.\n");
+      }
+      return;
+    }
+    selection = await integrationSelection(options, false, {
+      targets: divergence.targets.length ? divergence.targets : undefined,
+      fragments: divergence.fragments,
+      connection: divergence.connection,
+    });
+  }
   const plan = await previewConfigSetup(
     selection,
     options.scope,
@@ -952,8 +1261,12 @@ async function configureIntegration(options: Options): Promise<void> {
         requires_restart: result.requires_restart,
       });
     else {
-      process.stdout.write(renderConfigSetup(result, { applied: true }));
       await epilogue(options, false);
+      process.stdout.write(
+        result.requires_restart
+          ? "Done: configuration applied; restart the host session.\n"
+          : "Done: configuration applied.\n",
+      );
     }
   } catch (error) {
     partial(
@@ -1167,6 +1480,7 @@ async function run(args: string[]): Promise<void> {
         "Application connection and presets",
       ]),
     );
+    if (isBack(selected)) fail("cancelled", "Wizard cancelled; no changes applied");
     topic = routes[selected];
   }
   if (topic === "install" || topic === "configure components" || topic === "maintenance repair") {
@@ -1249,10 +1563,12 @@ async function run(args: string[]): Promise<void> {
       // configure agent on a fresh critic-<name> adds the critic: one command
       // covers model-set for existing profiles and critic-add for new critics.
       const request = await modelSelection(options, name, undefined);
+      if (isBack(request)) fail("cancelled", "Wizard cancelled; no changes applied");
       await profileChange(options, { ...request, action: "critic-add" });
       return;
     }
     const request = await modelSelection(options, name, existing);
+    if (isBack(request)) fail("cancelled", "Wizard cancelled; no changes applied");
     await profileChange(options, { ...request, action: "model-set" });
     return;
   }
