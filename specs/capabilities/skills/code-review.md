@@ -97,6 +97,11 @@ prose continues the complete conversation naturally in the chosen language.
 Private artifacts have bounded paths and permissions. Exact refs remain out of
 chat and prose, but executable GitLab position arguments retain exact revisions.
 Ordinary local edits need no user confirmation; external mutations remain manual.
+Orchestration reads artifacts by path and passes them by path: input contracts
+come from runtime responses and recorded artifacts, never from reading runtime
+sources or dumping complete JSON schemas into the orchestrator window, and the
+whole context package is never loaded into it — bounded or delegated reads
+cover the rare inside look.
 
 ## Requirement
 
@@ -285,10 +290,26 @@ executes OCR critics mechanically inside the process without an authoring
 stop, stops once per model critic with that participant's ready receipt
 template and the exact `record-run-critic` import command, and merges the
 complete panel into one aggregate critic receipt through the contributors
-convention. An invalid selection is a loud refusal that records nothing, a
-selection without a panel stage (a fast or unchanged review) is refused, and
-the run results name the panel with every critic's engine and receipt
-identity. Context collection treats degraded discussions as a loud refusal:
+convention. Every emitted critic receipt template pre-stamps `run_id` with the
+reviewmatic run identity derived from the collected evidence, and the model
+critic stop carries the rule that `session_id` is the real session id of that
+critic subagent — a copied or invented identity is refused. An invalid
+selection is a loud refusal that records nothing, a selection without a panel
+stage (a fast or unchanged review) is refused, and the run results name the
+panel with every critic's engine and receipt identity. A pipeline transition
+observed after the evidence collection — while the poll waits or after it — is
+post-collection drift, not a poll answer: the run never restarts, never
+re-collects evidence, and never launches a second critic because a pipeline
+changed; the next resume takes the existing re-anchor preflight, whose
+fingerprint comparison without persisting keeps authorship for code-identical
+state, and a CI-only transition becomes exactly one CI delta target checked
+with `record-delta` while prior checks stay in history. A full restart with
+re-collection is reserved for changed code or changed notes. The run path has
+one authorship surface there: the content stop emits only the prose
+projection (`record-prose` merges the authored prose keys onto the
+re-rendered content), and the standalone `--kind content` template is limited
+to the marked repair and interactive paths. Context collection treats
+degraded discussions as a loud refusal:
 an unusable discussion entry or a note with an empty or missing body stops
 the review with an addressed error instead of writing a silently empty
 artifact. Preparation shall expose already

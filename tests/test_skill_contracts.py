@@ -544,7 +544,23 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
 
 
 def test_code_review_requires_compact_incremental_manual_publication_contract() -> None:
-    workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
+    # The section split keeps every rule: the pin reads the router combined
+    # with the focused section contracts.
+    section_files = (
+        "run-path.md",
+        "review-panel.md",
+        "remote-review-stages.md",
+        "inverted-tail.md",
+    )
+    workflow = "\n".join(
+        [
+            (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8"),
+            *(
+                (ROOT / "skills/code-review/references" / name).read_text(encoding="utf-8")
+                for name in section_files
+            ),
+        ]
+    )
     for marker in (
         "--incremental auto",
         "--incremental off",
@@ -1032,7 +1048,18 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
     )
 
     review = " ".join(
-        (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8").split()
+        "".join(
+            [
+                (ROOT / "skills/code-review/references" / name).read_text(encoding="utf-8")
+                for name in (
+                    "workflow.md",
+                    "run-path.md",
+                    "review-panel.md",
+                    "remote-review-stages.md",
+                    "inverted-tail.md",
+                )
+            ]
+        ).split()
     )
     for marker in (
         "`references/simplification-criteria.md` path into every critic task and into the arbitrator task",

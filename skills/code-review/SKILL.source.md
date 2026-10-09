@@ -21,6 +21,11 @@ and asks for a fresh `reviewmatic record-delta` verification of changes and
 affected conclusions. Original checks remain historical; never replace their
 digests or treat a mapped source position as proof of a finding's truth.
 
+The orchestrator reads artifacts by path and passes them by path: contracts
+come from runtime responses, never from reading runtime sources or complete
+JSON schemas, and the whole context package is never read into the main
+window (the reading discipline in `references/workflow.md` pins the budget).
+
 Each runbook stands on the current snapshot. `history_context` is advisory:
 past findings, reasons, and decisions inform critics and arbitration but never
 require ledger coverage, old IDs, revisions, or `update_issue`. Return prepared

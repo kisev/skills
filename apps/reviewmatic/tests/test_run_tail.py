@@ -58,6 +58,50 @@ def test_run_content_stop_is_the_prose_surface(fixture: ReviewFixture, capsys: A
     assert "record-prose" in prose_stop["manual_command"]
 
 
+def test_record_prose_merges_prose_keys_over_the_rerendered_content(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    """One authorship surface: the run's content stop emits only the prose
+    projection, and ``record-prose`` merges the authored prose keys onto the
+    re-rendered content instead of the reverse."""
+    args = ["run", "--url", fixture.url, "--repo-root", str(fixture.repo), "--review-mode", "fast"]
+    assert main(args) == 0
+    decision_stop = output(capsys)
+    assert decision_stop["template_kind"] == "decision"
+    decision_path = Path(decision_stop["template_path"])
+    decision = contract.read_json(decision_path, "decision")
+    decision.update(run_id="merge-primary-run", session_id="merge-primary-session")
+    for response in decision["responses"]:
+        response["reason"] = "Verified the exact reviewed code."
+    contract.write_json(decision_path, decision)
+    assert main(decision_stop["manual_argv"][1:]) == 0
+    capsys.readouterr()
+    assert main([*args, "--resume"]) == 0
+    prose_stop = output(capsys)
+    prose_path = Path(prose_stop["template_path"])
+    prose = contract.read_json(prose_path, "prose")
+    # The prose projection carries judgments only: no machine-rendered SemVer
+    # bindings ever appear on this surface.
+    assert "target_revision" not in prose["semver_assessment"]
+    for summary in ("First authored summary.", "Second authored summary."):
+        edited = fill_prose(contract.read_json(prose_path, "prose"))
+        edited["summary"] = summary
+        contract.write_json(prose_path, edited)
+        assert main(prose_stop["manual_argv"][1:]) == 0
+        capsys.readouterr()
+        prose = contract.read_json(prose_path, "prose")
+    assert main([*args, "--resume"]) == 0
+    final = output(capsys)
+    assert final["stage"] == "plan_ready"
+    state = tail.load(Path(final["artifact_root"]))
+    assert state is not None
+    # The second record-prose re-rendered the content from the recorded
+    # decision and merged the re-authored prose key over it.
+    assert state["content"]["summary"] == "Second authored summary."
+    assert state["content"]["semver_assessment"]["target_revision"]
+    assert state["prose"]["summary"] == "Second authored summary."
+
+
 def test_multiline_target_derives_the_range(fixture: ReviewFixture) -> None:
     target = {"path": "review.txt", "before": "base\nreviewed change"}
     row = render.targeted_suggestion(

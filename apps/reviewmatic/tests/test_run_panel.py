@@ -232,22 +232,30 @@ def test_run_panel_composes_ocr_and_model_critics(
     assert measure_size <= ocr_critic.OCR_BACKGROUND_LIMIT
     assert measure_cuts == ()
 
-    # The model critic fills its template in place; the import finishes the panel.
+    # The model critic template arrives pre-stamped with the run identity: the
+    # critic fills only its own real session_id.
+    critic_template = contract.read_json(Path(waiting["template_path"]), "critic template")
+    assert waiting["identity_rule"] == run_panel.IDENTITY_RULE
+    assert critic_template["run_id"].startswith("reviewmatic-run-")
+    assert critic_template["session_id"] == ""
     _fill_template(
         waiting["template_path"],
-        {"run_id": "model-run-1", "session_id": "model-session-1"},
+        {"session_id": "model-session-1"},
     )
     imported = _run_manual(capsys, waiting["manual_argv"])
     assert imported["status"] == "ok"
     assert imported["stage"] == "finalize_missing"
-    assert imported["panel"]["critics"][1]["run_id"] == "model-run-1"
+    assert imported["panel"]["critics"][1]["run_id"] == critic_template["run_id"]
 
     # The aggregate critic receipt carries both contributors with their engines.
     receipt_path = Path(str(_progress(root, "critic_receipt_path")))
     _meta, receipt = contract.artifact_payload(receipt_path, "critic_receipt")
     contributors = cast("list[dict[str, Any]]", receipt["contributors"])
     assert [item.get("engine", "model") for item in contributors] == ["ocr", "model"]
-    assert {item["run_id"] for item in contributors} == {"ocr-run-1", "model-run-1"}
+    assert {item["run_id"] for item in contributors} == {
+        "ocr-run-1",
+        critic_template["run_id"],
+    }
 
     # The rest of the cycle is unchanged: finalize, decision, content, plan.
     resume = [*base, "--resume", "--json"]
@@ -272,6 +280,10 @@ def test_run_panel_composes_ocr_and_model_critics(
     assert cli_main(resume) == 0
     waiting = _stdout_json(capsys)
     assert waiting["stage"] == "content_missing"
+    # One authorship surface: the run's content stop is the prose projection,
+    # never a standalone content template.
+    assert waiting["template_kind"] == "prose"
+    assert Path(waiting["template_path"]).name.startswith("content-prose-")
     template = contract.read_json(Path(waiting["template_path"]), "content template")
     contract.write_json(
         Path(waiting["template_path"]), render.prose_projection(empty_content(template))

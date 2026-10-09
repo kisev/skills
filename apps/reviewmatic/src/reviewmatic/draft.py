@@ -21,6 +21,7 @@ from reviewmatic import (
     scope,
     tail,
 )
+from reviewmatic.context import reviewmatic_review_identity
 from reviewmatic.context_package import (
     ExpectedPackage,
     bind_question_contexts,
@@ -559,7 +560,7 @@ def _critic_receipt(context: dict[str, Any], mode: str) -> dict[str, Any]:
     receipt: dict[str, Any] = {
         "schema": "portable-gitlab/critic-receipt/v2",
         "evidence_digest": context["evidence_digest"],
-        "run_id": "",
+        "run_id": reviewmatic_review_identity(context["evidence_digest"]),
         "session_id": "",
         "findings": [],
         "question_answers": [],

@@ -180,6 +180,16 @@ def runner_action(
     }
 
 
+def reviewmatic_review_identity(evidence_digest: str) -> str:
+    """The run identity every emitted critic receipt template pre-stamps.
+
+    The receipt's ``run_id`` names the reviewmatic run that produced the
+    template, so a critic never invents one; its own real session id stays
+    the receipt's second identity component.
+    """
+    return f"reviewmatic-run-{evidence_digest[:16]}"
+
+
 def empty_progress(
     evidence_path: Path,
     evidence_digest: str,
@@ -5345,7 +5355,7 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
         value: dict[str, Any] = {
             "schema": "portable-gitlab/critic-receipt/v2",
             "evidence_digest": evidence_digest,
-            "run_id": "",
+            "run_id": reviewmatic_review_identity(evidence_digest),
             "session_id": "",
             "findings": [],
             "external_mutations": False,

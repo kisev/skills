@@ -18,7 +18,7 @@
   "invariants": [
     {
       "id": "critic-contract",
-      "path": "skills/code-review/references/workflow.md",
+      "path": "skills/code-review/references/remote-review-stages.md",
       "contains": "independent critic receipt"
     }
   ],
@@ -32,7 +32,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "a212f76e68f6917bca9feab89317e25932d65d57fad6fe68aa3d2b1f480b2308",
+  "digest": "99a0fe23a378e22d6f0db23c1a2255c8fe15a0320c2f2869195a0a018e0a9d93",
   "locale": "ru",
   "pair_id": "gitlab.code-review.trigger"
 }

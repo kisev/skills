@@ -530,6 +530,7 @@ class ReviewRun:
             "history_context": context_artifact[1].get("incremental", {}).get("history_context"),
             "panel": run_panel.summary(panel),
             "template_path": str(template_path),
+            "identity_rule": run_panel.IDENTITY_RULE,
             "manual_command": action["command"],
             "manual_argv": action["argv"],
             "resume_command": self.resume_command(),

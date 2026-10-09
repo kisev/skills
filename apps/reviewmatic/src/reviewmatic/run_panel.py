@@ -24,6 +24,12 @@ from reviewmatic.portable.portable_gitlab import contract
 PANEL_NAME = "review-panel.json"
 PANEL_SCHEMA = "code-review/run-panel/v1"
 
+IDENTITY_RULE = (
+    "The receipt template is pre-stamped: run_id already carries this reviewmatic "
+    "run's identity and stays unchanged, and session_id is the real session id of "
+    "this critic subagent - never a copied or invented identity."
+)
+
 # The verbatim poll text, keyed by locale (the precedent is
 # review_metadata_labels): the agent presents this text to the user word for
 # word instead of paraphrasing the template.

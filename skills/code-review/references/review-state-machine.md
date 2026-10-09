@@ -153,14 +153,16 @@ for the affected scope, and a late receipt bound to the superseded version is
 rejected instead of certifying the changed question. Request complete detailed
 findings in the host/profile's required report envelope; `review_report` is
 valid for routed specialists. Populate the returned receipt template from
-those findings and real native invocation run/session metadata, or use a
-returned receipt when its identities are real. If the host exposes no separate
-run ID, reuse the real session ID as `run_id`; do not introduce invented
-labels. The OpenCode core plugin exposes current session identity to primary
-and child agents without requiring optional profiles. Never ask a child to
-guess its identity. Do not switch to another provider, invent a profile,
-fabricate a receipt, or run `opencode run` to evade a failed delegation
-policy. If the host truly cannot launch any independent subagent, report that
+those findings; the emitted template carries a pre-stamped `run_id` with this
+reviewmatic run's identity — keep it unchanged — and `session_id` is the
+receipt's real native session id: the critic subagent's own session, never a
+copied or invented label (keep the pre-stamped `run_id` when the host exposes
+no separate run ID). The OpenCode core plugin exposes current session identity
+to primary and child agents without requiring optional profiles. Never ask a
+child to guess its identity. Do not switch to another provider, invent a
+profile, fabricate a receipt, or run `opencode run` to evade a failed
+delegation policy. If the host truly cannot launch any independent subagent,
+report that
 capability failure before an extended review rather than silently weakening
 its depth. A failed specialist is not replaced or omitted without reconciling
 the user's selected critic count.
@@ -177,7 +179,7 @@ authors or opinion differences, and records the consolidated decisions in one
 `record-arbitration`. The receipt must select exactly one `merge_verdict` —
 `decline`, `push_back`, `merge_then_fix`, or `merge` — with an evidence-based
 rationale (the ladder and its tie-breaker are defined in
-`references/workflow.md`), and a `decline` still salvages the attempted pain
+`references/review-panel.md`), and a `decline` still salvages the attempted pain
 into a recommended issue. Findings discipline belongs to the arbitrator: only
 a finding that moves the merge verdict or readiness, or joins the action
 list, reaches the runbook findings; every other candidate stays a refuted or
@@ -194,8 +196,12 @@ automatically.
 
 Existing v2 artifacts and low-level `prepare`, `context`, `template-review`,
 `record-artifact`, `finalize`, `finalize-review`, `scaffold-review`, `status`, and
-`report-review` remain supported for old callers. Do not mix them with a guided
-draft. Internal progress stages remain available for inspection.
+`report-review` remain supported for old callers. `template-review --kind
+content` is a repair/interactive surface for an existing draft, not a run-path
+authoring surface: the run path emits only the prose projection through
+`record-prose`, and a standalone content template never replaces it. Do not
+mix these low-level commands with a guided draft. Internal progress stages
+remain available for inspection.
 
 Every accepted non-low finding blocks `ready`. Failed/canceled CI jobs require
 trace-supported classification across child/downstream pipelines; only proven

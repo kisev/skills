@@ -66,7 +66,10 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
     critic = review_context.template_review(str(root), "critic")
     assert critic["stage"] == "critic_missing"
     critic_draft = contract.read_json(Path(critic["template_path"]), "critic template")
-    assert critic_draft["run_id"] == ""
+    # The template pre-stamps the reviewmatic run identity; the critic keeps it.
+    assert critic_draft["run_id"].startswith("reviewmatic-run-")
+    assert critic_draft["run_id"] == review_context.reviewmatic_review_identity(evidence_digest)
+    assert critic_draft["session_id"] == ""
     assert critic_draft["evidence_digest"] == evidence_digest
 
     primary_finding = {

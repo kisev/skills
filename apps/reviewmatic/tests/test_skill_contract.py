@@ -149,7 +149,17 @@ def test_run_panel_poll_contract_is_documented() -> None:
 
 def test_publication_skeletons_and_self_documenting_refusals_are_documented() -> None:
     """The pre-rendered publication variants and their refusal contract are wired."""
-    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    skill = SKILL_DIR / "references"
+    workflow = "\n".join(
+        (skill / name).read_text(encoding="utf-8")
+        for name in (
+            "workflow.md",
+            "run-path.md",
+            "review-panel.md",
+            "remote-review-stages.md",
+            "inverted-tail.md",
+        )
+    )
     assert "formally complete block per valid variant" in workflow
     assert "fill the placeholders" in workflow
     assert "never passes" in workflow
@@ -201,10 +211,10 @@ def test_the_contract_test_reads_the_authored_sources() -> None:
 
 def test_the_poll_is_presented_verbatim_with_a_fixed_glossary() -> None:
     """The skill presents the runtime poll text word for word, with fixed terms."""
-    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
-    assert "word for word" in workflow
-    assert "poll.text" in workflow
-    assert "poll-glossary.md" in workflow
+    run_path = (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8")
+    assert "word for word" in run_path
+    assert "poll.text" in run_path
+    assert "poll-glossary.md" in run_path
     glossary = (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8")
     for term in ("Poll", "Critic", "Engine", "OCR engine", "Arbitrator", "Panel"):
         assert term in glossary
@@ -218,9 +228,11 @@ def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
     from reviewmatic import run_panel
 
     entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
-    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    panel = " ".join(
+        (SKILL_DIR / "references" / "review-panel.md").read_text(encoding="utf-8").split()
+    )
     glossary = (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8")
-    for text in (entry, workflow):
+    for text in (entry, panel):
         assert "agentomatic agent list" in text
         assert "distinct models or engines" in text
         assert "two critics on the same single model" in text
@@ -266,6 +278,73 @@ def test_the_compact_background_contract_is_documented() -> None:
     assert "Only a compact background above the OCR CLI limit" in incremental
 
 
+def test_the_orchestrator_reads_by_path_within_a_window_budget() -> None:
+    """The router pins the reading-budget contract: contracts come from runtime
+    responses, never from runtime sources or full schema dumps; the context
+    package travels by path; large reads are bounded or delegated."""
+    router = " ".join(
+        (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8").split()
+    )
+    for marker in (
+        (
+            "They never come from reading the runtime's source code or dumping complete "
+            "JSON schemas into the conversation to derive input fields"
+        ),
+        (
+            "Never read the whole recorded context package into the main window: "
+            "critics and arbitrators receive it by path"
+        ),
+        "a bounded read (a head, a targeted grep, a single section)",
+        (
+            "Never re-read an entire artifact into the main window to answer a "
+            "question the runtime response already answers"
+        ),
+    ):
+        assert marker in router, marker
+
+
+def test_post_poll_drift_routes_through_re_anchor_without_a_second_critic() -> None:
+    """The stale-pipeline trap is neutralized by the existing delta mechanism:
+    a pipeline transition during the poll never restarts the run, and the run's
+    OCR measurement stays the pre-poll render."""
+    run_path = " ".join(
+        (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8").split()
+    )
+    for marker in (
+        "A pipeline transition that arrives while the poll waits",
+        "post-collection drift, not a poll answer",
+        "never restarts the run, never re-collects evidence, and never adds a second critic",
+        "The OCR background was measured before the poll",
+        "fingerprint comparison without persisting keeps authorship",
+        "one CI delta target checked with `record-delta` while prior checks stay in history",
+        "one fresh delta check, never a second critic",
+        "A full restart with re-collection is only for changed code or changed notes",
+    ):
+        assert marker in run_path, marker
+
+
+def test_run_critic_templates_carry_the_pre_stamped_identity() -> None:
+    """Templates the run emits pre-stamp the run identity; the receipt's
+    session_id is the critic subagent's real session id."""
+    run_path = " ".join(
+        (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8").split()
+    )
+    assert "its `run_id` already carries this reviewmatic run's identity" in run_path
+    assert "`session_id` is the real session id of that critic subagent" in run_path
+
+
+def test_a_content_template_stays_on_the_repair_path() -> None:
+    """The run emits only the prose projection; `template-review --kind content`
+    is confined to the marked repair and interactive paths."""
+    stages = " ".join(
+        (SKILL_DIR / "references" / "remote-review-stages.md").read_text(encoding="utf-8").split()
+    )
+    assert "`template-review --kind content`" in stages
+    assert "a run's content stop emits only the prose projection" in stages
+    assert "`record-prose` merges the authored prose keys onto the re-rendered content" in stages
+    assert "never replaces the prose projection on the run path" in stages
+
+
 def test_the_bulk_poll_wording_names_the_actual_participants() -> None:
     """``ordinary model critic`` is gone: the texts name a subagent on the
     current model and state the arbitrator's engine explicitly."""
@@ -275,10 +354,16 @@ def test_the_bulk_poll_wording_names_the_actual_participants() -> None:
 
 
 def test_the_tail_routing_precedence_is_documented() -> None:
-    """Render before prose before finalize; structural edits are repair."""
-    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
-    tail = workflow.index("The inverted tail")
-    section = " ".join(workflow[tail:].split())
+    """Render before prose before finalize; structural edits are repair. The
+    router preserves the pinned stage order: run path, inverted tail, doctrine."""
+    router = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    assert (
+        router.index("Run path: the primary")
+        < router.index("The inverted tail")
+        < router.index("Necessity and completion")
+    )
+    tail = (SKILL_DIR / "references" / "inverted-tail.md").read_text(encoding="utf-8")
+    section = " ".join(tail[tail.index("The inverted tail") :].split())
     render_at = section.index("render-review --draft")
     prose_at = section.index("record-prose --draft")
     assert render_at < prose_at, "render-review precedes record-prose in the tail"
@@ -288,9 +373,8 @@ def test_the_tail_routing_precedence_is_documented() -> None:
     assert "decision → shared render → record-prose → finalize" in section
     assert "Historical checks certify the old snapshot" in section
     assert "Line mapping proves a publication position, never the truth" in section
-    primary = workflow[
-        workflow.index("Run path: the primary") : workflow.index("Necessity and completion")
-    ]
+    run = (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8")
+    primary = " ".join(run[run.index("Run path: the primary") :].split())
     assert "shared renderer" in primary
     assert "record-prose --artifact-root" in primary
     assert "scaffold-review` is the structural repair" in primary
@@ -298,12 +382,14 @@ def test_the_tail_routing_precedence_is_documented() -> None:
 
 
 def test_standalone_runbook_and_semantic_input_contract_are_documented() -> None:
-    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    run_path = (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8")
+    tail = (SKILL_DIR / "references" / "inverted-tail.md").read_text(encoding="utf-8")
     history = " ".join(
         (SKILL_DIR / "references" / "incremental-review.md").read_text(encoding="utf-8").split()
     )
     entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
     assert "history_context" in entry
+    workflow = f"{run_path}\n{tail}"
     for fragment in (
         "History is advisory",
         "prepared `finding_id` unchanged",
