@@ -10,6 +10,12 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Changed
 
+- `team-roadmap` aligns its document contract with curated roadmap practices
+  (from the awesome-roadmaps study): cross-checks goal statuses against the
+  profile status legend and reports mismatches, refreshes a document
+  freshness marker when period outcomes change, keeps canonical naming with
+  one link per goal, accepts Now/Next/Later period vocabularies, and keeps
+  the purpose and non-commitment statement in the document.
 - Release preparation and release review now share one changelog register:
   every item names user-visible behavior, stays short, folds follow-up
   commits into its MR item, and claims only the surfaces its artifact

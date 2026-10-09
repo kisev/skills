@@ -21,6 +21,10 @@ the evidence.
 Use the configured cadence and express evidence windows as UTC `[since, until)`.
 Separate past, current, and future periods before proposing changes.
 
+A free-text period vocabulary such as Now/Next/Later is valid when the profile
+or document uses it: map `Now` to the current period and `Next`/`Later` to
+future periods, and keep every other rule in this workflow unchanged.
+
 ## 2. Collect Bounded Evidence
 
 Build an evidence matrix with one row per roadmap goal and explicit columns for
@@ -65,6 +69,10 @@ For every goal, determine status from evidence and preserve useful details:
 - Blocked names the external dependency and its evidence.
 - Contradictory evidence remains unresolved until explained.
 
+Cross-check each goal's `status` against `actions.roadmap.status_legend`. A goal
+status without a legend entry, or a legend entry that no goal uses, is a source
+discrepancy to report, not a silent rename.
+
 Every unfinished goal needs one explicit destination: a named future period,
 backlog, cancellation with reason, or blocked state with owner/dependency. A
 partial or not-started goal that disappears from future plans is a planning gap,
@@ -78,7 +86,12 @@ new commitments merely to fill a section.
 
 Keep the existing document structure unless the request includes a format
 change. Follow profile `rules`, `status_legend`, link conventions, and period
-ordering. Keep identifiers, project names, versions, and source links exact.
+ordering. Keep identifiers, project names, versions, and source links exact,
+use canonical names consistently (for example `Node.js`, not `NodeJS`), and
+give each goal at most one link whose text matches the canonical target name.
+Ensure the document states its purpose and that future-period entries are
+planning intentions, not commitments; add or refresh that statement only when
+the document contract allows it, and report it as a change when added.
 Avoid decorative status changes that alter meaning.
 
 Roadmap output is planning context, not an implementation task list. Do not
@@ -90,7 +103,10 @@ owned location.
 
 For a review, report findings and stop without writing. For an update, write
 the complete candidate document directly through `artifact-write`. When the
-update changes period outcomes, append or refresh a "Data sources" section
+update changes period outcomes, refresh the document's freshness marker (for
+example `Reviewed: <date>, periods <covered>`), keep its format consistent
+with the existing document, and align it with the evidence windows used. When
+the update changes period outcomes, append or refresh a "Data sources" section
 rendered from `scripts/evidence_store.py evidence-show --profile PROFILE --since START_INCLUSIVE --until END_EXCLUSIVE`: one row per contributing
 source with the kind, exact location, collected window or point timestamp,
 completeness, and `collected_at`, in the document's language. Snapshot the
@@ -104,8 +120,8 @@ files. A failed check must be fixed and rerun or reported as an explicit
 limitation.
 
 Report periods reviewed, goals completed, carried, backlogged, cancelled, or
-blocked, unplanned delivery, source discrepancies, evidence completeness,
-artifact path, and verification results.
+blocked, unplanned delivery, source discrepancies, status-legend mismatches,
+evidence completeness, artifact path, and verification results.
 
 Read `references/interaction-contract.md` for evidence and mutation rules
 and `references/language-policy.md` for user-facing prose.
