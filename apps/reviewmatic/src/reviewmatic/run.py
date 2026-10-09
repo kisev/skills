@@ -453,10 +453,10 @@ class ReviewRun:
         context_artifact = context.progress_artifact(root, progress, "context", "review_context")
         if context_artifact is None:
             raise contract.WorkflowError("the panel poll requires the selected review context")
-        background, background_bytes = run_panel.render_run_background(
+        background, background_bytes, cut_sections = run_panel.render_run_background(
             root, context_artifact[1], context_digest
         )
-        poll = run_panel.poll(locale, mode, background_bytes)
+        poll = run_panel.poll(locale, mode, background_bytes, cut_sections)
         template_path = run_panel.selection_template(root, context_digest)
         argv = [
             "reviewmatic",

@@ -101,14 +101,20 @@ panel and requires explicit `low_risk=true` justified by the inspected change.
 Use the host's available agent inventory, not assumed agent names. When this
 skill runs directly and the panel composition was not already fixed by the
 request, ask once — in the same single question round as missing task context —
-how many critics, which installed `critic-*` profiles or ordinary subagents,
-and which arbitrator. An explicit skip is acceptable and defaults to one
-ordinary critic and one ordinary arbitrator, recorded as exactly that default.
+how many critics, which installed `critic-*` profiles or subagents on the
+current session model, and which arbitrator. Before offering multi-critic
+variants, verify those profiles first (`agentomatic agent list` or the
+profile manifest): a variant with more than one model critic is offered only
+when installed profile critics with distinct models or engines exist, and a
+composition of two critics on the same single model is never offered — it is
+not an independent review. An explicit skip is acceptable and defaults to one
+subagent on the current session's model and one arbitrator subagent on the
+same model, recorded as exactly that default.
 When the skill started automatically, do not stop for questions and record the
 default composition transparently. For each role an installed specialist
-profile and an ordinary independent subagent running with the current session's
-agent, provider, and model are both valid; specialist profiles and stronger
-models are optional. Never substitute a configuration silently: the recorded
+profile and an independent subagent on the current session's agent, provider,
+and model are both valid; specialist profiles and stronger models are
+optional. Never substitute a configuration silently: the recorded
 `name`, `profile`, `provider`, and `model` travel into the runbook, and the
 arbitration receipt must name the selected arbitrator.
 
@@ -126,8 +132,9 @@ finding traces its symptom to the changed lines through concrete code
 proving unreachability from a real entrypoint (reachability from
 entrypoint).
 
-If no specialist profiles are installed, launch an ordinary independent native
-subagent of the current agent; no profile-selection question is needed.
+If no specialist profiles are installed, launch an independent native subagent
+of the current agent, running on the current session's model; no
+profile-selection question is needed.
 Absence of `critic` is not a blocker. Supply the recorded context package
 path, the exact evidence/context/inspection paths, the materialized
 `references/simplification-criteria.md` path, accepted scope and user

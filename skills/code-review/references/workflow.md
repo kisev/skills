@@ -52,14 +52,22 @@ review locale, and the stop's `rules` instruct how to present it — present the
 word for word, without paraphrasing or summarizing; never retell the template
 in your own words. The poll names the critics, the engine of every critic, the
 one-line arbitrator role, and the resolved mode with an engines note when the
-OCR engine is excluded (a background file above the
-CLI limit); when the note excludes OCR, do not offer it. The term meanings are
-fixed in `references/poll-glossary.md`. Attach your recommendation to the poll; the choice is the user's. Fill the
+OCR engine is excluded (only when even the compacted background exceeds the
+CLI limit; the note reports the compacted size and the cut sections); when
+the note excludes OCR, do not offer it. The term meanings are
+fixed in `references/poll-glossary.md`. Attach your recommendation to the poll; the choice is the user's. Before
+proposing the option variants, check the installed critic profiles with
+`agentomatic agent list` (or the profile manifest): propose more than one
+model critic only when installed profile critics with distinct models or
+engines exist, and never propose two critics on the same single model — two
+critics running one model are not an independent check; with an empty critic
+pool the honest composition is one subagent on the current model plus the
+arbitrator. Fill the
 returned selection template with the answer and run the printed
 `reviewmatic run --resume --url <mr-url> --participants <template>` command. A `fast` review never stops for the poll: it runs without a panel. Never
 substitute a configuration silently: the recorded names appear in the results, and the state machine rejects a substituted configuration.
 
-After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the background from the collected context, invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
+After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the compact background from the collected context (thread registry and open questions verbatim, the judgment sections under their byte caps — the poll measured exactly this render), invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
 
 The remaining stops are the decision and the prose. At the decision stop,
 launch the selected arbitrator in a separate native session. It verdicts every
@@ -143,15 +151,19 @@ composition is the depth control: a deeper review is requested by adding more
 independent critics, and there is no separate depth mode. First record
 the panel with `reviewmatic record-participants --draft <draft-path> --input <participants.json>`: the critic count and composition, then the arbitrator.
 Each role is either an installed specialist profile (`critic-*` agents) or one
-ordinary independent subagent running with the current session's agent,
-provider, and model; a role may also be the mechanical `ocr` engine. Ask for
+independent subagent on the current session's agent, provider, and model; a role
+may also be the mechanical `ocr` engine. Ask for
 the panel selection in one poll at the start of every panel review, in the
 same single question round as any missing task context: the critic
 composition, the engine of every critic, and the arbitrator. Attach your
-recommendation to the poll; the choice is the user's. An explicit user skip
-records exactly that answer — one ordinary model critic and one ordinary
-arbitrator — but an unanswered poll is never filled silently: wait for the
-answer. Never
+recommendation to the poll; the choice is the user's. Before composing the
+options, check the installed critic profiles (`agentomatic agent list`):
+multi-critic options are proposed only when installed profile critics with
+distinct models or engines exist, and a composition of two critics on the
+same single model is never proposed — it is not an independent check. An
+explicit user skip records exactly that answer — one subagent on the current
+session's model as the critic and one arbitrator subagent on the same model —
+but an unanswered poll is never filled silently: wait for the answer. Never
 substitute a configuration silently: the recorded profile, provider, and model
 names appear in the runbook, and the arbitrator receipt must name the selected
 arbitrator.

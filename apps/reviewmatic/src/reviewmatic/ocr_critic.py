@@ -25,6 +25,16 @@ OCR_SEVERITIES = {"critical", "high", "medium", "low"}
 # refuses before spawning so the panel never depends on the CLI's own error.
 OCR_BACKGROUND_LIMIT = 8000
 
+# The compact render spends the background budget on the mechanical evidence:
+# thread registry entries and open questions stay verbatim on single lines,
+# one uniform relevance moves into a single hoisted line, and the judgment
+# sections carry byte caps (goal and the task narrative per text, criteria
+# items, claims, constraints, and prior decisions per item). The advisory
+# review history is written as a single-line JSON document. These caps only
+# compact the render; they never silence content below their cap.
+OCR_BACKGROUND_TEXT_LIMIT = 600
+OCR_BACKGROUND_ITEM_LIMIT = 240
+
 _LOCAL_SEVERITY_BLOCKING = {"critical", "high"}
 
 
@@ -112,23 +122,55 @@ def delta_scoped_previous_findings(incremental: dict[str, Any]) -> list[dict[str
     return scoped
 
 
+# The byte clamping used by the compact render: whitespace-collapsed text
+# within the limit, ellipsis included, never splitting a UTF-8 sequence.
+def _clamped(text: str, limit: int) -> str:
+    collapsed = " ".join(text.split())
+    raw = collapsed.encode("utf-8")
+    if len(raw) <= limit:
+        return collapsed
+    ellipsis = "…"
+    prefix = raw[: max(limit - len(ellipsis.encode("utf-8")), 0)]
+    while prefix:
+        try:
+            return prefix.decode("utf-8") + ellipsis
+        except UnicodeDecodeError:
+            prefix = prefix[:-1]
+    return ellipsis
+
+
 # Renders the recorded context package as the Markdown background file passed
 # to ``ocr review --background-file``. Purely derived from the package payload
 # (and the explicit previous-findings section for incremental reviews) so a
-# re-render of the same inputs is byte-identical.
+# re-render of the same inputs is byte-identical. The render is the compact
+# variant in every call: the poll measures it and the critic executes it, so
+# the measured size is the executed size. ``cut_sections``, when given,
+# receives the section keys the caps actually truncated; the thread registry,
+# open questions, and the previous-findings section are never capped.
 def render_ocr_background(
     payload: dict[str, Any],
     directory: Path,
     package_digest: str,
     *,
     previous_findings: list[dict[str, Any]] | None = None,
+    cut_sections: list[str] | None = None,
 ) -> Path:
+    cuts = cut_sections if cut_sections is not None else []
+    recorded: set[str] = set()
+
+    def compact(text: str, limit: int, key: str) -> str:
+        clamped = _clamped(text, limit)
+        if cut_sections is not None and clamped != " ".join(text.split()) and key not in recorded:
+            recorded.add(key)
+            cuts.append(key)
+        return clamped
+
     lines: list[str] = ["# Review background", ""]
     goal = payload.get("goal")
     lines.append("## Goal")
     lines.append("")
     if isinstance(goal, dict) and isinstance(goal.get("text"), str) and goal["text"]:
-        lines.append(str(goal["text"]))
+        lines.append(compact(str(goal["text"]), OCR_BACKGROUND_TEXT_LIMIT, "goal"))
     else:
         lines.append("Unknown: the author did not record a review goal for this change.")
     lines.append("")
@@ -138,7 +180,11 @@ def render_ocr_background(
     lines.append("")
     items = criteria.get("items") if isinstance(criteria, dict) else None
     if isinstance(items, list) and items:
-        lines.extend(f"- {item}" for item in items if isinstance(item, str) and item)
+        lines.extend(
+            f"- {compact(str(item), OCR_BACKGROUND_ITEM_LIMIT, 'acceptance_criteria')}"
+            for item in items
+            if isinstance(item, str) and item
+        )
     else:
         lines.append("- Unknown: no acceptance criteria were recorded.")
     lines.append("")
@@ -152,14 +198,19 @@ def render_ocr_background(
                 continue
             prefix = str(claim.get("kind") or "claim")
             sources = ", ".join(str(source) for source in claim.get("sources") or [])
-            lines.append(f"- [{prefix}] {claim.get('statement')} (sources: {sources})")
+            rendered = f"- [{prefix}] {claim.get('statement')} (sources: {sources})"
+            lines.append(compact(rendered, OCR_BACKGROUND_ITEM_LIMIT, "claims"))
         lines.append("")
 
     constraints = payload.get("constraints")
     if isinstance(constraints, list) and constraints:
         lines.append("## Constraints")
         lines.append("")
-        lines.extend(f"- {item}" for item in constraints if isinstance(item, str) and item)
+        lines.extend(
+            f"- {compact(str(item), OCR_BACKGROUND_ITEM_LIMIT, 'constraints')}"
+            for item in constraints
+            if isinstance(item, str) and item
+        )
         lines.append("")
 
     decisions = payload.get("prior_decisions")
@@ -171,7 +222,8 @@ def render_ocr_background(
                 continue
             source = str(decision.get("source") or "")
             suffix = f" (source: {source})" if source else ""
-            lines.append(f"- {decision.get('decision')}{suffix}")
+            rendered = f"- {decision.get('decision')}{suffix}"
+            lines.append(compact(rendered, OCR_BACKGROUND_ITEM_LIMIT, "prior_decisions"))
         lines.append("")
 
     questions = payload.get("questions")
@@ -181,28 +233,36 @@ def render_ocr_background(
         for question in questions:
             if not isinstance(question, dict):
                 continue
+            subject = " ".join(str(question.get("subject") or "").split())
             assigned = "; assigned to critics" if question.get("critic") is True else ""
-            lines.append(f"- {question.get('id')}: {question.get('subject')}{assigned}")
+            lines.append(f"- {question.get('id')}: {subject}{assigned}")
         lines.append("")
 
     threads = payload.get("thread_registry")
     if isinstance(threads, list) and threads:
         lines.append("## Discussion threads")
         lines.append("")
-        for thread in threads:
-            if not isinstance(thread, dict):
-                continue
-            lines.append(
-                f"- #{thread.get('id')} ({thread.get('state')}): {thread.get('summary')} "
-                f"Relevance: {thread.get('review_relevance')}"
-            )
+        typed = [thread for thread in threads if isinstance(thread, dict)]
+        relevances = [
+            " ".join(str(thread.get("review_relevance") or "").split()) for thread in typed
+        ]
+        uniform = len(typed) > 1 and bool(relevances[0]) and len(set(relevances)) == 1
+        if uniform:
+            lines.append(f"Relevance for every thread: {relevances[0]}")
+        for thread, relevance in zip(typed, relevances, strict=True):
+            summary = " ".join(str(thread.get("summary") or "").split())
+            bullet = f"- #{thread.get('id')} ({thread.get('state')}): {summary}"
+            if uniform or not relevance:
+                lines.append(bullet)
+            else:
+                lines.append(f"{bullet} Relevance: {relevance}")
         lines.append("")
 
     background = payload.get("background")
     if isinstance(background, str) and background.strip():
         lines.append("## Task narrative")
         lines.append("")
-        lines.append(background)
+        lines.append(compact(background, OCR_BACKGROUND_TEXT_LIMIT, "task_narrative"))
         lines.append("")
 
     if previous_findings:
@@ -218,9 +278,8 @@ def render_ocr_background(
         for finding in previous_findings:
             if not isinstance(finding, dict):
                 continue
-            lines.append(
-                f"- {finding.get('id')} ({finding.get('severity')}): {finding.get('summary')}"
-            )
+            summary = " ".join(str(finding.get("summary") or "").split())
+            lines.append(f"- {finding.get('id')} ({finding.get('severity')}): {summary}")
         lines.append("")
 
     history = payload.get("history_context")
@@ -235,7 +294,7 @@ def render_ocr_background(
                 ),
                 "",
                 "```json",
-                json.dumps(history, ensure_ascii=False, sort_keys=True, indent=2),
+                json.dumps(history, ensure_ascii=False, sort_keys=True),
                 "```",
                 "",
             ]

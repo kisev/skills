@@ -12,7 +12,10 @@ continues into finalization.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 from reviewmatic import context, ocr_critic
 from reviewmatic import draft as draft_module
@@ -29,11 +32,13 @@ _POLL_TEXT = {
         "One poll for this review.\n"
         "- Critics: which critics review this change, and the engine of each - a model "
         'subagent ("engine": "model") or the mechanical OpenCodeReview CLI '
-        '("engine": "ocr").\n'
+        '("engine": "ocr"). Only critics that actually exist may join: two critics on '
+        "the same single model are not an independent check.\n"
         "- Depth: choose it through the critic composition - more independent critics give "
         "a deeper review; there is no separate depth mode.\n"
-        "- Arbitrator: one separate participant that merges every critic finding into a "
-        "single verdict.\n"
+        "- Arbitrator: one separate participant - a subagent on the same model or a "
+        "selected profile agent - that merges every critic finding into a single "
+        "verdict.\n"
         "- Mode: {mode} review.{ocr_note}\n"
         "Attach your recommendation if you have one; the choice is the user's. Answer in "
         "the selection template and run the printed command."
@@ -42,10 +47,12 @@ _POLL_TEXT = {
         "Один опрос на это ревью.\n"
         "- Критики: какие критики ревьюят это изменение и движок каждого - модельный "
         'субагент ("engine": "model") или механический OpenCodeReview CLI '
-        '("engine": "ocr").\n'
+        '("engine": "ocr"). Участвуют только реально существующие критики: два критика '
+        "на одной и той же модели - не независимая проверка.\n"
         "- Глубина: выбирай её составом критиков - больше независимых критиков даёт более "
         "глубокое ревью; отдельного режима глубины нет.\n"
-        "- Арбитр: отдельный участник, сводящий все находки критиков в один вердикт.\n"
+        "- Арбитр: отдельный участник - субагент на той же модели или выбранный "
+        "профильный агент, сводящий все находки критиков в один вердикт.\n"
         "- Режим: ревью в режиме {mode}.{ocr_note}\n"
         "Можешь приложить свою рекомендацию; выбор за пользователем. Ответь в шаблоне "
         "выбора и выполни напечатанную команду."
@@ -60,12 +67,29 @@ _OCR_NOTES = {
         "head, а прошлые находки, которых касается дельта, включены в его background.",
     },
     "oversized": {
-        "en": " OCR critics are not offered: the background file is {bytes} bytes, above "
-        "the ocr CLI limit of {limit}.",
-        "ru": " OCR-критики не предлагаются: background-файл весит {bytes} байт, выше "
-        "лимита ocr CLI в {limit}.",
+        "en": " OCR critics are not offered: the compacted background is {bytes} bytes, "
+        "above the ocr CLI limit of {limit}; cut: {sections}.",
+        "ru": " OCR-критики не предлагаются: уплотнённый background - {bytes} байт, выше "
+        "лимита ocr CLI в {limit}; обрезано: {sections}.",
     },
 }
+# The truncated-section keys the compact render reports, localized in the note;
+# unknown keys pass through as their raw keys.
+_SECTION_LABELS = {
+    "goal": {"en": "goal", "ru": "цель"},
+    "acceptance_criteria": {"en": "acceptance criteria", "ru": "критерии приёмки"},
+    "claims": {"en": "claims", "ru": "утверждения"},
+    "constraints": {"en": "constraints", "ru": "ограничения"},
+    "prior_decisions": {"en": "prior decisions", "ru": "прежние решения"},
+    "task_narrative": {"en": "task narrative", "ru": "нарратив задачи"},
+}
+
+
+def _section_list(locale: str, cut_sections: Sequence[str]) -> str:
+    labels = [(_SECTION_LABELS.get(key) or {}).get(locale, key) for key in cut_sections]
+    if not labels:
+        return "nothing" if locale == "en" else "ничего"
+    return ", ".join(labels)
 
 
 _POLL_RULES = {
@@ -73,14 +97,22 @@ _POLL_RULES = {
         "Present the poll text verbatim - word for word, without paraphrasing or "
         "summarizing it. Record the answer in the selection template exactly as the user "
         "gave it, attach your recommendation only when the user asks for it or accepts it, "
-        "and run the printed command. When the engines note excludes the OCR engine, do "
-        "not offer it."
+        "and run the printed command. Before composing the offered critic variants, "
+        "check the installed critic profiles (`agentomatic agent list`): propose "
+        "multi-critic compositions only when installed profile critics with distinct "
+        "models or engines exist, and never propose two critics on the same single "
+        "model - that is not independent verification. When the engines note excludes "
+        "the OCR engine, do not offer it."
     ),
     "ru": (
         "Предъяви текст опроса дословно - слово в слово, без пересказа и сокращений. "
         "Запиши ответ в шаблон выбора в точности как дал пользователь, прикладывай свою "
         "рекомендацию только если пользователь её принимает, и выполни напечатанную "
-        "команду. Если примечание движков исключает OCR - не предлагай его."
+        "команду. Перед составлением вариантов критиков проверь установленных критиков "
+        "(`agentomatic agent list`): предлагай мульти-критик-составы только когда "
+        "существуют профильные критики с отличающимися моделями или движками, и никогда "
+        "не предлагай двух критиков на одной и той же модели - это не независимая "
+        "проверка. Если примечание движков исключает OCR - не предлагай его."
     ),
 }
 
@@ -91,8 +123,9 @@ def poll_rules(locale: str) -> str:
 
 def engine_offering(mode: str, background_bytes: int) -> dict[str, Any]:
     """Which engines the poll may offer, derived from the resolved mode and
-    the offline-rendered background size. Incremental reviews offer the OCR
-    engine scoped to the delta; only an oversized background excludes it."""
+    the compact-rendered background size. The measurement is the owned render
+    the run's OCR critic executes, so the offer holds for the execution too;
+    only a compact background still above the limit excludes it."""
     if background_bytes > ocr_critic.OCR_BACKGROUND_LIMIT:
         return {
             "ocr": False,
@@ -108,13 +141,19 @@ def engine_offering(mode: str, background_bytes: int) -> dict[str, Any]:
     }
 
 
-def poll(locale: str, mode: str, background_bytes: int) -> dict[str, Any]:
-    """The verbatim poll presentation: text, engines, and the mode note."""
+def poll(
+    locale: str, mode: str, background_bytes: int, cut_sections: Sequence[str] = ()
+) -> dict[str, Any]:
+    """The verbatim poll presentation: text, engines, and the mode note.
+    ``cut_sections`` names the sections the compact render already truncated;
+    the oversized note reports the compacted size, the limit, and that list."""
     offering = engine_offering(mode, background_bytes)
     note = ""
     if offering["exclusion"] == "oversized":
         note = _OCR_NOTES["oversized"][locale].format(
-            bytes=background_bytes, limit=ocr_critic.OCR_BACKGROUND_LIMIT
+            bytes=background_bytes,
+            limit=ocr_critic.OCR_BACKGROUND_LIMIT,
+            sections=_section_list(locale, cut_sections),
         )
     elif mode == "incremental":
         note = _OCR_NOTES["incremental"][locale]
@@ -128,12 +167,15 @@ def poll(locale: str, mode: str, background_bytes: int) -> dict[str, Any]:
 
 def render_run_background(
     root: Path, review_context: dict[str, Any], context_digest: str
-) -> tuple[Path, int]:
-    """Render the OCR background offline with the same renderer the critic runs.
+) -> tuple[Path, int, tuple[str, ...]]:
+    """Render the compact OCR background offline with the same renderer the
+    critic runs.
 
     No GitLab request and no CLI spawn: this is the measurement the poll uses
     to decide whether the OCR engine may be offered. An incremental review
     renders the same previously-reported-findings section the execution will.
+    Returns the rendered file, its exact size, and the truncated-section keys
+    the compact caps produced.
     """
     drafts = contract.private_directory(root / "review-drafts")
     incremental = cast("dict[str, Any]", review_context.get("incremental") or {})
@@ -141,13 +183,15 @@ def render_run_background(
     scoped_previous = (
         ocr_critic.delta_scoped_previous_findings(incremental) if mode == "incremental" else []
     )
+    cuts: list[str] = []
     background = ocr_critic.render_ocr_background(
         ocr_background(review_context),
         drafts,
         context_digest,
         previous_findings=scoped_previous or None,
+        cut_sections=cuts,
     )
-    return background, background.stat().st_size
+    return background, background.stat().st_size, tuple(cuts)
 
 
 def panel_path(root: Path) -> Path:

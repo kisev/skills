@@ -210,6 +210,70 @@ def test_the_poll_is_presented_verbatim_with_a_fixed_glossary() -> None:
         assert term in glossary
 
 
+def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
+    """The agent verifies the installed critic profiles before composing poll
+    options; multi-critic options require distinct models or engines, and two
+    critics on one model are never offered. The same rule lives in the
+    runtime poll text and rules (both locales)."""
+    from reviewmatic import run_panel
+
+    entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    glossary = (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8")
+    for text in (entry, workflow):
+        assert "agentomatic agent list" in text
+        assert "distinct models or engines" in text
+        assert "two critics on the same single model" in text
+    normalized_glossary = " ".join(glossary.split())
+    assert (
+        "an independent subagent on the current session's agent, provider, and model"
+        in normalized_glossary
+    )
+    assert (
+        "a subagent on the same model as the session, or a selected specialist profile"
+        in normalized_glossary
+    )
+    for locale in ("en", "ru"):
+        rules = run_panel.poll_rules(locale)
+        assert "agentomatic agent list" in rules
+        if locale == "en":
+            assert "never propose two critics on the same single model" in rules
+        else:
+            assert "двух критиков на одной и той же модели" in rules
+        poll = run_panel.poll(locale, "normal", 500)
+        if locale == "en":
+            assert (
+                "two critics on the same single model are not an independent check" in poll["text"]
+            )
+            assert "a subagent on the same model or a" in poll["text"]
+        else:
+            assert "два критика на одной и той же модели - не независимая проверка" in poll["text"]
+            assert "субагент на той же модели или выбранный профильный агент" in poll["text"]
+
+
+def test_the_compact_background_contract_is_documented() -> None:
+    """The compact render is offered when it fits; the poll note names the
+    compacted size and the cut sections, and the executed file is the
+    measured one."""
+    glossary = " ".join(
+        (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8").split()
+    )
+    assert "Compact background" in glossary
+    assert "the poll measures and the OCR critic executes" in glossary
+    incremental = " ".join(
+        (SKILL_DIR / "references" / "incremental-review.md").read_text(encoding="utf-8").split()
+    )
+    assert "Only a compact background above the OCR CLI limit" in incremental
+
+
+def test_the_bulk_poll_wording_names_the_actual_participants() -> None:
+    """``ordinary model critic`` is gone: the texts name a subagent on the
+    current model and state the arbitrator's engine explicitly."""
+    joined = "\n".join(document.read_text(encoding="utf-8") for document in skill_documents())
+    assert "ordinary model critic" not in joined
+    assert "ordinary critic and one ordinary arbitrator" not in joined
+
+
 def test_the_tail_routing_precedence_is_documented() -> None:
     """Render before prose before finalize; structural edits are repair."""
     workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")

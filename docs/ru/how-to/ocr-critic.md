@@ -1,6 +1,6 @@
 ---
 audience: user
-review: {"components": ["reviewmatic"], "sources": ["apps/reviewmatic/src/reviewmatic/ocr_critic.py", "apps/reviewmatic/src/reviewmatic/draft.py", "apps/reviewmatic/src/reviewmatic/local_review.py", "apps/reviewmatic/src/reviewmatic/cli.py", "apps/reviewmatic/tests/test_ocr_critic.py"], "contracts": ["specs/capabilities/skills/code-review.md", "skills/code-review/references/workflow.md"]}
+review: {"components": ["reviewmatic"], "sources": ["apps/reviewmatic/src/reviewmatic/ocr_critic.py", "apps/reviewmatic/src/reviewmatic/draft.py", "apps/reviewmatic/src/reviewmatic/run_panel.py", "apps/reviewmatic/src/reviewmatic/local_review.py", "apps/reviewmatic/src/reviewmatic/cli.py", "apps/reviewmatic/tests/test_ocr_critic.py", "apps/reviewmatic/tests/test_run_panel.py"], "contracts": ["specs/capabilities/skills/code-review.md", "skills/code-review/references/workflow.md"]}
 ---
 
 # Запуск OCR-критика в панели ревью
@@ -57,8 +57,13 @@ reviewmatic record-ocr-critic --bundle <snapshot> --participant ocr-critic
 
 Один вызов выполняет весь механический проход критика:
 
-1. Рендерит записанный контекстный пакет в Markdown-файл background под
-   корнем артефактов.
+1. Рендерит записанный контекстный пакет в компактный Markdown-файл background
+   под корнем артефактов: каждая запись реестра обсуждений и каждый открытый
+   вопрос остаются дословно на одной строке, одинаковая relevance выносится
+   в одну строку, а цель, элементы критериев приёмки, утверждения,
+   ограничения, прежние решения и нарратив задачи несут короткие байтовые
+   капы; advisory-история ревью записывается однострочным JSON. Этот же рендер
+   — и замер опроса, и файл, который исполняет критик.
 2. Вызывает `ocr review --format json --audience agent` с таймаутом 300 секунд —
    по записанному диапазону base..head в управляемом review worktree для
    удалённого MR или в режиме workspace (staged, unstaged и untracked
@@ -73,7 +78,12 @@ reviewmatic record-ocr-critic --bundle <snapshot> --participant ocr-critic
 
 Если OCR CLI отсутствует, падает или возвращает запуск без постоянной
 идентичности сессии, команда завершается конкретной ошибкой, а черновик
-остаётся неизменным; повторите команду после починки настройки OCR.
+остаётся неизменным; повторите команду после починки настройки OCR. Background
+уплотняется по приоритету: треды реестра и открытые вопросы остаются
+дословно, а цель/критерии/утверждения/ограничения/прежние решения, нарратив
+задачи и advisory-история несут короткие байтовые капы (рендер называет каждый
+усечённый раздел). OCR-движок исключается только когда даже уплотнённый
+рендер превышает лимит ocr CLI в 8000 байт.
 
 ## Арбитраж и границы
 

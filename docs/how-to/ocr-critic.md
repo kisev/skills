@@ -1,6 +1,6 @@
 ---
 audience: user
-review: {"components": ["reviewmatic"], "sources": ["apps/reviewmatic/src/reviewmatic/ocr_critic.py", "apps/reviewmatic/src/reviewmatic/draft.py", "apps/reviewmatic/src/reviewmatic/local_review.py", "apps/reviewmatic/src/reviewmatic/cli.py", "apps/reviewmatic/tests/test_ocr_critic.py"], "contracts": ["specs/capabilities/skills/code-review.md", "skills/code-review/references/workflow.md"]}
+review: {"components": ["reviewmatic"], "sources": ["apps/reviewmatic/src/reviewmatic/ocr_critic.py", "apps/reviewmatic/src/reviewmatic/draft.py", "apps/reviewmatic/src/reviewmatic/run_panel.py", "apps/reviewmatic/src/reviewmatic/local_review.py", "apps/reviewmatic/src/reviewmatic/cli.py", "apps/reviewmatic/tests/test_ocr_critic.py", "apps/reviewmatic/tests/test_run_panel.py"], "contracts": ["specs/capabilities/skills/code-review.md", "skills/code-review/references/workflow.md"]}
 ---
 
 # Run the OCR Critic in a Review Panel
@@ -57,8 +57,13 @@ reviewmatic record-ocr-critic --bundle <snapshot> --participant ocr-critic
 
 One invocation performs the whole mechanical critic pass:
 
-1. Renders the recorded context package as a Markdown background file under
-   the artifact root.
+1. Renders the recorded context package as a compact Markdown background file
+   under the artifact root: every thread registry entry and every open
+   question stays verbatim on a single line, one uniform relevance hoists into
+   a single line, and byte caps clamp goal, acceptance criteria items, claims,
+   constraints, prior decisions, and the task narrative; the advisory review
+   history is written as a single-line JSON document. This same render is
+   both the poll's measurement and the file the critic runs.
 2. Invokes `ocr review --format json --audience agent` with a 300-second
    timeout — over the recorded base..head range in the managed review worktree
    for a remote MR, or in workspace mode (staged, unstaged, and untracked
@@ -73,7 +78,12 @@ One invocation performs the whole mechanical critic pass:
 
 If the OCR CLI is missing, fails, or returns a run without a persistent
 session identity, the command fails with a concrete error and the draft stays
-unchanged; rerun the command after fixing the OCR setup.
+unchanged; rerun the command after fixing the OCR setup. The OCR background
+is compacted by priority: registry threads and open questions stay verbatim,
+and goal/criteria/claims/constraints/prior decisions plus the task narrative
+and the advisory history carry short byte caps (the render discloses each
+truncated section). A background only excludes the OCR engine when even the
+compacted render exceeds the CLI's 8000-byte limit.
 
 ## Arbitration and Boundaries
 

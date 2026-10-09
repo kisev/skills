@@ -43,8 +43,10 @@ receipts bound to the delta digest. Model critics and the arbitrator receive
 current snapshot paths and advisory history. OCR reviews `from_head..head` and
 receives the same history with the previous findings touching changed paths in
 its background. Historical IDs in its receipt describe consultation coverage,
-not mandatory entries in the current runbook. Only a background above the OCR
-CLI limit excludes that engine. If a required critic is unavailable, block the
+not mandatory entries in the current runbook. Only a compact background above
+the OCR CLI limit excludes that engine — the background that both the poll
+measures and the critic executes. If a required critic is unavailable, block
+the
 current review without replacing the previous result.
 
 When nothing changed, preserve mode `unchanged`, omit the panel, and produce a

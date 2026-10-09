@@ -70,8 +70,14 @@ to an exact SHA before starting and verifies the pin with that single call. A
 resumed `--participants` answer replaces the recorded panel only while no
 critic receipt is bound; with bound receipts it is refused loudly with the
 bound names and the honest path. The panel poll renders after the mode and
-background resolve: only a background above the OCR CLI limit excludes the
-OCR engine with the reason. Incremental review retains the delta-scoped engine. The same offline render
+background resolve: the poll measures the compact background render — thread
+registry entries and open questions verbatim on single lines, one uniform
+relevance hoisted, byte caps on goal, criteria items, claims, constraints,
+prior decisions, and the task narrative, with a single-line advisory history —
+and the run's OCR critic executes that exact render; the OCR engine is
+excluded only when even the compacted background exceeds the OCR CLI limit,
+and the engines note reports the compacted size and the cut sections.
+Incremental review retains the delta-scoped engine. The same offline render
 measures the size the critic would run, the CLI invocation prefights the
 limit before spawning, and the verbatim locale-keyed poll text plus its fixed
 glossary are presented word for word. Tail refusals name the rule, the
@@ -263,7 +269,14 @@ unreachability from a real entrypoint. The runtime shall reject a
 receipt that leaves any candidate finding, merged finding, or contradiction
 without a verdict, shall never rewrite arbitrator text, and in panel mode
 shall restrict `record-input` to the orchestrator's identity fields. The host
-agent adds no full review pass of its own. The one-process `run` path drives
+agent adds no full review pass of its own. Before composing the poll options
+the agent shall verify the installed critic profiles (`agentomatic agent
+list` or the profile manifest): multi-critic compositions are offered only
+when installed profile critics with distinct models or engines exist, and a
+composition of two critics on the same single model is never offered; the
+poll names the model engine as a subagent on the current session's model and
+names the arbitrator explicitly as a subagent on the same model (or the
+selected profile). The one-process `run` path drives
 the same panel: the poll is the decision point, answered through
 `run --participants` with the same selection schema and the optional
 `--ocr-provider`/`--ocr-model` overrides; without the answer the run stops

@@ -20,7 +20,7 @@ import pytest
 from helpers.review_fixture import ReviewFixture, make_review_fixture
 
 from reviewmatic import context as review_context
-from reviewmatic import render, run_panel
+from reviewmatic import ocr_critic, render, run_panel
 from reviewmatic.cli import main as cli_main
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -219,6 +219,18 @@ def test_run_panel_composes_ocr_and_model_critics(
     assert "--model" in arguments and "gpt-x" in arguments
     background = Path(arguments[arguments.index("--background-file") + 1])
     assert background.exists()
+    # The executed background is byte-identical to the poll measurement: the
+    # same compact render both measures and runs.
+    progress = review_context.load_progress(root)
+    assert progress is not None
+    context_artifact = review_context.progress_artifact(root, progress, "context", "review_context")
+    assert context_artifact is not None
+    measure_background, measure_size, measure_cuts = run_panel.render_run_background(
+        root, context_artifact[1], progress["context_digest"]
+    )
+    assert Path(str(measure_background)).read_bytes() == background.read_bytes()
+    assert measure_size <= ocr_critic.OCR_BACKGROUND_LIMIT
+    assert measure_cuts == ()
 
     # The model critic fills its template in place; the import finishes the panel.
     _fill_template(
@@ -666,8 +678,12 @@ def test_poll_still_excludes_ocr_for_oversized_backgrounds() -> None:
     assert offering["ocr"] is False
     assert offering["exclusion"] == "oversized"
     poll = run_panel.poll("en", "incremental", 9000)
-    assert "the background file is 9000 bytes" in poll["text"]
+    assert "compacted background is 9000 bytes" in poll["text"]
     assert "above the ocr CLI limit of 8000" in poll["text"]
+    assert "cut: nothing" in poll["text"]
+    russian = run_panel.poll("ru", "incremental", 9000)
+    assert "уплотнённый background - 9000 байт" in russian["text"]
+    assert "обрезано: ничего" in russian["text"]
 
 
 def test_engine_offering_and_poll_exclude_ocr_for_oversized_background(
@@ -690,15 +706,121 @@ def test_engine_offering_and_poll_exclude_ocr_for_oversized_background(
             for index in range(40)
         ]
     }
-    background, size = run_panel.render_run_background(root, bulky, "d" * 64)
+    background, size, cut_sections = run_panel.render_run_background(root, bulky, "d" * 64)
     assert size > 8000
+    assert cut_sections == ()
     offering = run_panel.engine_offering("normal", size)
     assert offering["ocr"] is False
     assert offering["exclusion"] == "oversized"
     poll = run_panel.poll("en", "normal", size)
-    assert f"the background file is {size} bytes" in poll["text"]
+    assert f"compacted background is {size} bytes" in poll["text"]
     assert "above the ocr CLI limit of 8000" in poll["text"]
     assert background.exists()
+
+
+def test_render_run_background_compacts_the_measured_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The surveyed MR !538 shape: 16 registry threads with long notes and one
+    uniform runtime-generated relevance line. The legacy per-bullet render
+    (summary + one fixed relevance suffix each) exceeds the 8000-byte CLI
+    limit; the compact render keeps every thread verbatim and hoists the
+    shared relevance once, so the poll offers the OCR engine."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    root = tmp_path / "state" / "panel"
+    root.mkdir(parents=True)
+    relevance = "uncollected: the run reviews the discussion registry, not a recorded package"
+    bulky = {
+        "discussions": [
+            {
+                "id": f"discussion-{index:02d}",
+                "root_system": False,
+                "root_resolved": bool(index % 2),
+                "notes": [{"body": f"Замечание {index}: заходит в\n\nстроки кэша. " + "О" * 180}],
+            }
+            for index in range(16)
+        ]
+    }
+    background, size, cut_sections = run_panel.render_run_background(root, bulky, "d" * 64)
+    # The legacy per-bullet render: the whole body pasted into the bullet plus
+    # the fixed " Relevance: ..." suffix each time.
+    legacy = 0
+    for index in range(16):
+        body = f"Замечание {index}: заходит в\n\nстроки кэша. " + "О" * 180
+        legacy += len(
+            (
+                f"  - #discussion-{index:02d} "
+                + ("resolved" if index % 2 else "open")
+                + f"): {body} Relevance: {relevance}\n"
+            ).encode("utf-8")
+        )
+    assert legacy > ocr_critic.OCR_BACKGROUND_LIMIT
+    assert size <= ocr_critic.OCR_BACKGROUND_LIMIT
+    assert cut_sections == ()
+    rendered = background.read_text(encoding="utf-8")
+    assert f"Relevance for every thread: {relevance}" in rendered
+    assert rendered.count(relevance) == 1
+    assert "строки кэша" in rendered
+    offering = run_panel.engine_offering("normal", size)
+    assert offering["ocr"] is True
+    assert offering["exclusion"] is None
+    poll = run_panel.poll("ru", "normal", size)
+    assert "OCR-критики не предлагаются" not in poll["text"]
+
+
+def test_poll_names_the_truncated_sections_when_the_compact_render_still_overflows(
+    tmp_path: Path,
+) -> None:
+    """Even after the priority capping, an extreme background stays over the
+    limit; the poll note reports the compacted size and the cut sections."""
+    size = ocr_critic.OCR_BACKGROUND_LIMIT + 1000
+    poll = run_panel.poll("en", "normal", size, ["goal", "claims"])
+    assert f"compacted background is {size} bytes" in poll["text"]
+    assert "cut: goal, claims" in poll["text"]
+    russian = run_panel.poll("ru", "normal", size, ["task_narrative"])
+    assert f"уплотнённый background - {size} байт" in russian["text"]
+    assert "обрезано: нарратив задачи" in russian["text"]
+
+
+def test_compact_render_caps_the_judgment_sections_and_keeps_the_registry(
+    tmp_path: Path,
+) -> None:
+    """The compact caps: goal, criteria items, claims, constraints, prior
+    decisions, and the task narrative truncate under byte caps and the keys
+    surface in ``cut_sections``; the registry and open questions render
+    verbatim."""
+    payload = {
+        "goal": {"status": "known", "text": "Цель. " + "О" * 1400},
+        "acceptance_criteria": {"status": "known", "items": ["Ок." * 200] * 3},
+        "claims": [
+            {"kind": "author_claim", "statement": "М." + "О" * 500 + f"#{index}", "sources": ["MR"]}
+            for index in range(4)
+        ],
+        "questions": [
+            {"id": "q1", "subject": "Короткий вопрос.", "critic": True},
+            {"id": "q2", "subject": "Вопрос без назначения.", "critic": False},
+        ],
+        "thread_registry": [
+            {
+                "id": "42",
+                "state": "open",
+                "summary": "Пометка цели.",
+                "review_relevance": "Путь затронут.",
+            }
+        ],
+        "background": "Описание задачи. " + "х" * 1200,
+    }
+    recorded: list[str] = []
+    background = ocr_critic.render_ocr_background(
+        payload, tmp_path / "drafts", "e" * 64, cut_sections=recorded
+    )
+    rendered = background.read_text(encoding="utf-8")
+    assert sorted(recorded) == ["acceptance_criteria", "claims", "goal", "task_narrative"]
+    assert "…" in rendered  # the byte clamp inside every truncated section
+    assert "- q1: Короткий вопрос.; assigned to critics" in rendered
+    assert "- q2: Вопрос без назначения." in rendered
+    single = ocr_critic.render_ocr_background(payload, tmp_path / "drafts", "e" * 64)
+    assert single.read_text(encoding="utf-8") == rendered
 
 
 def test_poll_presents_the_verbatim_locale_keyed_text() -> None:

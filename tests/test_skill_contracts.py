@@ -603,7 +603,9 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "without GitLab reads, publication artifacts, or progress changes",
         "Record the panel with the returned `record-participants` action",
         "Absence of `critic` is not a blocker",
-        "ordinary independent native subagent of the current agent",
+        # The "ordinary model critic" phrasing is retired (task CR-VII): the
+        # pin now follows the current wording.
+        "independent native subagent of the current agent",
         "never replace the arbitrator's semantic assessment",
         "Every accepted non-low finding blocks `ready`",
         "Existing v2 artifacts and low-level",
