@@ -36,6 +36,20 @@ PRERELEASE_VERSION = re.compile(r"^\d+\.\d+\.\d+-")
 T = TypeVar("T")
 
 
+def verification_peer_version() -> str:
+    """Sample OpenCode peer version pinned by the compatibility authority."""
+    compatibility = json.loads(
+        (ROOT / "evals/contracts/opencode-compatibility.json").read_text(encoding="utf-8")
+    )
+    versions = compatibility.get("versions")
+    if not isinstance(versions, list) or len(versions) != 1:
+        raise PublicationError("compatibility authority does not pin one verification version")
+    version = versions[0]
+    if not isinstance(version, str) or not version:
+        raise PublicationError("compatibility authority verification version is invalid")
+    return version
+
+
 class PublicationError(Exception):
     """npm publication or verification failed closed."""
 
@@ -355,7 +369,7 @@ def registry_smoke(entries: list[dict[str, Any]]) -> None:
             "--no-audit",
             "--no-fund",
             *(f"{entry['name']}@{entry['version']}" for entry in entries),
-            "@opencode/plugin@2.0.25",
+            f"@opencode/plugin@{verification_peer_version()}",
             cwd=root,
             env=env,
         )

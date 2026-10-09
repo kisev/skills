@@ -13,8 +13,8 @@ min_version = "2026.9.11"
 # tombi: format.rules.table-keys-order = "ascending"
 [tools]
   "aqua:BurntSushi/ripgrep" = "15.2.0"
-  "aqua:astral-sh/uv" = "0.12.23"
-  "aqua:evilmartians/lefthook" = "2.2.0"
+  "aqua:astral-sh/uv" = "0.12.24"
+  "aqua:evilmartians/lefthook" = "2.2.1"
   "aqua:gitleaks/gitleaks" = "8.30.1"
   "aqua:go-task/task" = "3.54.0"
   "aqua:jqlang/jq" = "1.8.2"
@@ -29,12 +29,12 @@ min_version = "2026.9.11"
     "3.13.16",
     "3.14.8",
   ]
-  "github:agent-sh/agnix" = "0.56.6"
+  "github:agent-sh/agnix" = "0.57.0"
   "github:editorconfig-checker/editorconfig-checker" = "4.0.2"
   glab = "1.121.0"
   node = "26.11.1"
   "npm:@commitlint/cli" = "21.2.3"
-  "npm:@opencode/cli" = { version = "2.0.25", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
+  "npm:@opencode/cli" = { version = "2.0.26", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
   "npm:agent-browser" = "0.38.2"
   "npm:markdownlint-cli2" = "0.23.3"
   "npm:oxfmt" = "0.72.0"

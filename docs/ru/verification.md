@@ -222,7 +222,8 @@ selection-only и не доказывают mode или audit outcomes. Offline-
 `observation_mode: hostless-contract`; только trusted-live использует
 `observation_mode: trusted-live` и может подтвердить case outcomes.
 
-Проверки совместимости запускаются для OpenCode `2.0.25` в диапазоне
+Проверки совместимости запускаются для OpenCode, закреплённого в `mise.toml`
+(см. `evals/contracts/opencode-compatibility.json`), в диапазоне
 `>=2.0.0 <2.1.0` без учётных данных: smoke-проверки установленного tarball,
 нативная оценка permissions на сервере V2 и контракт V2 HTTP и работы с базой
 memomatic только для чтения.

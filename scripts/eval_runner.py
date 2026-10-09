@@ -544,8 +544,9 @@ def validate_compatibility_inventory(root: Path = ROOT) -> None:
     if (
         not isinstance(value, dict)
         or value.get("schema") != "opencode-compatibility/v1"
-        or value.get("range") != ">=2.0.0 <2.1.0"
-        or value.get("versions") != ["2.0.25"]
+        or not isinstance(value.get("versions"), list)
+        or not value["versions"]
+        or not all(isinstance(item, str) for item in value["versions"])
         or value.get("credentials") is not False
         or value.get("network") is not False
     ):

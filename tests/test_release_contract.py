@@ -703,7 +703,7 @@ def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
     install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
     for name in publish_npm_release.NPM_PUBLISH_ORDER:
         assert f"{name}@{RELEASE_VERSION}" in install
-    assert "@opencode/plugin@2.0.25" in install
+    assert f"@opencode/plugin@{publish_npm_release.verification_peer_version()}" in install
     catalog_calls = [arguments for arguments in calls if arguments[-2:] == ("catalog", "--json")]
     assert len(catalog_calls) == 1
     assert Path(catalog_calls[0][0]).name == "agentomatic"
