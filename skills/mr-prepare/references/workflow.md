@@ -1,6 +1,6 @@
 # Ordinary MR preparation
 
-Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`,
+Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/manual-publication.md`, `references/portable-gitlab-contracts-v2.md`,
 `references/output-format.md`, and `references/language-policy.md`.
 
 ## Collect and select language
@@ -111,5 +111,5 @@ explicit, never silently become proof of absence.
 
 Follow `references/output-format.md`. If finalize is not `ok`, report the blocker
 in the selected language and request fresh preparation, not an older successful
-result. Never run the generated publication commands or create, update, approve,
-merge, push, or mutate labels.
+result. `references/manual-publication.md` owns the execution boundary: never
+run the generated publication commands or mutate labels.

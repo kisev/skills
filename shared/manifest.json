@@ -251,8 +251,32 @@
       "destination": "team-sprint-start/references/interaction-contract.md"
     },
     {
+      "source": "references/manual-publication.md",
+      "destination": "release-review/references/manual-publication.md"
+    },
+    {
+      "source": "references/manual-publication.md",
+      "destination": "release-prepare/references/manual-publication.md"
+    },
+    {
+      "source": "references/manual-publication.md",
+      "destination": "mr-prepare/references/manual-publication.md"
+    },
+    {
+      "source": "references/manual-publication.md",
+      "destination": "task-prepare/references/manual-publication.md"
+    },
+    {
       "source": "references/label-semantics.md",
       "destination": "release-prepare/references/label-semantics.md"
+    },
+    {
+      "source": "references/mattermost-contract.md",
+      "destination": "mattermost-triage/references/runner-contract.md"
+    },
+    {
+      "source": "references/mattermost-contract.md",
+      "destination": "mattermost/references/runner-contract.md"
     },
     {
       "source": "references/language-policy.md",
@@ -1301,6 +1325,10 @@
     {
       "source": "references/work-item-contract.schema.json",
       "destination": "goal/references/work-item-contract.schema.json"
+    },
+    {
+      "source": "references/humanize-patterns.md",
+      "destination": "humanize/references/patterns.md"
     },
     {
       "source": "references/work-item-contract.schema.json",

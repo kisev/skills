@@ -1,8 +1,8 @@
 # Mechanical specification validation
 
 `scripts/spec_validate.py` proves only the closed set of structural invariants
-described here. It is Python 3.12+, standard-library-only, read-only, independent
-of Git, and safe to run with isolated interpreter settings.
+described here: Python 3.12+, standard-library-only, read-only, independent of
+Git, and safe under isolated interpreter settings.
 
 ## Commands
 
@@ -12,7 +12,7 @@ Validate one snapshot:
 python3 -I -S -B scripts/spec_validate.py check --path <specs>
 ```
 
-Validate lifecycle preservation between two explicitly supplied snapshots:
+Validate lifecycle between two supplied snapshots:
 
 ```sh
 python3 -I -S -B scripts/spec_validate.py lifecycle \
@@ -24,13 +24,13 @@ python3 -I -S -B scripts/spec_validate.py lifecycle \
 one non-empty `Canonical language:` declaration, the `Extension Index`,
 requirement and ADR identifiers, the ADR index, supported relative inline
 Markdown links, and exact placeholders from the supplied templates. The
-declaration proves only that a language was selected; the runner does not detect
-the language of prose.
+declaration proves only that a language was selected, not the language of
+prose.
 
 `lifecycle` does not infer history. It compares only the explicit baseline and
-candidate, requires every baseline `REQ-*` and `ADR-*` identifier to remain, and
-requires each new identifier number to exceed the baseline maximum in its
-namespace. Run `check` separately for each snapshot when snapshot validity is
+candidate, requires every baseline `REQ-*` and `ADR-*` identifier to remain,
+and requires each new identifier number to exceed the baseline maximum in its
+namespace. Run `check` separately per snapshot when snapshot validity is
 required.
 
 ## Deterministic syntax
@@ -41,19 +41,20 @@ required.
   top-level directories exist beside `requirements/` and `architecture/`, each
   has exactly one entry of the form
   `- [Name](name/README.md): Non-empty semantic boundary.`
-- Requirement declarations use `### REQ-F/I/Q/C-NNN - Title`. References to an
+- Requirement declarations use `### REQ-F/I/Q/C-NNN - Title`; references to an
   identifier are not declarations.
 - ADR files use `NNNN-lowercase-hyphenated-title.md`; their first line uses
-  `# ADR-NNNN: Title`. The decision index links every ADR exactly once.
-- Supported local Markdown links are inline links with a relative POSIX path and
-  an optional fragment. URI links are not fetched. Images, reference links, link
-  titles, and nested destination parentheses are outside the checked subset.
-- Findings use paths relative to the root supplied for their snapshot.
+  `# ADR-NNNN: Title`, and the decision index links every ADR exactly once.
+- Supported local Markdown links are inline links with a relative POSIX path
+  and an optional fragment. URI links are not fetched. Images, reference links,
+  link titles, and nested destination parentheses are outside the checked
+  subset.
+- Findings use paths relative to each snapshot's supplied root.
 
 ## JSON contract
 
-Every invocation writes exactly one UTF-8 JSON document to standard output and
-nothing else. Schema version `spec-validate/v1` has these fields:
+Every invocation writes exactly one UTF-8 JSON document to standard output,
+nothing else. Schema version `spec-validate/v1`:
 
 ```json
 {
@@ -69,16 +70,16 @@ nothing else. Schema version `spec-validate/v1` has these fields:
 }
 ```
 
-`mode` is `check`, `lifecycle`, or `help`. `status` is `valid`, `invalid`, or
-`error`. Each check is `passed`, `failed`, or `not_checked`. A finding contains
+`mode` is `check`, `lifecycle`, or `help`; `status` is `valid`, `invalid`, or
+`error`; each check is `passed`, `failed`, or `not_checked`. A finding contains
 `code`, relative POSIX `path`, one-based `line` and `column` (`0` when no exact
-location exists), and `message`. Findings are sorted by
-`(code, path, line, column)`. An input or execution error contains stable `code`
-and `message`; it never exposes an absolute path.
+location exists), and `message`; findings sort by `(code, path, line, column)`.
+An input or execution error contains stable `code` and `message` and never
+exposes an absolute path.
 
-Exit status `0` means all requested invariants passed, `1` means validation
-findings exist, and `2` means invocation, input, or execution failed. `--help`
-returns the same JSON contract and exit status `0`.
+Exit status `0` means all requested invariants passed, `1` validation findings
+exist, and `2` invocation, input, or execution failure. `--help` returns the
+same JSON contract with exit status `0`.
 
 ## Deliberate limits
 

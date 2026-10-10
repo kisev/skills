@@ -13,8 +13,9 @@ up front. This router maps each stage to its files:
 | Changelog item drafting and its done-when checklist | `references/changelog-register.md` |
 
 Accept exactly one release MR URL; do not infer it from a branch or prepare a
-batch. The skill and every helper are read-only for GitLab: they may collect
-evidence and write local artifacts, but they never execute a publication command.
+batch. `references/manual-publication.md` owns the manual publication boundary:
+the skill and every helper are read-only for GitLab — they may collect evidence
+and write local artifacts, but they never execute a publication command.
 
 ## Evidence and inventory
 
@@ -38,11 +39,12 @@ Report `success`, `running`, `failed`, `canceled`, or `missing` only for a pipel
 
 ## Stable runbook
 
-Atomically replace one target-scoped `release-publication.md` only after the evidence and decisions are complete. Keep immutable payload and body files behind it, retain changed body-only versions, and list only earlier version paths at the end of the current runbook. The pre-merge section contains exact previews and direct manual `glab` commands, in order, to create the selected new milestone when needed, update the release MR and milestone, post an MR comment containing the announcement and an attachment for the illustration prompt, and merge the MR. Omit inapplicable commands rather than placeholders. Every command consumes the immutable payload shown in the runbook and binds the exact host, project, MR IID, release head, selected milestone, and content; changed bindings require regeneration. Each mutation records an advisory XDG marker after exit zero, but the marker is not a GitLab postcondition or retry authorization. State prominently that no command was executed.
+Atomically replace one target-scoped `release-publication.md` only after the evidence and decisions are complete. Keep immutable payload and body files behind it, retain changed body-only versions, and list only earlier version paths at the end of the current runbook. The pre-merge section contains exact previews and direct manual `glab` commands, in order, to create the selected new milestone when needed, update the release MR and milestone, post an MR comment containing the announcement and an attachment for the illustration prompt, and merge the MR. Omit inapplicable commands rather than placeholders. Every command consumes the immutable payload shown in the runbook and binds the exact host, project, MR IID, release head, selected milestone, and content; changed bindings require regeneration. Marker, execution-status, and no-execution reporting rules come from `references/manual-publication.md`. State prominently that no command was executed.
 
 Regenerated mutation blocks expose `execution-status=not_run` or
-`execution-status=run_unverified`. Keep the latter action visible until refreshed
-GitLab evidence confirms its target state.
+`execution-status=run_unverified`, as `references/manual-publication.md`
+requires; keep the latter action visible until refreshed GitLab evidence
+confirms its target state.
 
 After the MR is merged, a separately invoked read-only post-merge helper refreshes this same stable runbook rather than creating another plan. It verifies the exact merged MR and commit, rejects an existing release or a same-name tag at another commit, copies the MR description byte-for-byte as the GitLab Release notes, and adds an exact manual `glab` release command plus one exact command for every approved work-item `close` or `comment` action. The same helper may refresh a stale post-merge runbook; when inventory changed, regenerate the approved content ledger and pass it with `--content`. Keep `no action` entries and all rationales and uncertainties visible. The helper never executes these commands or any other remote mutation.
 

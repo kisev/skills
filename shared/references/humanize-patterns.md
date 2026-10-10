@@ -1,6 +1,6 @@
 # Pattern catalog
 
-The complete editing catalog for `humanize`, mapped to the 26 categories of
+The editing catalog for `humanize`, mapped to the 26 categories of
 [blader/humanizer](https://github.com/blader/humanizer), which draws on
 Wikipedia's "Signs of AI writing". Groups A through E are numbered strongest
 first. A pattern without the "weak alone" mark justifies an edit on one

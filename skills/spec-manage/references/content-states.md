@@ -33,7 +33,7 @@ Example: `UNKNOWN (accepted by the product owner): whether files above 2 GiB are
 supported. Boundary: input-size compatibility only; consequence: no size promise
 is made. Needed evidence: an agreed limit and stress results.`
 
-These forms define concise content, not weaker readiness. The document profiles,
+These forms define concise content, not weaker readiness; document profiles,
 semantic audit criteria, authority rules, and formal validation remain unchanged.
 The compact example in `references/minimal-example.md` illustrates depth only;
 do not copy it mechanically or treat it as a normative template.

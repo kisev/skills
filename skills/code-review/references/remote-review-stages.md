@@ -51,35 +51,24 @@ action first; `check-review` rejects an unrecorded package.
 On every invocation, read every non-system discussion and every reply, open or resolved, code or conversation changed; never treat `resolved=true`, `Fixed`, approvals, green CI, or no conflicts as proof. For each thread decide assessment, rationale, explicit `fix_mode` (`suggestion`, `patch`, or `not_required`), optional unified `patch`, and exactly one outcome: `no_publication`, `local_fix`, `reply`, `resolve`, or `reopen`. An open
 thread cannot use `no_publication`; a resolved thread uses `no_publication`
 when the existing explanation or applied suggestion already establishes the
-fix and a new reply adds none; prepare a reply only when it adds an
-independent confirmation, never say a resolved thread closes. A reply
-continues the conversation naturally from the authenticated user's role:
-apply `humanize`, keep `;` only inside code or quotations, address the
-participant with the informal second-person singular, never invoke a
-publication action, and name an attributable fixing commit with an immutable
-GitLab link — no SHA.
+fix and a new reply adds no information; prepare a reply only when it adds an
+independent confirmation or correction, and never say a resolved thread
+closes. A reply continues the complete conversation naturally, reacts to its
+latest relevant point, and is written from the authenticated user's factual
+role in the selected language: apply `humanize`, keep `;` outside code or
+exact quotations forbidden, address the participant with the informal
+second-person singular without forcing a pronoun, and never invoke a
+publication action. Name an attributable fixing commit naturally with an
+immutable GitLab link — no SHA — else confirm the current code result
+without guessing.
 
-Conventional Comments
+The reply opens with a Conventional Comments
 label matching its meaning — `suggestion`, `issue`, `question`, `note`,
 `praise`, or `todo`, optionally preceded by the `blocking:` severity — so the
 reply's kind is visible before its prose. The same taxonomy covers the
 run-path prose surfaces, and when a discussion claims the change misses its
 original purpose, the arbitrator resolves that observation as explicitly as
 a critic answer to the validation question.
-
-An open thread cannot use `no_publication`; a resolved one uses
-`no_publication` when the existing explanation or applied suggestion already
-establishes the fix and a new reply adds no information; prepare a reply only
-when it adds an
-independent confirmation or correction, and never say a resolved thread is
-being closed. A reply continues the complete conversation naturally, reacts
-to its latest relevant point, and is written from the authenticated user's
-factual role: apply `humanize`, do not use `;` outside code or exact
-quotations, and address the participant with the selected language's informal
-second-person singular without forcing a pronoun. The review workflow never
-invokes a publication action; name an attributable fixing commit naturally
-with an immutable GitLab link — no SHA — else confirm the current code result
-without guessing.
 
 Every contract-7 thread decision binds `last_note_id`,
 `last_note_body_sha256`, and `thread_sha256` for the complete discussion,

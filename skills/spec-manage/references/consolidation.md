@@ -1,6 +1,10 @@
 # Canonical specification consolidation
 
-Consolidation is a mandatory part of every `spec-update`, not a separate periodic project. Its purpose is to keep `specs/` a compact model of the current system that a person can read and hold in mind. Canonical documents are not a change log, but they retain compact lifecycle records for stable requirements and decisions; Git retains the full edit history.
+Consolidation is a mandatory part of every `spec-update`, not a separate
+periodic project: keep `specs/` a compact model of the current system that a
+person can read and hold in mind. Canonical documents are not a change log, but
+they retain compact lifecycle records for stable requirements and decisions;
+Git retains the full edit history.
 
 ## Scope
 

@@ -763,7 +763,7 @@ def test_humanize_relations_carry_explicit_workflow_invocations() -> None:
 
 
 def test_humanize_patterns_catalog_maps_all_26_upstream_categories() -> None:
-    catalog = (ROOT / "skills/humanize/references/patterns.md").read_text(encoding="utf-8")
+    catalog = (ROOT / "shared/references/humanize-patterns.md").read_text(encoding="utf-8")
     assert "26 categories" in catalog
     assert "A writing sample never overrides" in catalog
     assert "did not express" in catalog
@@ -811,6 +811,12 @@ def test_humanize_patterns_catalog_maps_all_26_upstream_categories() -> None:
         "### 25. Текст о самом тексте вместо предмета (слабо в одиночку)",
     ):
         assert heading in russian, heading
+    import re
+
+    canon_numbers = re.findall(r"^### (\d+)\. ", catalog, re.MULTILINE)
+    assert canon_numbers == [str(n) for n in range(1, 27)]
+    for document in (english, russian):
+        assert re.findall(r"^### (\d+)\. ", document, re.MULTILINE) == canon_numbers
 
 
 WEAK_ALONE_CATEGORIES = frozenset({6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, 25})
@@ -819,7 +825,7 @@ WEAK_ALONE_CATEGORIES = frozenset({6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, 25})
 def test_humanize_weak_alone_classification_is_consistent() -> None:
     import re
 
-    catalog = (ROOT / "skills/humanize/references/patterns.md").read_text(encoding="utf-8")
+    catalog = (ROOT / "shared/references/humanize-patterns.md").read_text(encoding="utf-8")
     marked: set[int] = set()
     for match in re.finditer(r"^### (\d+)\. .+?( \(weak alone\))?$", catalog, re.MULTILINE):
         if match.group(2):
@@ -876,12 +882,15 @@ def test_humanize_documentation_carries_bilingual_examples() -> None:
             "### 1. ",
             "### 13. ",
             "### 26. ",
-            "**Before (en):**" if document is english else "**До (en):**",
+            "**Before:**" if document is english else "**До:**",
         ):
             assert heading in document, heading
-        assert "**Before (ru):**" in document or "**До (ru):**" in document
-        assert "**After (ru):**" in document or "**После (ru):**" in document
-    assert "A writing sample never overrides" in english
+        assert "**After:**" in document or "**После:**" in document
+        assert "26 categories" in document or "26 категорий" in document
+        assert "references/patterns.md" in document
+    assert "A writing sample never overrides" in (
+        ROOT / "shared/references/humanize-patterns.md"
+    ).read_text(encoding="utf-8")
     assert "образец" in russian.lower() or "Образец" in russian
     readme = (ROOT / "docs/README.md").read_text(encoding="utf-8")
     readme_ru = (ROOT / "docs/ru/README.md").read_text(encoding="utf-8")

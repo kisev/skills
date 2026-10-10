@@ -4,7 +4,7 @@
     "max_tokens": 4000,
     "timeout_seconds": 30
   },
-  "digest": "513cf78d5b649f56e5a923d697d7a2c5b42c1b073e1a5c17e50939ed3094a659",
+  "digest": "10845dbd5882b4c75c88e4b8391a265cbbba6ba90d741f95b3e3ee0a1bc7c4da",
   "expected": {
     "case_outcomes": [
       {
@@ -117,7 +117,7 @@
     {
       "contains": "the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25",
       "id": "humanize-weak-alone-set",
-      "path": "skills/humanize/references/patterns.md"
+      "path": "shared/references/humanize-patterns.md"
     },
     {
       "contains": "rewrite_case_assertions",
