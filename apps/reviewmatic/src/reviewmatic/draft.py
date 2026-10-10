@@ -692,6 +692,11 @@ def resume_review(root_value: str) -> dict[str, Any]:
             repo_root=(
                 progress["repo_root"] if isinstance(progress.get("repo_root"), str) else None
             ),
+            related_issues=(
+                cast("dict[str, Any]", review_context.get("related_issues"))
+                if isinstance(review_context.get("related_issues"), dict)
+                else None
+            ),
         ),
         "context_package": {
             "template_path": str(package_template_path),
@@ -751,7 +756,7 @@ def resume_review(root_value: str) -> dict[str, Any]:
                 "assessment": "fixed",
                 "rationale": "The exact reviewed code already addresses the remark.",
                 "outcome": "resolve",
-                "proposed_response": "The exact reviewed code now handles this path.",
+                "proposed_response": "note: The exact reviewed code now handles this path.",
                 "fix_mode": "not_required",
                 "patch": None,
                 "fixing_commit": None,

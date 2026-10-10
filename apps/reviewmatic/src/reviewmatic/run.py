@@ -142,6 +142,11 @@ class ReviewRun:
                 )
             self.log(f"resuming from {self.root}")
         else:
+            if self.repo_root is None:
+                raise contract.WorkflowError(
+                    "this review requires a checkout of the project: ask the user for a "
+                    "checkout of the reviewed repository and pass its path with --repo-root"
+                )
             target = contract.parse_target(self.url, {"merge_requests"})
             bundle = cast(
                 "dict[str, Any]",

@@ -488,11 +488,15 @@ manually` and accepts an explicit value; the CLI never starts the host itself.
 
 Specialist profiles are optional for skill-driven independent reviews.
 `code-review` asks once which available critics and how many to use and which
-arbitrator to select; if none are
-installed, the current agent launches ordinary independent native subagents
-running the session's agent, provider, and model, and the recorded selection
-is never substituted silently. The core plugin applies routing receipts and
-structured-report checks to
+arbitrator to select, grounding the offered options in this host's agent
+inventory — `~/.config/opencode/agents/*.md`, `.opencode/agents/*.md`, and
+the `agent` key of the global and project `opencode.json` — where an agent
+defined without a model runs on the session's agent, provider, and model,
+exactly like an ordinary native subagent, and the recorded selection is never
+substituted silently. External review bots (PR-Agent, CodeRabbit,
+pr-review-toolkit) are inspiration only: connecting them was declined, and
+reconsideration needs an explicit new agreement. The core plugin applies
+routing receipts and structured-report checks to
 package-managed profiles and explicitly routed calls, not ordinary native
 subagents. No standalone `opencode run` workaround or agent installation is
 required for that fallback.

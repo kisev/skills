@@ -383,75 +383,14 @@ def _is_worktree_at(path: str) -> bool:
     return inside and toplevel
 
 
-# --- Managed repository clone (XDG runtime cache) ---
+# --- Source checkout resolution ---
 #
-# Every remote-MR preparation works on a repository that contains the exact
-# base/start/head objects. A user-provided `--repo-root` checkout is used as an
-# optimization when it has a matching remote and can provide those objects;
-# otherwise the runtime creates or updates one clone per host+project under the
-# XDG cache and shares it across merge requests with an incremental fetch.
-
-
-def _cache_home() -> Path:
-    configured = os.environ.get("XDG_CACHE_HOME")
-    path = Path(configured) if configured else Path.home() / ".cache"
-    if not path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts[1:]):
-        raise contract.WorkflowError("XDG_CACHE_HOME must be an absolute normalized path")
-    return path
-
-
-def repositories_root() -> Path:
-    return _cache_home() / "agent-skills" / "reviewmatic" / "repositories"
-
-
-def clone_slug(host: str, project: str) -> str:
-    """Stable cache key for one host+project, independent of any merge request."""
-    readable = re.sub(r"[^A-Za-z0-9._-]+", "-", f"repo-{host}-{project}")[:96]
-    digest = hashlib.sha256(f"{host}\n{project}\n".encode()).hexdigest()[:8]
-    return f"{readable}-{digest}"
-
-
-def repository_clone_path(host: str, project: str) -> str:
-    return str(repositories_root() / clone_slug(host, project))
-
-
-def _clone_url(host: str, project: str) -> str:
-    return f"https://{host}/{project}.git"
-
-
-def _is_managed_clone(path: str, host: str, project: str) -> bool:
-    return bool(_remotes_for(path, host, [project]))
-
-
-def ensure_clone(host: str, project: str) -> str:
-    """Create or incrementally update the shared clone for one project."""
-    host = host.lower()
-    path = repository_clone_path(host, project)
-    lock_base = str(repositories_root())
-
-    def update() -> None:
-        if _path_exists(path):
-            if not _is_managed_clone(path, host, project):
-                raise contract.WorkflowError(
-                    f"the managed clone {path} does not point at {host}/{project}; remove it "
-                    "manually and start the review again"
-                )
-            worktree.git(path, ["fetch", "--prune", "--no-tags", "origin"], None, FETCH_TIMEOUT_S)
-            return
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-        worktree.git(
-            Path(path).parent,
-            ["clone", "--no-checkout", "--no-tags", _clone_url(host, project), path],
-            None,
-            600.0,
-        )
-        if not _is_managed_clone(path, host, project):
-            raise contract.WorkflowError(
-                f"the managed clone {path} does not match {host}/{project}"
-            )
-
-    _with_preparation_lock(lock_base, clone_slug(host, project), update)
-    return path
+# Every remote-MR preparation works on a checkout the user provides: the
+# checkout must have a Git remote pointing at the merge request's project (or
+# the source project, for a fork MR) and must be able to fetch the exact
+# base/start/head objects. The runtime never invents a repository for an MR: it
+# only fetches into the checkout the user selected and prepares the managed
+# review worktree under that checkout's `.worktrees/reviewmatic/`.
 
 
 def _evidence_identity(
@@ -523,14 +462,22 @@ def _ensure_exact_objects(
 
 
 def resolve_main_checkout(evidence: dict[str, Any], repo_root: str | None) -> tuple[str, str]:
-    """Resolve the repository that holds the exact MR objects.
+    """Resolve the user-selected checkout that holds the exact MR objects.
 
-    A user-provided checkout is used when it has a matching remote and can
-    provide the objects; every other case creates or updates the shared clone.
-    Returns the repository path and the remote that provided the MR head ("" when
-    the head object was already present or unavailable from the checkout).
+    The checkout is required: the runtime never creates a repository for the
+    review. The checkout must have a matching remote and must be able to fetch
+    the exact base/start/head objects; any other case is an instructive error.
+    Returns the checkout path and the remote that provided the MR head ("" when
+    the head object was already present).
     """
     host, project, target, object_value = _evidence_identity(evidence)
+    if repo_root is None:
+        raise contract.WorkflowError(
+            "this review requires a checkout of the project: ask the user for a checkout of "
+            "the reviewed repository and pass its path with --repo-root; the checkout must "
+            f"have a Git remote pointing at {host}/{project} and be able to fetch the exact "
+            "merge request objects"
+        )
     project_id = _plain_int(target.get("project_id"))
     iid = _plain_int(target.get("iid"))
     source_branch = (
@@ -538,41 +485,38 @@ def resolve_main_checkout(evidence: dict[str, Any], repo_root: str | None) -> tu
         if contract.nonempty_string(object_value.get("source_branch"))
         else ""
     )
-    checkout_error: str | None = None
-    if repo_root is not None:
-        try:
-            toplevel = checkout_root(repo_root)
-            main = worktree.main_checkout_root(toplevel)
-            target_remotes = sorted(_remotes_for(main, host, [project]), key=lambda item: item.name)
-            source_remotes: list[RemoteTarget] = []
-            source_project_id = _plain_int(object_value.get("source_project_id"))
-            if (
-                source_project_id is not None
-                and project_id is not None
-                and source_project_id != project_id
-            ):
-                source_project_path = _source_project_path_for(host, source_project_id)
-                source_remotes = sorted(
-                    _remotes_for(main, host, [source_project_path]), key=lambda item: item.name
-                )
-            if target_remotes or source_remotes:
-                head_remote = _ensure_exact_objects(
-                    main, evidence, target_remotes, source_remotes, iid, source_branch
-                )
-                return main, head_remote
-        except contract.WorkflowError as error:
-            checkout_error = str(error)
     try:
-        clone = ensure_clone(host, project)
-        target_remotes = sorted(_remotes_for(clone, host, [project]), key=lambda item: item.name)
-        head_remote = _ensure_exact_objects(clone, evidence, target_remotes, [], iid, source_branch)
+        toplevel = checkout_root(repo_root)
+        main = worktree.main_checkout_root(toplevel)
+        target_remotes = sorted(_remotes_for(main, host, [project]), key=lambda item: item.name)
+        source_remotes: list[RemoteTarget] = []
+        source_project_path: str | None = None
+        source_project_id = _plain_int(object_value.get("source_project_id"))
+        if (
+            source_project_id is not None
+            and project_id is not None
+            and source_project_id != project_id
+        ):
+            source_project_path = _source_project_path_for(host, source_project_id)
+            source_remotes = sorted(
+                _remotes_for(main, host, [source_project_path]), key=lambda item: item.name
+            )
+        if not target_remotes and not source_remotes:
+            raise contract.WorkflowError(
+                f"no remote of {main} points at {host}/{project}"
+                + ("" if source_project_path is None else f" or {host}/{source_project_path}")
+                + "; ask the user for a checkout of the reviewed repository and pass its "
+                "path with --repo-root"
+            )
+        head_remote = _ensure_exact_objects(
+            main, evidence, target_remotes, source_remotes, iid, source_branch
+        )
     except contract.WorkflowError as error:
-        detail = error if checkout_error is None else f"{checkout_error}; managed clone: {error}"
         raise contract.WorkflowError(
-            "the exact merge request objects are unavailable from --repo-root and from the "
-            f"managed clone for {host}/{project}: {detail}"
+            "the passed --repo-root checkout is not a usable review source for "
+            f"{host}/{project}: {error}"
         ) from error
-    return clone, head_remote
+    return main, head_remote
 
 
 def prepare_review_worktree(
@@ -652,8 +596,8 @@ def prepare_review_worktree(
         raise contract.WorkflowError(
             f"no remote of {main} points at {host}/{project_path}"
             + ("" if source_project_path is None else f" or {host}/{source_project_path}")
-            + "; the managed clone for this project is unavailable and --repo-root has no "
-            "matching remote; verify Git access to the project and start the review again"
+            + "; the passed checkout is not a usable review source: ask the user for a "
+            "checkout of the reviewed repository and pass its path with --repo-root"
         )
 
     head_attempts = (

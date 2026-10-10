@@ -1,40 +1,64 @@
 # Run path: the primary remote-MR review
 
-Drive a remote-MR review with one process: `reviewmatic run --url <mr-url> --review-mode <fast|normal> --locale <en|ru> --incremental auto`. `--repo-root <checkout>` is optional and uses the same resolution as `start-review`: a matching checkout is an optimization, and a missing or object-less checkout falls back to the managed clone. The run verifies the exact base and head objects during context collection and stops with a concrete error otherwise. The run owns every mechanical step — evidence collection, context, finalization, scaffolding, and the final report — and stops only where an agent must author an artifact. Every stop prints the ready template path and the exact next command; execute each returned command as `uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`.
+Drive a remote-MR review with one process:
+`reviewmatic run --url <mr-url> --review-mode <fast|normal> --locale <en|ru> --incremental auto --repo-root <checkout>`. The checkout is required: ask the
+user for a checkout of the reviewed repository and pass its path with
+`--repo-root`; the run never clones or creates a repository for the MR. The
+checkout must have a Git remote pointing at the MR's project (any remote
+name; for a fork MR register the fork as a new remote with `git remote add`,
+or rely on an anonymous host URL, so the exact MR head object is fetchable)
+and must fetch the exact base/start/head objects. A non-checkout path, a
+checkout without a matching remote, or one that cannot fetch the objects is
+an instructive error naming the missing remote — never substitute silently
+or clone behind it. The run owns every mechanical step — evidence, context, finalization,
+scaffolding, and the report — and stops only where an agent must author an
+artifact; every stop prints the template path and exact next command as
+`uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`.
+Do not duplicate canonical collection with direct `glab mr view` or parallel
+MR reads; use `--incremental off` only for an explicit request such as
+"without incremental review", "start from scratch", or "ignore the previous
+review" — "full review" alone is not an opt-out.
+
 The run stops once for the panel poll. The stop carries the complete poll
-presentation under `poll`: `poll.text` is the verbatim question, keyed to the
-review locale, and the stop's `rules` instruct how to present it — present the text
-word for word, without paraphrasing or summarizing; never retell the template
-in your own words. The poll names the critics, the engine of every critic, the
-one-line arbitrator role, and the resolved mode with an engines note when the
-OCR engine is excluded (only when even the compacted background exceeds the
-CLI limit; the note reports the compacted size and the cut sections); when
-the note excludes OCR, do not offer it. The term meanings are
-fixed in `references/poll-glossary.md`. Attach your recommendation to the poll; the choice is the user's. Before
-proposing the option variants, check the installed critic profiles with
-`agentomatic agent list` (or the profile manifest): propose more than one
-model critic only when installed profile critics with distinct models or
-engines exist, and never propose two critics on the same single model — two
-critics running one model are not an independent check; with an empty critic
-pool the honest composition is one subagent on the current model plus the
-arbitrator. Fill the
+presentation under `poll`: `poll.text` is the verbatim question and the stop's
+`rules` instruct how to present it — present the text word for word, without
+paraphrasing or summarizing. The poll names the critics, the engine of every
+critic, the one-line arbitrator role, and the resolved mode with an engines
+note when the OCR engine is excluded (only when even the compacted background
+exceeds the CLI limit; the note reports the compacted size and the cut
+sections); when the note excludes OCR, do not offer it. Term meanings are
+fixed in `references/poll-glossary.md`; attach your recommendation, and the
+choice is the user's. Before
+proposing the option variants, ground the critic pool in the host's agent
+inventory (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`): suggest more than one
+model critic only when candidate agents carry distinct models or engines, and
+never propose two critics on the same single model — two critics running one
+model are not an independent check. An agent defined without a model runs on
+the primary session's model; an inventory source that cannot be read makes
+the pool unknown, not empty. Fill the
 returned selection template with the answer and run the printed
 `reviewmatic run --resume --url <mr-url> --participants <template>` command. A `fast` review never stops for the poll: it runs without a panel. Never
 substitute a configuration silently: the recorded names appear in the results, and the state machine rejects a substituted configuration.
-
-A pipeline transition that arrives while the poll waits — a job moves from running to failed, a downstream pipeline reddens, a note lands — is post-collection drift, not a poll answer: it never restarts the run, never re-collects evidence, and never adds a second critic. The OCR background was measured before the poll, and the run executes that exact render. Finish the selection; the next resume takes a re-anchor before prose, whose fingerprint comparison without persisting keeps authorship for code-identical state, and a CI-only transition becomes exactly one CI delta target checked with `record-delta` while prior checks stay in history — one fresh delta check, never a second critic. A full restart with re-collection is only for changed code or changed notes.
-
+A pipeline transition that arrives while the poll waits — a failed job, a reddening downstream pipeline, a landed note — is post-collection drift, not a poll answer: it never restarts the run, never re-collects evidence, and never adds a second critic. The OCR background was measured before the poll, and the run executes that exact render. Finish the selection; the next resume takes a re-anchor before prose whose fingerprint comparison without persisting keeps authorship for code-identical state, and a CI-only transition becomes exactly one CI delta target checked with `record-delta` while prior checks stay in history — one fresh delta check, never a second critic. A full restart with re-collection is only for changed code or changed notes.
 The emitted critic template is pre-stamped: its `run_id` already carries this reviewmatic run's identity and must not be changed, and `session_id` is the real session id of that critic subagent — never copy another critic's or the orchestrator's identity into a receipt.
-
-After the selection is recorded the run continues mechanically. OCR critics execute inside the run without any authoring stop: reviewmatic renders the compact background from the collected context (thread registry and open questions verbatim, the judgment sections under their byte caps — the poll measured exactly this render), invokes the `ocr` CLI over the exact base..head range, maps the comments into one receipt, and binds it to the selected critic. Model critics stop the run once each: the stop names the participant, prints its ready receipt template, and the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command. Launch the model critic as an independent subagent over the collected context and the managed review worktree described below, fill its receipt template verbatim, and run the printed command; when the last receipt is imported, the panel merges into one aggregate critic receipt and the run continues by itself.
+After the selection the run continues mechanically. OCR critics execute
+inside the run without an authoring stop: reviewmatic renders the compact
+background (thread registry and open questions verbatim, judgment sections
+under their byte caps — the poll measured exactly this render), invokes the
+`ocr` CLI over the exact base..head range, maps the comments into one
+receipt, and binds it to the selected critic. Each model critic stops the run
+once: the stop names the participant, prints its ready receipt template, and
+the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command — launch the critic as an
+independent subagent over the collected context and the managed review
+worktree, fill the receipt verbatim, and run the printed command; with the
+last receipt imported, the panel merges and the run continues by itself.
 The remaining stops are the decision and the prose. At the decision stop,
-launch the selected arbitrator in a separate native session. It verdicts every
-critic finding and may record `publication_intents`: one finding ID with
-`publication: {kind, fix_mode}` and optional dependencies and source target.
-Import the decision with the returned `reviewmatic finalize-review` command.
-The real `run` then invokes the shared renderer, materializes
-`content-prose-<digest>.json`, and returns `template_kind=prose` with
-`reviewmatic record-prose --artifact-root <root> --input <prose>`.
+launch the selected arbitrator in a separate native session: it verdicts every
+critic finding and may record `publication_intents` (one finding ID with
+`publication: {kind, fix_mode}` and optional dependencies); import the
+decision with the returned `reviewmatic finalize-review` command. The run then
+invokes the shared renderer, materializes `content-prose-<digest>.json`, and
+returns `template_kind=prose` with `reviewmatic record-prose --artifact-root <root> --input <prose>`.
 Edit prose, semantic choices, and fix payloads only. Do not author positions,
 range counters, patch paths/digests, revisions, or `update_issue`.
 Return the prepared `finding_id` unchanged. Never create or reconstruct machine
@@ -54,6 +78,7 @@ context path. History is advisory and may warn without blocking current review.
 The runbook stands on current findings and proposals, without historical ledger
 coverage, inherited IDs/revisions, or manual synchronization.
 Resume the same run to finalize; `scaffold-review` is the structural repair
-path, never the normal tail. Apply the discussion, findings, SemVer, and
-metadata doctrine below to those judgments. Print the returned report through
-`references/output-format.md`, and execute no publication commands.
+path, never the tail. Apply the stage doctrine of
+`references/remote-review-stages.md` at those judgments, print the returned
+report through `references/output-format.md`, and execute no publication
+commands.

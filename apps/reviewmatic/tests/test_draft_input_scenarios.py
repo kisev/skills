@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import pytest
 from helpers.review_fixture import ReviewFixture, make_review_fixture
 
+from reviewmatic import context as review_context
 from reviewmatic import draft as draft_module
 from reviewmatic import local_review
 from reviewmatic.portable.portable_gitlab import contract
@@ -257,6 +258,68 @@ def test_start_review_returns_the_prepared_scope_overview_with_author_claims_fla
     assert emitted["scope"]["mode"] == "mr"
     assert emitted["scope"]["inputs"]["evidence_path"] == started["evidence_path"]
     assert fixture.request_count() == requests
+
+
+def test_the_scope_lists_related_issues_collected_from_the_closes_issues_endpoint(
+    fixtures: Any,
+) -> None:
+    fixture = fixtures(
+        {
+            "resolved": True,
+            "closesIssues": [
+                {
+                    "iid": 12,
+                    "title": "Retry needs an idempotency key",
+                    "state": "opened",
+                    "web_url": "https://gitlab.example/group/project/-/issues/12",
+                }
+            ],
+        }
+    )
+    started = draft_module.start_review(url=fixture.url, repo_root=str(fixture.repo))
+    assert started["status"] == "ok", started
+    assert (
+        json.dumps(fixture.request_endpoints()).count("projects/19/merge_requests/7/closes_issues")
+        > 0
+    ), "the collection requests the documented MR endpoint"
+
+    related = started["scope"]["related_issues"]
+    assert related["source"] == "author_text"
+    assert related["complete"] is True
+    assert related["items"] == [
+        {
+            "iid": 12,
+            "title": "Retry needs an idempotency key",
+            "state": "opened",
+            "web_url": "https://gitlab.example/group/project/-/issues/12",
+        }
+    ]
+
+    # The review context artifact carries the same author_text channel.
+    _, context_value, _digest = review_context.validate_context_binding(
+        started["context_path"], started["evidence_path"]
+    )
+    component = context_value["related_issues"]
+    assert component["endpoint"] == "merge_requests/7/closes_issues"
+    assert component["source"] == "author_text"
+    assert component["items"][0]["source"] == "author_text"
+    assert component["complete"] is True
+    assert component["errors"] == []
+
+
+def test_the_scope_records_related_issue_unavailability_as_unknown(
+    fixtures: Any,
+) -> None:
+    fixture = fixtures({"resolved": True, "closesIssuesError": "closes_issues refused"})
+    started = draft_module.start_review(url=fixture.url, repo_root=str(fixture.repo))
+    assert started["status"] == "ok", started
+    related = started["scope"]["related_issues"]
+    assert related["complete"] is False
+    assert related["items"] == []
+    assert "unknown" in related["notice"], related
+    assert "closes_issues" in json.dumps(related["notice"]) or "closes" in json.dumps(
+        fixture.request_endpoints()
+    )
 
 
 def test_record_input_applies_semantic_sections_mechanically_and_preserves_machine_fields(

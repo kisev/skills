@@ -832,6 +832,61 @@ def incremental_context(
         }
 
 
+def related_issue_entry(item: dict[str, Any]) -> dict[str, Any] | None:
+    """One bounded, provenance-marked row for a linked issue of the MR."""
+    iid = item.get("iid")
+    if not isinstance(iid, int):
+        return None
+    return {
+        "iid": iid,
+        "title": item.get("title") if isinstance(item.get("title"), str) else "",
+        "state": item.get("state") if isinstance(item.get("state"), str) else "",
+        "web_url": item.get("web_url") if isinstance(item.get("web_url"), str) else "",
+        "source": "author_text",
+    }
+
+
+def collect_related_issues(hostname: str, project_id: int, iid: int) -> dict[str, Any]:
+    """Author-linked context: the MR's closes-issues list, collected once.
+
+    The endpoint choice is the documented MR endpoint
+    (``merge_requests/{iid}/closes_issues``): it answers exactly what the
+    validation question needs — which issues this change claims to close. An
+    unavailable request never blocks the review: the component degrades to an
+    explicit unknown state, so reviewers see that the linkage is unverified
+    instead of reading an empty list as "no related issues exist".
+    """
+    try:
+        closes = portable.paginated(
+            hostname, f"projects/{project_id}/merge_requests/{iid}/closes_issues"
+        )
+    except portable.WorkflowError as exc:
+        return {
+            "endpoint": f"merge_requests/{iid}/closes_issues",
+            "source": "author_text",
+            "complete": False,
+            "items": [],
+            "errors": [str(exc)],
+            "notice": "related issues are unknown: the request failed, so their presence "
+            "is not evidence of their absence",
+        }
+    items = [
+        entry
+        for item in cast("list[object]", closes.get("items", []))
+        if isinstance(item, dict) and (entry := related_issue_entry(item)) is not None
+    ]
+    complete = closes.get("complete") is True
+    errors = [portable.redact(value) for value in cast("list[str]", closes.get("errors", []))]
+    return {
+        "endpoint": f"merge_requests/{iid}/closes_issues",
+        "source": "author_text",
+        "complete": complete,
+        "items": items,
+        "errors": errors,
+        "notice": None if complete else "related issues are unknown: the request failed",
+    }
+
+
 def annotate_discussion(value: dict[str, Any], web_url: str) -> dict[str, Any]:
     notes = value.get("notes")
     if not isinstance(notes, list) or not notes or not isinstance(notes[0], dict):
@@ -1110,6 +1165,14 @@ def collect_context(
                 "evidence is unusable and the review stops instead of degrading silently"
             )
     notes = [{**note, "note_url": f"{web_url}#note_{note['id']}"} for note in notes]
+    # Related issues are author-linked context: the MR author's closes link
+    # points at them, so their identity travels with the author_text
+    # provenance. An unavailable request is explicit, never a silently empty
+    # list: the component reports completeness and the caller decides how far
+    # the review can lean on it.
+    related_issues = collect_related_issues(
+        str(project["hostname"]), int(project["id"]), int(target["iid"])
+    )
     exact_git = exact_git_context(repo_root, evidence)
     errors.extend(cast("list[str]", exact_git["errors"]))
     try:
@@ -1151,6 +1214,7 @@ def collect_context(
         "discussions": discussions,
         "notes": notes,
         "issue_templates": issue_templates,
+        "related_issues": related_issues,
         "release_evidence": review_semver.collect(evidence),
         "counts": counts,
         "exact_git": exact_git,

@@ -1,14 +1,13 @@
 # Manual publication
 
-Review preparation never publishes. The supported publication interface is to
-copy and run the direct `glab` commands from `<artifact-root>/runbook.md`.
-Runbook creation requires the selected Python reviewmatic runtime; publication
-does not. Reviewmatic has no terminal UI or in-app send interface.
-
-The runbook keeps the exact body preview beside its command. Generated body
-files are private and immutable; a repair writes a new body and updates the
-runbook. Commands name the exact GitLab host, project, MR, and position. Raw
-refs may appear in executable position arguments, not in prose or chat.
+Review preparation never publishes. The supported publication interface is
+copying and running the direct `glab` commands from
+`<artifact-root>/runbook.md`; runbook creation needs the selected reviewmatic
+runtime, publication does not, and reviewmatic has no terminal UI or in-app
+send interface. The runbook keeps the exact body preview beside its command;
+generated body files are private and immutable, a repair writes a new body,
+commands name the exact host/project/MR/position, and raw refs appear only in
+executable position arguments, never prose or chat.
 
 Every shell block that creates a comment or discussion or changes thread state
 starts with a manual head check. It uses `glab api --hostname` for the exact MR
@@ -29,14 +28,13 @@ JSON. Agents do not execute these commands.
 
 ## Failure and repetition
 
-One manual send performs the selected operation and any explicitly planned
-state change after successful publication. Show the exit code, output, and
-bounded redacted error. Exit zero means the command completed, not that the
-remote effect was independently verified. The user checks GitLab in the
-browser and decides whether to repeat. There are no publication reservations,
-persistent locks, expiry, automatic freshness checks, polling, or automatic
-retries. A network failure, timeout, or interruption must not block another
-manual send.
+One manual send performs the selected operation and any planned state change
+after successful publication; show the exit code, output, and bounded
+redacted error. Exit zero means the command completed, not that the remote
+effect was verified — the user checks GitLab and decides whether to repeat.
+There are no reservations, locks, expiry, automatic freshness checks,
+polling, or retries, and a network failure or interruption never blocks
+another manual send.
 
 A repeat after an uncertain outcome can duplicate a comment; explain this
 without preventing the user's choice. Never erase or rewrite live legacy

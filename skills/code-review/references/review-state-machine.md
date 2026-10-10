@@ -1,211 +1,128 @@
 # Guided remote review
 
-The agent owns analysis. `reviewmatic` owns collection, bindings, draft
-validation, freshness, verdict derivation, and atomic finalization. Use the
-guided commands below; do not reconstruct low-level transitions or inspect the
-installed runtime's source to discover input fields.
+The agent owns analysis; `reviewmatic` owns collection, bindings, validation, freshness, verdict derivation, and finalization. Use the guided commands below; never reconstruct transitions or inspect the runtime source.
 
 ## One editable draft
 
-1. Run `reviewmatic start-review --url MR_URL --review-mode MODE --locale LOCALE --incremental INCREMENTAL`.
-   Modes are `fast|normal`, locales `en|ru`, incremental policies `auto|off`.
-   `--repo-root CHECKOUT` is optional: a matching checkout is used as an
-   optimization, and a missing or object-less checkout falls back to one managed
-   clone per host and project under the XDG cache, so the invocation does not
-   depend on the current directory. The runner prepares a
-   managed review worktree at the exact MR head and returns it in `review_worktree`
-   with the source repository and exact base/start/head/target refs; pass these
-   exact paths to critics and read all code there without recollection.
-   Inspect its evidence, context, and `inspection_path`. The inspection index
-   contains the complete diff and exact base/head source snapshots, not working
-   tree files. Missing, binary, non-regular, or over-budget source snapshots are
-   explicit; inspect those objects separately and trace affected consumers.
-   Do not duplicate MR collection with `glab mr view`.
-   Read `draft_schema_path`, `input_contract` and `input_examples` immediately;
-   they describe editable input separately from final artifact envelopes.
-   Complete the returned context package template and record it with the
-   returned `record-package` action before launching critics; critics receive
-   the recorded package path as their primary task context. Assigned questions
-   are answered by critics in receipt `question_answers`, and every
-   `not_verified` answer is checked by the primary in `question_verifications`
-   while the original answer stays untouched; see
+1. Run `reviewmatic start-review --url MR_URL --review-mode MODE --locale LOCALE --incremental INCREMENTAL`
+   (modes `fast|normal`, locales `en|ru`, incremental `auto|off`) with
+   `--repo-root CHECKOUT`: the runner verifies the exact base/head objects in
+   that checkout and stops with an instructive error otherwise — it never
+   clones a repository for the MR. The runner prepares a managed review
+   worktree at the exact MR head, returns it in `review_worktree` with the
+   source repository and exact base/start/head/target refs, and critics read
+   all code there without recollection. Inspect the evidence, context, and
+   `inspection_path`; the index holds the complete diff and exact base/head
+   source snapshots, not working-tree files, with missing, binary,
+   non-regular, or over-budget snapshots explicit. Never duplicate MR
+   collection with `glab mr view`. Read `draft_schema_path`, `input_contract`,
+   and `input_examples` immediately. Complete the returned context package
+   template and record it before launching critics; assigned questions are
+   answered by critics in `question_answers` and every `not_verified` answer
+   is checked by the primary in `question_verifications` — see
    `references/context-package.md`.
-2. Record the panel with the returned `record-participants` action before any
-   receipt exists: the critic count and composition and the arbitrator, as
-   described below. Then review the exact code and all discussions only as far
-   as orchestrating requires — the panel performs the full review. Fill the
-   returned `draft_path` identity fields (`run_id`, `session_id`, `low_risk`)
-   through `record-input`; every finding, disposition, CI assessment, and
-   content section arrives through the arbitration receipt. Each disposition
-   includes `id`, `decision=accept|reject`, `reason`, and `dependencies` with
-   `paths`, `thread_ids`, `metadata_fields`, and `ci`. Accepted candidates may
-   use empty dependency lists; rejected candidates retain concrete scope
-   dependencies. Preserve receipt identities and use distinct finding ID
-   prefixes across critics. Optional `severity_override` records
-   `original_severity`, effective `severity` and a concrete reason without
-   editing the receipt. `duplicate_of` names an accepted canonical finding.
-   `existing_thread` fix records bind `thread_id` without requiring duplicate
-   publication or dropping the defect from readiness. Complete every generated
-   `ci_job_assessments` entry from its bounded trace. `trace_evidence` must be
-   an exact non-empty substring of that job's collected redacted trace, not a
-   paraphrase. Preserve its project/pipeline/job IDs.
+2. Record the panel with the returned `record-participants` action before
+   any receipt exists: critics plus the arbitrator. Review code and
+   discussions only as far as orchestration requires. Fill the returned
+   `draft_path` identity fields (`run_id`, `session_id`, `low_risk`) through
+   `record-input`; every finding, disposition, CI assessment, and content
+   section arrives through the arbitration receipt. Each disposition includes
+   `id`, `decision=accept|reject`, `reason`, and `dependencies` with `paths`,
+   `thread_ids`, `metadata_fields`, and `ci`; accepted candidates may use
+   empty lists, rejected ones concrete scope dependencies. Preserve receipt
+   identities and distinct finding ID prefixes per critic; `severity_override`
+   records `original_severity`/`severity`/reason, `duplicate_of` names the
+   canonical finding, and `existing_thread` fix records bind `thread_id`
+   without dropping the defect from readiness. Complete every generated
+   `ci_job_assessments` entry from its bounded trace: `trace_evidence` is an
+   exact non-empty substring of the job's collected redacted trace, with
+   project/pipeline/job IDs preserved.
 3. The arbitration receipt completes `content`: semantic
-   chat/architecture/metadata/SemVer assessments, every catalog label, checks
-   as strings, concrete `finding_publications`, previous-finding assessments,
-   recommended issues, and every thread decision. Metadata input is the flat
-   five-field assessment, not an `observed` wrapper. Publication input has
-   exactly `finding_id`, `type`, `path`, `line`, `old_line`, `body`,
-   `fix_mode`, and `patch`, optionally `suggestions`, `split_rationale`, and
-   `patch_reason`. `patch_reason` is mandatory for patch fallback. The runner
-   derives findings, rejected candidates, revisions, body/patch paths, digests,
-   and verdicts. Do not add those derived fields or copy data between
-   decision/content artifacts. Grouped thread suggestions may carry an optional
-   prose-only `routing_response` for the short original-thread reply when the
-   fix needs a new position. It does not replace the shared explanation in
-   `proposed_response` or suggestion parts.
-4. Run the returned `reviewmatic check-review --draft DRAFT_PATH` action. It
-   validates locally without GitLab reads, publication artifacts, or progress
-   changes. Fix the reported field paths in the same draft, then repeat the
-   check. A presentation or patch error does not freeze the decision or require
-   restarting the review. Raw commit IDs stay in private evidence, not prose
-   that will be rendered into the plan; use immutable GitLab links when needed.
-   The validator reports independent schema and fix errors together, including
-   receipt prose and suggestion ranges. Do not bisect prose to find an error.
-5. Run the returned `reviewmatic finish-review --draft DRAFT_PATH`. It
+   chat/architecture/metadata/SemVer assessments, every catalog label, checks,
+   concrete `finding_publications`, previous-finding assessments, recommended
+   issues, and thread decisions. Metadata input is the flat five-field
+   assessment, not an `observed` wrapper; publication input has exactly
+   `finding_id`, `type`, `path`, `line`, `old_line`, `body`, `fix_mode`, and
+   `patch`, optionally `suggestions`/`split_rationale`/`patch_reason`
+   (mandatory for fallback). The runner derives findings, candidates,
+   revisions, paths, digests, and verdicts — never add derived fields or copy
+   data between artifacts. Grouped thread suggestions may carry prose-only
+   `routing_response` for a new-position reply; it never replaces the shared
+   explanation or parts.
+4. Run the returned `reviewmatic check-review --draft DRAFT_PATH`: it validates
+   locally without GitLab reads, publication artifacts, or progress changes;
+   fix the reported fields in the draft and repeat.
+5. Run the returned `reviewmatic finish-review --draft DRAFT_PATH`: it
    revalidates locally — no GitLab request runs at finalization — and
-   atomically publishes the local immutable plan, Markdown, and baseline.
-   Post-review drift is caught by the explicit `refresh-review` and by the
-   head check guarding every manual publication block. Print its `chat`
-   verbatim and one fenced manual `plan_command`. Never run that interactive
-   command or any publication/patch command during the review.
+   atomically publishes the plan, Markdown, and baseline. Post-review drift
+   is caught by an explicit `refresh-review` and the head check guarding
+   every manual publication block. Print `chat` verbatim and one fenced
+   `plan_command`; never run any publication command during the review.
 
-Use `reviewmatic resume-review --artifact-root ROOT` after interruption. It
-returns the same editable draft, the recorded participants, and the pending
-panel steps without recollection. A recorded composition is never asked for
-again. Use `reviewmatic refresh-review --draft DRAFT` to collect changed evidence while
-retaining the panel selection: the refreshed draft keeps the participants
-without receipt bindings and expects fresh critic receipts plus a fresh
-arbitration receipt; the old final plan and draft are preserved. Finalized new
-plans use `repair-review`; see `references/repair.md`. Collection, validation,
-and finalization timings are separate from model and subagent time; do not
-blame review analysis time on the runtime or hide validation-repair loops
-inside it.
+Use `reviewmatic resume-review --artifact-root ROOT` after interruption: the
+same editable draft, participants, and pending panel steps return without
+recollection, and a recorded composition is never asked for again. Use
+`reviewmatic refresh-review --draft DRAFT` for changed evidence while
+retaining the selection; the old plan and draft are preserved. Finalized new
+plans use `repair-review` (`references/repair.md`). Collection, validation,
+and finalization timings are separate from model and subagent time; never
+blame review analysis on the runtime or hide validation-repair loops.
 
 ## Review panel: critics and arbitrator
 
-Normal and incremental reviews run as a panel: one recorded selection,
-parallel independent critics, and one separate arbitrator. Unchanged mode
-skips the panel but still audits every discussion. Fast mode runs without a
-panel and requires explicit `low_risk=true` justified by the inspected change.
-
-Use the host's available agent inventory, not assumed agent names. When this
-skill runs directly and the panel composition was not already fixed by the
-request, ask once — in the same single question round as missing task context —
-how many critics, which installed `critic-*` profiles or subagents on the
-current session model, and which arbitrator. Before offering multi-critic
-variants, verify those profiles first (`agentomatic agent list` or the
-profile manifest): a variant with more than one model critic is offered only
-when installed profile critics with distinct models or engines exist, and a
-composition of two critics on the same single model is never offered — it is
-not an independent review. An explicit skip is acceptable and defaults to one
-subagent on the current session's model and one arbitrator subagent on the
-same model, recorded as exactly that default.
-When the skill started automatically, do not stop for questions and record the
-default composition transparently. For each role an installed specialist
-profile and an independent subagent on the current session's agent, provider,
-and model are both valid; specialist profiles and stronger models are
-optional. Never substitute a configuration silently: the recorded
-`name`, `profile`, `provider`, and `model` travel into the runbook, and the
-arbitration receipt must name the selected arbitrator.
-
-Record the selection once with `reviewmatic record-participants --draft DRAFT --input participants.json` (`critics` plus `arbitrator`); the selection is
-fixed once receipts exist. Set the critic count through the selection itself;
-run independent critics in parallel when the host supports it and retain every
-receipt. The runner aggregates them without discarding contributor identities
-and binds each receipt to its participant through the exact `record-critic --participant NAME` import command. Launch the panel as soon as the recorded
-context package and snapshots are ready; join their results before validation.
-Each critic performs one complete independent review: findings plus answers to
-its assigned questions, from the same package and snapshots, without seeing
-other critics' output, recollecting GitLab, or rebuilding the file map. Every
+The guided path records the same panel the run path and
+`references/review-panel.md` define: one recorded selection
+(`reviewmatic record-participants --draft DRAFT --input participants.json`:
+critics plus arbitrator), then parallel independent critics, then one separate
+arbitrator. Ground the pool in the host's agent inventory before composing
+options (`review-panel.md`); set the critic count through the selection
+itself; the selection is fixed once receipts exist. Import each independent
+critic receipt with `reviewmatic record-critic --draft <draft-path> --input <receipt>` and its exact `--participant` name; the runtime binds the receipt
+identity to the participant and rejects a re-used one. Each critic performs one complete independent review: findings plus answers
+to its assigned questions, from the same package and snapshots, without
+other critics' output, GitLab recollection, or file-map rebuild. Every
 finding traces its symptom to the changed lines through concrete code
-(symptom-path tracing), and an unreachable or dead-code claim requires
-proving unreachability from a real entrypoint (reachability from
-entrypoint).
+(symptom-path tracing), and unreachable-code claims prove unreachability
+from a real entrypoint.
 
-If no specialist profiles are installed, launch an independent native subagent
-of the current agent, running on the current session's model; no
-profile-selection question is needed.
 Absence of `critic` is not a blocker. Supply the recorded context package
-path, the exact evidence/context/inspection paths, the materialized
+path, the exact snapshot paths, the materialized
 `references/simplification-criteria.md` path, accepted scope and user
 decisions, but no other reviewer's conclusions. The critic reads the package
-as its primary context and opens the snapshots directly when a detail is
-unclear; it answers every question assigned to critics in receipt
+as its primary context, answers every question assigned to critics in
 `question_answers` with one verdict — `confirmed`, `refuted`, or
-`not_verified` — plus evidence or a concrete reason, copying that question's
-`context_digest` from the recorded package. With several critics the runtime
-enforces the pair rule: each selected critic answers each assigned question,
-and one critic's answer never covers another critic's assignment. Each answer
-is bound to the meaningful context version it was produced against; a
-re-recorded package with an edited question retires the previous answers into
-the draft's `superseded_question_results` history and requires fresh answers
-for the affected scope, and a late receipt bound to the superseded version is
-rejected instead of certifying the changed question. Request complete detailed
-findings in the host/profile's required report envelope; `review_report` is
-valid for routed specialists. Populate the returned receipt template from
-those findings; the emitted template carries a pre-stamped `run_id` with this
-reviewmatic run's identity — keep it unchanged — and `session_id` is the
-receipt's real native session id: the critic subagent's own session, never a
-copied or invented label (keep the pre-stamped `run_id` when the host exposes
-no separate run ID). The OpenCode core plugin exposes current session identity
-to primary and child agents without requiring optional profiles. Never ask a
-child to guess its identity. Do not switch to another provider, invent a
-profile, fabricate a receipt, or run `opencode run` to evade a failed
-delegation policy. If the host truly cannot launch any independent subagent,
-report that
-capability failure before an extended review rather than silently weakening
-its depth. A failed specialist is not replaced or omitted without reconciling
-the user's selected critic count.
+`not_verified` — plus evidence or a concrete reason bound to that question's
+`context_digest`, and with several critics the runtime enforces the pair rule
+(one critic's answer never covers another's assignment); edited-question
+re-records retire affected answers into `superseded_question_results` and a
+late superseded-bound receipt is refused (`references/context-package.md`
+owns the arithmetic). Request complete detailed findings in the required
+report envelope — `review_report` is valid for routed specialists — and
+populate the returned receipt template: its `run_id` is pre-stamped with this
+run's identity (keep it), and `session_id` is the critic subagent's real
+native session id, never a copied or invented label. Never ask a child to
+guess its identity, switch providers, invent an identity, fabricate a
+receipt, or run `opencode run` to evade a failed delegation policy; if the
+host cannot launch any independent native subagent of the current agent, report that capability failure
+before an extended review instead of weakening depth, and never replace or
+omit a failed specialist without reconciling the selected critic count.
 
-When the last critic receipt is imported, the runtime returns the ready
-arbitrator task: a complete arbitration input with the same package binding,
-every critic receipt verbatim, and the reported contradictions. The
-arbitrator is a separate selected subagent — never one of the critics and
-never the orchestrating session. It confirms or refutes every critic finding
-with a concrete reason grounded in targeted evidence checks, resolves every
-contradiction and `not_verified` answer, merges duplicates without losing
-authors or opinion differences, and records the consolidated decisions in one
-`code-review/arbitration/v1` receipt imported verbatim with
-`record-arbitration`. The receipt must select exactly one `merge_verdict` —
-`decline`, `push_back`, `merge_then_fix`, or `merge` — with an evidence-based
-rationale (the ladder and its tie-breaker are defined in
-`references/review-panel.md`), and a `decline` still salvages the attempted pain
-into a recommended issue. Findings discipline belongs to the arbitrator: only
-a finding that moves the merge verdict or readiness, or joins the action
-list, reaches the runbook findings; every other candidate stays a refuted or
-duplicate ledger entry with its reason, and the critics never see this
-filter. It must not start a new defect search from scratch;
-majority agreement or a model's name never replaces a reason. The runtime
-rejects a receipt that leaves any candidate finding, merged finding, or
-contradiction without a verdict, and never rewrites arbitrator text. Answers
-stay attached to their receipts and are never merged away; `unresolved`
-stays explicit when evidence is insufficient. No answer resolves publication
-automatically.
+When the last critic receipt is imported, the arbitrator task arrives with
+the same package binding, every receipt verbatim, and the reported
+contradictions; its duties, ladder, import, and refusal contract live in
+`references/review-panel.md` and apply unchanged.
 
 ## Compatibility and verdict
 
-Existing v2 artifacts and low-level `prepare`, `context`, `template-review`,
-`record-artifact`, `finalize`, `finalize-review`, `scaffold-review`, `status`, and
-`report-review` remain supported for old callers. `template-review --kind
-content` is a repair/interactive surface for an existing draft, not a run-path
-authoring surface: the run path emits only the prose projection through
-`record-prose`, and a standalone content template never replaces it. Do not
-mix these low-level commands with a guided draft. Internal progress stages
-remain available for inspection.
+Existing v2 artifacts and low-level commands (`prepare`, `context`,
+`template-review`, `record-artifact`, `finalize`, `finalize-review`,
+`scaffold-review`, `status`, and `report-review`) are supported for old
+callers; never mixing them with a guided draft; progress stages stay inspectable.
 
-Every accepted non-low finding blocks `ready`. Failed/canceled CI jobs require
-trace-supported classification across child/downstream pipelines; only proven
-manual process gates can be non-blocking. Missing, active, stale, incomplete,
-unknown, or unclassified CI evidence stays blocking. Previous findings and every
-critic candidate require an explicit arbitrator verdict. Generated verdicts
-never replace the arbitrator's semantic assessment or authorize publication.
+Every accepted non-low finding blocks `ready`; failed or canceled CI jobs
+require trace-supported classification across child/downstream pipelines,
+with only proven manual process gates non-blocking and missing, active,
+stale, incomplete, unknown, or unclassified CI evidence staying blocking.
+Every previous finding and critic candidate needs an explicit arbitrator
+verdict; generated verdicts never replace the arbitrator's semantic
+assessment or authorize publication.

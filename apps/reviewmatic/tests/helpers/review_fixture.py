@@ -207,6 +207,11 @@ elif clean in (
     value = []
 elif clean == "projects/19/merge_requests/7/discussions":
     value = [discussion]
+elif clean == "projects/19/merge_requests/7/closes_issues":
+    if config.get("closesIssuesError"):
+        sys.stderr.write(config["closesIssuesError"])
+        raise SystemExit(1)
+    value = config.get("closesIssues", [])
 if value is None:
     sys.stderr.write(f"unexpected GET {clean}\\n")
     raise SystemExit(1)

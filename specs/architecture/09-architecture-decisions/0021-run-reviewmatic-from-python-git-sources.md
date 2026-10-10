@@ -65,11 +65,13 @@ continues to write copy-ready manual `glab` runbooks and private XDG artifacts.
 ## Compatibility
 
 The Python runtime retains existing artifact schemas, XDG locations, managed
-worktree layout, and runbook contracts. A remote-MR preparation resolves one
-managed clone per host and project under the XDG cache when no suitable
-`--repo-root` checkout can provide the exact objects, so the invocation no
-longer depends on the current directory; the clone is an internal runtime cache
-and does not change the stored evidence, context, or review-worktree formats.
+worktree layout, and runbook contracts. Amendment (2026-10-09): remote-MR
+preparation now requires the user's checkout — an invocation without a usable
+`--repo-root` stops with an instructive error, and the managed clone fallback
+from this decision's earlier revision was removed after host credentials
+proved SSH-only — so the invocation deliberately depends on a checkout again;
+the clone removal does not change the stored evidence, context, or
+review-worktree formats.
 The former `@kisev/reviewmatic` npm package and its published versions remain
 untouched and are not deprecated by this decision; a registry deprecation
 requires separate confirmation.

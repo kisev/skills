@@ -1,6 +1,8 @@
 # Finding examples
 
-Use these examples to calibrate evidence and minimum fixes. Do not copy claims without verifying the reviewed project and private exact-revision evidence. Keep raw SHAs out of user-facing prose.
+Calibrate evidence and minimum fixes with these examples; never copy claims
+without verifying the reviewed project and exact-revision evidence, and keep
+raw SHAs out of user-facing prose.
 
 ## Evidence-backed finding
 
@@ -29,21 +31,18 @@ Use these examples to calibrate evidence and minimum fixes. Do not copy claims w
 ## Thread decision
 
 ```markdown
-| Thread                                                                     | State | Assessment | Rationale                                                         | Proposed outcome |
-| -------------------------------------------------------------------------- | ----- | ---------- | ----------------------------------------------------------------- | ---------------- |
-| [note_42](https://gitlab.example/group/project/-/merge_requests/7#note_42) | open  | accepted   | The exact reviewed path still retries without an idempotency key. | local_fix        |
+| Thread | State | Assessment | Rationale | Proposed outcome |
+| --- | --- | --- | --- | --- |
+| [note_42](https://gitlab.example/group/project/-/merge_requests/7#note_42) | open | accepted | The exact reviewed path still retries without an idempotency key. | local_fix |
 ```
 
 Valid outcomes are `no_publication`, `local_fix`, `reply`, `resolve`, and
-`reopen`. A publishable response is natural prose; do not put severity or
-internal evidence labels in that prose.
-Write it from the authenticated user's factual role and use natural informal
-second person when addressing the participant.
-
-An open thread must use `reply`, `resolve`, or author-mode `local_fix`. A thread
-resolved by another or unknown user needs a reply only when it adds information.
-Use `no_publication` after confirming that the existing explanation or applied
-suggestion remains correct, regardless of the resolver's identity.
+`reopen`: natural prose from the authenticated user's factual role with
+informal second person, and no severity or evidence labels. An open thread
+must use `reply`, `resolve`, or author-mode `local_fix`; a thread resolved by
+another user needs a reply only when it adds information, and
+`no_publication` applies after confirming the existing explanation or applied
+suggestion remains correct.
 
 For an actionable current new-line position, prepare exactly one suggestion.
 Use a bounded range opener for a contiguous multi-line replacement:
@@ -57,84 +56,64 @@ result = provider.submit(operation)
 ```
 ````
 
-For separate safe positions, use related `suggestions` records with `path`, `line`,
-and a natural `body` containing one block each. Supply `split_rationale`; do not
-turn one problem into several findings. Prefer this to a patch.
-
-Only when suggestions cannot express the fix or division is unsafe, set
-`fix_mode=patch`, explain `patch_reason`, and put this diff in the separate `patch`
-field. The input `body` contains prose only. This is not an input body example:
-
-```sh
-diff --git a/src/payment.py b/src/payment.py
---- a/src/payment.py
-+++ b/src/payment.py
-@@ -18 +18,2 @@
-+operation = reserve_operation(request.id)
- result = provider.submit(request)
-```
-
-The runner checks the patch against the exact reviewed head without changing the
-checkout and writes it as an immutable `.patch` file. Do not combine unrelated
-findings in one patch. Multiple blocks within one positioned part, suggestion on a deleted line,
-binary or symlink patches, and rewritten fix content after confirmation are
-invalid. Omit `index` lines so private revision identifiers do not enter the
-publication plan.
-
-For `resolve` or `reopen`, publish the explanatory reply first and show the state
-change as a separate command. Never close or reopen a thread without that reply.
+For separate safe positions, use related `suggestions` records (`path`, `line`,
+natural `body` with one block each) plus `split_rationale`; never split one
+problem into several findings, and prefer a suggestion to a patch
+(`fix_mode=patch` only when a suggestion cannot express the fix or division
+is unsafe, with `patch_reason` and prose-only `body`). The runner checks the
+patch against the exact reviewed head without changing the checkout and
+writes it as an immutable `.patch` file; unrelated findings stay in one patch,
+multiple blocks in one positioned part, suggestion on a deleted line, binary
+or symlink patches, and rewritten fix content after confirmation are invalid.
+Omit `index` lines so private revision identifiers do not enter the plan.
 
 ## Grouped suggestion bodies
 
-For grouped suggestions, write each part's `body` as a complete short comment
-with its own explanation and one suggestion block. It is published verbatim,
-without automatically prepending the finding's general introduction. Bare
-suggestion blocks retain the shared explanation for compatibility. Preserve
-all necessary caveats in each affected part; do not repeat the general summary
-when the part already explains its correction.
+For `resolve` or `reopen`, publish the explanatory reply first and show the
+state change as a separate command; never close or reopen a thread without
+that reply. Parts of grouped suggestions are published verbatim as complete
+short comments; preserve all necessary caveats per part and do not repeat
+the shared explanation the part already covers.
 
 ## Recommended issue
 
-Use a recommended issue only for a confirmed real problem that the MR neither
-introduces, worsens, moves, nor depends on for safe operation. Include a stable
-ID, title, problem, risk, evidence, why it is outside this MR, a minimum fix, and
-a complete natural issue body. It does not block the MR and is never created
+Use a recommended issue only for a confirmed real problem the MR neither
+introduces, worsens, moves, nor depends on for safe operation — stable ID,
+title, problem, risk, evidence, why it is outside this MR, minimum fix, and a
+complete natural issue body. It never blocks the MR and is never created
 automatically.
 
 ## Author mode
 
-For the author's own MR, report the same risk and minimum fix as a `local_fix`
-with `fix_mode=patch`. Do not create a new review thread, edit the checkout, or
-describe the author as an independent reviewer.
+For the author's own MR, report the same risk and minimum fix as a
+`local_fix` with `fix_mode=patch`; never create a review thread, edit the
+checkout, or describe the author as an independent reviewer.
 
 ## Weak formulations
 
-- `Closing.` does not explain whether the concern was false, fixed, or still
-  relevant, and is not an acceptable closing reply.
-- `Fixed.` does not identify the checked behavior or explain why the closure is
-  valid.
-- `This function is too long` has no consequence or contract evidence.
-- `Tests are missing` is not a finding until a concrete unverified behavior is identified.
-- `This may be slow` is speculation without a path, scale, or measurement.
-- `Move this to another service` is not a fix without an ownership or failure-mode advantage.
+- `Closing.` / `Fixed.`: neither names the checked behavior nor explains why
+  the closure is valid.
+- `This function is too long`: no consequence or contract evidence.
+- `Tests are missing`: not a finding until a concrete unverified behavior is
+  identified.
+- `This may be slow`: speculation without a path, scale, or measurement.
+- `Move this to another service`: not a fix without an ownership or
+  failure-mode advantage.
 
 ## Follow-up calibration
 
-- A user accepts the narrow race caused by switching a local account during one
-  operation. A new reviewer receives that decision and does not demand credential
-  capture without changed facts. A regression that sends every request under the
-  wrong account is different and remains actionable.
+- A user accepts one narrow risk (switching a local account mid-operation); a
+  new reviewer inherits it; a regression sending every request under the wrong
+  account is different and stays actionable.
 - The agreed renderer links only wholly plain-text values and leaves mixed
   Markdown untouched. An unlinked reference inside a Markdown table is within
   the accepted boundary, not a new parser requirement. Corrupting that table is
   a regression that must still be reported.
-- Requiring a list of examined discussion IDs does not prove the model chose the
-  right discussion. Do not promote this structural preference to a blocking
-  validator change without a concrete violated requirement.
-- A generated execution summary includes a deferred item as ready to execute.
-  Explain the planning consequence and fix the evidence binding; do not label it
-  High solely because an invalid input can be constructed.
-- An API rejects a second relation between the same pair of items. Rejecting the
-  conflicting proposal can satisfy the existing contract. Replacing the old
-  relation with delete/create is a separate feature with partial-failure cost,
-  and becomes required only when the user chooses that scope.
+- A list of examined discussion IDs does not prove the model chose the
+  right discussion; it never becomes a blocking validator change without a
+  concrete violated requirement.
+- A generated summary showing a deferred item as ready: fix the evidence
+  binding, don't label High merely for a constructible invalid input.
+- An API rejecting a second relation between the same pair: rejecting the
+  conflicting proposal satisfies the contract; delete-and-recreate is a
+  separate feature with partial-failure cost, required only by user scope.

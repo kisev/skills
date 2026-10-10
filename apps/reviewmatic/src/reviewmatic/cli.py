@@ -80,7 +80,11 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         "Collect evidence and context once and create one editable review draft",
         (
             OptionSpec("url", "exact HTTPS GitLab merge request URL", required=True),
-            OptionSpec("repo-root", "local checkout root; defaults to the current repository"),
+            OptionSpec(
+                "repo-root",
+                "review source checkout: ask the user for it; the checkout must have a "
+                "remote for the MR project and fetch the exact MR objects",
+            ),
             OptionSpec(
                 "review-mode",
                 "review depth",
@@ -117,7 +121,7 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         (
             OptionSpec("url", "exact HTTPS GitLab merge request URL", collect=True),
             OptionSpec("project-url", "exact HTTPS GitLab project URL"),
-            OptionSpec("repo-root", "local checkout root"),
+            OptionSpec("repo-root", "review source checkout; required for code-review"),
             OptionSpec(
                 "review-mode",
                 "review depth",
@@ -395,7 +399,11 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
         "Drive the whole review cycle in one process with resume and authoring callbacks",
         (
             OptionSpec("url", "exact HTTPS GitLab merge request URL", required=True),
-            OptionSpec("repo-root", "local checkout root; defaults to the current directory"),
+            OptionSpec(
+                "repo-root",
+                "review source checkout: ask the user for it; the checkout must have a "
+                "remote for the MR project and fetch the exact MR objects",
+            ),
             OptionSpec(
                 "review-mode",
                 "review depth",
@@ -1111,6 +1119,11 @@ def _run_prepare(namespace: argparse.Namespace) -> int:
         raise contract.WorkflowError("project creation mode is only available for task preparation")
     if len(urls) != 1:
         raise contract.WorkflowError("code-review accepts exactly one --url target")
+    if _field(namespace, "repoRoot") is None:
+        raise contract.WorkflowError(
+            "this review requires a checkout of the project: ask the user for a checkout of "
+            "the reviewed repository and pass its path with --repo-root"
+        )
     target = contract.parse_target(urls[0], {"merge_requests"})
     results: list[dict[str, Any]] = []
     try:

@@ -115,13 +115,13 @@ non-regular, and over-budget inspection inputs shall be explicit.
 
 Remote preparation shall prepare one persistent managed review worktree per merge
 request under the resolved repository's `.worktrees/reviewmatic/`, separate from
-manual fix-application trees. It shall resolve the repository from an explicit
-`--repo-root` when that checkout has a matching remote and can provide the exact
-objects, and otherwise from one managed clone per host and project under the XDG
-cache, shared across the project's merge requests with an incremental fetch; the
-invocation directory shall not select the repository. A provided checkout whose
-objects cannot be fetched shall fall back to the managed clone instead of
-failing. The MR's base/start/head and target revisions shall be fixed from the
+manual fix-application trees. It shall resolve the repository only from
+the explicit `--repo-root` checkout the user provides: an invocation without a
+checkout, a non-checkout path, a checkout without a remote matching the merge
+request's project or source project (for a fork MR a registered fork remote or
+an anonymous host URL), or a checkout that cannot fetch the exact objects
+shall stop with an instructive error naming the missing remote — the runtime
+shall never clone or create a repository for a review. The MR's base/start/head and target revisions shall be fixed from the
 evidence; missing objects shall be fetched through Git and verified against those
 SHAs, and the current target tip shall never replace the MR diff base. The local
 merge base shall be verified against the evidence base SHA, and the real
@@ -275,10 +275,13 @@ receipt that leaves any candidate finding, merged finding, or contradiction
 without a verdict, shall never rewrite arbitrator text, and in panel mode
 shall restrict `record-input` to the orchestrator's identity fields. The host
 agent adds no full review pass of its own. Before composing the poll options
-the agent shall verify the installed critic profiles (`agentomatic agent
-list` or the profile manifest): multi-critic compositions are offered only
-when installed profile critics with distinct models or engines exist, and a
-composition of two critics on the same single model is never offered; the
+the agent shall ground the critic pool in the host's agent inventory
+(`~/.config/opencode/agents/*.md`, `.opencode/agents/*.md`, and the `agent`
+key of the global and project `opencode.json`): multi-critic compositions are
+offered only when candidate agents carry distinct models or engines, an agent
+defined without a model counts as running on the primary session's model, an
+unreadable inventory source records the pool as unknown rather than empty,
+and a composition of two critics on the same single model is never offered; the
 poll names the model engine as a subagent on the current session's model and
 names the arbitrator explicitly as a subagent on the same model (or the
 selected profile). The one-process `run` path drives
@@ -318,8 +321,13 @@ runtime representations: `start-review` and `resume-review` shall return a
 readable scope overview built from recorded evidence — target identity, the MR
 description and other author-provided text flagged as claims, changed paths,
 discussion threads, pipelines with completeness and truncation markers, the
-best-effort file-relation map with its incompleteness notice, and
-every exact snapshot, inspection, and managed-worktree path — plus a compact
+best-effort file-relation map with its incompleteness notice, the MR's
+related issues collected through the documented
+`merge_requests/{iid}/closes_issues` endpoint and recorded in the review
+context with the author\_text origin their author-provided content carries —
+a failed request leaves the linked-issue presence explicit and unknown,
+never empty — and every exact snapshot, inspection, and managed-worktree
+path — plus a compact
 input contract naming exactly the editable fields for the current stage;
 `scope-review` shall re-print that overview from recorded artifacts without any
 GitLab request. Standard input shall not require reading the full artifact
@@ -353,9 +361,14 @@ selected by the current snapshot: preparation materializes it, an existing
 draft bound to the same evidence survives untouched, and a stale draft is
 rebuilt from the current snapshot and finalized baseline with runtime-owned
 fields updated and historical superseded results retained, so the documented
-`prepare-local → record-package → record-input → finalize-local` order works
-without re-recording the package or repairing bindings by hand. A repeated
-`scope-review` shall restore the carried task, the recorded baseline, and the
+`prepare-local → record-package → record-input → finalize-local` order works.
+The discussion contract shall render a publishable thread reply that opens
+with the Conventional Comments label matching its meaning (`suggestion`,
+`issue`, `question`, `note`, `praise`, or `todo`, optionally preceded by
+`blocking:`), and the panel shall carry one critic-assigned validation
+question — whether the change solves the problem it was made for — that the
+arbitrator weighs together with its critic answers.
+A repeated `scope-review` shall restore the carried task, the recorded baseline, and the
 exact draft and template paths from recorded state without mutating
 preparation or collecting evidence again.
 Validation and import failures shall name
@@ -368,9 +381,11 @@ review
 worktrees shall be readable by the agent through a structural permission
 preset; no per-repository path, shell, or edit permission shall be added for
 them, and secret denies and explicit user denies keep priority.
-Available selected specialists are preferred; absent profiles fall back
-to ordinary native subagents running the host session's agent, provider, and
-model. Every selected contributor and finding shall be
+Available selected specialists are preferred; when the host inventory
+(`~/.config/opencode/agents/*.md`, `.opencode/agents/*.md`, and the `agent`
+key of `opencode.json`) names an agent without a model, it runs on the host
+session's agent, provider, and model, like an absent profile's ordinary native
+subagent. Every selected contributor and finding shall be
 retained with real run/session identities. Every critic candidate and every
 merged finding requires an explicit arbitrator verdict; duplicate accepted
 findings are invalid, and a disagreement alone never hides a finding from the

@@ -157,22 +157,6 @@ def add_project(fixture: ReviewFixture, remote: str, url: str) -> None:
     fixture.git("config", "--add", f"url.{fixture.origin}.insteadOf", url)
 
 
-def use_clone_cache(
-    monkeypatch: pytest.MonkeyPatch, fixture: ReviewFixture, tmp_path: Path
-) -> Path:
-    """Redirect the managed clone's HTTPS URL to the fixture's local origin.
-
-    The fixture already isolates ``XDG_CACHE_HOME`` under its temporary tree;
-    this wires the clone URL through an environment-level ``insteadOf`` so the
-    clone runs without network access.
-    """
-    cache = Path(os.environ["XDG_CACHE_HOME"])
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{fixture.origin}.insteadOf")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", fixture.origin_url)
-    return cache
-
-
 def start(fixture: ReviewFixture, url: str | None = None) -> dict[str, Any]:
     return draft_module.start_review(url=url or fixture.url, repo_root=str(fixture.repo))
 
@@ -264,40 +248,57 @@ def test_a_fork_merge_request_is_fetched_from_the_fork_remote_under_any_name(
     assert_no_code_fetches(fixture)
 
 
-def test_an_unrelated_repository_falls_back_to_the_managed_clone(
-    fixture: ReviewFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_an_unrelated_repository_is_an_instructive_error_not_a_fallback(
+    fixture: ReviewFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     fixture.git("remote", "set-url", "origin", "https://gitlab.example/other/project.git")
-    cache = use_clone_cache(monkeypatch, fixture, tmp_path)
-    result = ok(start(fixture))
-    source = result["review_worktree"]["source_repo_root"]
-    assert source.startswith(str(cache))
-    assert source != str(fixture.repo)
-    assert result["review_worktree"]["remote"] == "origin"
+    cache = Path(os.environ["XDG_CACHE_HOME"])
+    blocked = start(fixture)
+    assert blocked["status"] == "blocked"
+    assert blocked["reason"] == "review requires a usable repository"
+    reported = json.dumps(blocked["errors"])
+    assert "--repo-root" in reported
+    assert "ask the user for a checkout" in reported
+    assert "no remote of" in reported
+    assert f"{fixture.repo}" in reported
+    assert Path(f"{fixture.repo}.worktrees").exists() is False
+    assert not (cache / "agent-skills" / "reviewmatic" / "repositories").exists()
+    blocked_again = start(fixture)
+    assert blocked_again["status"] == "blocked"
     assert not Path(f"{fixture.repo}.worktrees").exists()
-    assert Path(source, ".git").exists()
+    assert not (cache / "agent-skills" / "reviewmatic" / "repositories").exists()
 
 
-def test_a_non_git_repo_root_falls_back_to_the_managed_clone(
-    fixture: ReviewFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_a_non_git_repo_root_is_an_instructive_error_not_a_fallback(
+    fixture: ReviewFixture, tmp_path: Path
 ) -> None:
-    cache = use_clone_cache(monkeypatch, fixture, tmp_path)
     plain = tmp_path / "plain"
     plain.mkdir()
-    result = ok(draft_module.start_review(url=fixture.url, repo_root=str(plain)))
-    assert result["review_worktree"]["source_repo_root"].startswith(str(cache))
+    blocked = draft_module.start_review(url=fixture.url, repo_root=str(plain))
+    assert blocked["status"] == "blocked"
+    reported = json.dumps(blocked["errors"])
+    assert "not a usable review source" in reported
+    assert "--repo-root" in reported
+    assert "not a Git checkout" in reported
+    repositories = Path(os.environ["XDG_CACHE_HOME"]) / "agent-skills" / "reviewmatic"
+    assert not (repositories / "repositories").exists()
+    assert not (plain / ".git").exists()
 
 
-def test_start_review_without_repo_root_uses_the_managed_clone(
+def test_start_review_without_repo_root_asks_the_user_for_a_checkout(
     fixture: ReviewFixture, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    cache = use_clone_cache(monkeypatch, fixture, tmp_path)
-    result = ok(draft_module.start_review(url=fixture.url))
-    source = result["review_worktree"]["source_repo_root"]
-    assert source.startswith(str(cache))
-    assert Path(source, ".git").exists()
-    assert Path(result["review_worktree"]["path"], "review.txt").exists()
+    repositories = Path(os.environ["XDG_CACHE_HOME"]) / "agent-skills" / "reviewmatic"
+    blocked = draft_module.start_review(url=fixture.url)
+    assert blocked["status"] == "blocked"
+    assert blocked["reason"] == "review requires a usable repository"
+    reported = json.dumps(blocked["errors"])
+    assert "--repo-root" in reported
+    assert "ask the user for a checkout" in reported
+    assert "gitlab.example/group/project" in reported
+    assert not (repositories / "repositories").exists()
+    assert not Path(f"{fixture.repo}.worktrees").exists()
 
 
 def test_fetch_failures_block_preparation_and_a_later_run_recovers(

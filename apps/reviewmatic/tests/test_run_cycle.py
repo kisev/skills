@@ -495,23 +495,22 @@ def test_run_stops_after_bounded_attempts_on_permanently_incomplete_evidence(
     assert dump.exists()
 
 
-def test_run_without_repo_root_uses_the_managed_clone(
-    fixture: ReviewFixture, capsys: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+def test_run_without_repo_root_names_the_checkout_instruction(
+    fixture: ReviewFixture,
+    capsys: Any,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
-    monkeypatch.setenv("GIT_CONFIG_KEY_0", f"url.{fixture.origin}.insteadOf")
-    monkeypatch.setenv("GIT_CONFIG_VALUE_0", fixture.origin_url)
     code = cli_main(["run", "--url", fixture.url, "--review-mode", "fast", "--json"])
-    assert code == 0
+    assert code == 1
     result = _stdout_json(capsys)
-    assert result["status"] == "waiting"
-    steps = [item["step"] for item in result["timings"]]
-    assert "resolve-repo" in steps
-    assert "context" in steps
-    progress = review_context.load_progress(Path(str(result["artifact_root"])))
-    assert progress is not None
-    assert str(progress["repo_root"]).startswith(str(fixture.tmp / "cache"))
+    assert result["status"] == "error"
+    message = str(result["error"])
+    assert "--repo-root" in message
+    assert "ask the user for a checkout" in message
+    repositories = fixture.tmp / "cache" / "agent-skills" / "reviewmatic"
+    assert not (repositories / "repositories").exists()
 
 
 def test_run_resume_requires_existing_state(fixture: ReviewFixture, capsys: Any) -> None:

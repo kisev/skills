@@ -2369,21 +2369,55 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         current_required = legacy_required | {"incremental", "issue_templates"}
         structured_required = current_required | {"current_user_id"}
         release_required = structured_required | {"release_evidence"}
+        related_required = release_required | {"related_issues"}
         payload_keys = set(payload)
         if payload_keys not in (
             legacy_required,
             current_required,
             structured_required,
             release_required,
+            related_required,
         ):
             raise WorkflowError("review context payload has unknown or missing fields")
         legacy_context = payload_keys == legacy_required
-        structured_context = payload_keys in (structured_required, release_required)
+        structured_context = payload_keys in (
+            structured_required,
+            release_required,
+            related_required,
+        )
         if payload_keys == release_required:
             from . import review_semver as _review_semver
 
             if not _review_semver.evidence_is_valid(payload["release_evidence"]):
                 raise WorkflowError("review release evidence is schema-invalid")
+        if payload_keys == related_required:
+            related_issues = payload["related_issues"]
+            if (
+                not isinstance(related_issues, dict)
+                or set(related_issues)
+                != {"endpoint", "source", "complete", "items", "errors", "notice"}
+                or not nonempty_string(related_issues.get("endpoint"))
+                or related_issues.get("source") != "author_text"
+                or not isinstance(related_issues.get("complete"), bool)
+                or not isinstance(related_issues.get("items"), list)
+                or not all(isinstance(item, str) for item in related_issues.get("errors", []))
+                or (
+                    related_issues.get("notice") is not None
+                    and not isinstance(related_issues.get("notice"), str)
+                )
+                or not all(
+                    isinstance(item, dict)
+                    and set(item) == {"iid", "title", "state", "web_url", "source"}
+                    and is_plain_int(item.get("iid"))
+                    and cast("int", item["iid"]) > 0
+                    and isinstance(item.get("title"), str)
+                    and isinstance(item.get("state"), str)
+                    and isinstance(item.get("web_url"), str)
+                    and item.get("source") == "author_text"
+                    for item in related_issues["items"]
+                )
+            ):
+                raise WorkflowError("review related issues are schema-invalid")
         counts = payload["counts"]
         exact_git = payload["exact_git"]
         if (

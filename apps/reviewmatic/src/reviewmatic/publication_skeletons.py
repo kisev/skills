@@ -85,7 +85,7 @@ def _variant_block(finding_id: str, variant: str) -> dict[str, Any]:
     if variant == "existing_thread":
         return {
             **_base(finding_id, "existing_thread"),
-            "body": "<BODY: prose continuing the existing thread naturally>",
+            "body": "<BODY: a Conventional Comments label, then prose continuing the existing thread naturally>",
             "fix_mode": "not_required",
             "patch": None,
             "thread_id": THREAD_ID_HINT,

@@ -3,11 +3,11 @@
 Choose the repair path by cost: the cheapest path that honestly covers the
 change is the right one, and a more expensive path never runs first.
 
-For the normal `run` tail, edit the generated prose file and apply it with
-`reviewmatic record-prose --artifact-root ROOT --input PROSE`. Do not rewind or
-refresh merely to fix wording. When the head moves, the same run preserves
-authorship and requests a separate `record-delta` verification. Refuted,
-changed, or ambiguous conclusions require only addressed judgment or target
+For the normal `run` tail, edit the generated prose and apply it with
+`reviewmatic record-prose --artifact-root ROOT --input PROSE`; never rewind
+or refresh merely to fix wording, and when the head moves the run preserves
+authorship and requests a separate `record-delta` verification instead.
+Refuted, changed, or ambiguous conclusions need addressed judgment or target
 edits, not a repeat of panel → decision → content.
 
 1. **Publication or arbitration texts (the cheapest honest path).** Wrong or
@@ -31,18 +31,18 @@ edits, not a repeat of panel → decision → content.
    representation of a finalized plan: `reviewmatic repair-review --artifact-root ROOT --kind presentation` (below). Changed decisions of a
    finalized plan: `--kind decision`.
 4. **Changed evidence.** Only changed MR facts (head, discussions, metadata,
-   CI) take `reviewmatic refresh-review --draft DRAFT`; never use a refresh to
-   fix texts.
+   CI) take `reviewmatic refresh-review --draft DRAFT`; never a refresh for
+   text fixes.
 
-Use `reviewmatic repair-review --artifact-root ROOT --kind presentation|fix|decision`
-for a finalized new guided plan. This returns one editable draft copied from the
-actual finalized source, not an empty review template. Older plans are historical
-only and require ordinary preparation; never migrate them or execute their old
-guarded actions. A repair updates `runbook.md` atomically and never publishes.
+For a finalized guided plan
+`reviewmatic repair-review --artifact-root ROOT --kind presentation|fix|decision`
+returns one editable draft from the finalized source. Older plans are historical only — never migrate them or execute guarded
+actions — and a repair updates `runbook.md` atomically without publishing.
 
-Record `repair.rationale` and `repair.checks`. Compare the original and new meaning
-yourself; structural checks do not prove semantic equivalence. Do not request
-confirmation for each ordinary local edit. The user controls publication.
+Record `repair.rationale` and `repair.checks`; compare the original and new
+meaning yourself, since structural checks do not prove semantic equivalence.
+No confirmation is needed for ordinary local edits; the user controls
+publication.
 
 - `presentation`: wording with unchanged claims and requirements, layout, commands,
   positions, or fix representation. Changed fix representation must produce the
@@ -55,16 +55,17 @@ confirmation for each ordinary local edit. The user controls publication.
   arbitration receipt from a new arbitrator session with `record-arbitration`;
   the panel selection itself stays fixed. Do not repeat unrelated review scope.
 
-If meaning is uncertain, use decision repair. If needed checks or evidence are
-unavailable, stop and report the exact limitation; preserve the current plan and
-unfinished draft. Never automatically expand to a broad review or invent checks.
+If meaning is uncertain, use decision repair. When needed checks or evidence
+are unavailable, stop, report the exact limitation, and preserve the current
+plan and unfinished draft; never expand to a broad review or invent checks.
 Run `check-review`, repair the same draft, then `finish-review`.
 
-After a runtime update, use presentation repair to regenerate broken commands in
-an existing contract-7 guided plan. Keep findings, fixes, positions, and critic
-receipts unchanged; record the actual comparison in `repair.checks`. Check the
-new body previews as well as commands, especially grouped suggestions. This path
-is local and needs no new full review. Do not edit immutable action artifacts.
+After a runtime update, use presentation repair to regenerate broken commands
+in an existing contract-7 plan, keeping findings, fixes, positions, and
+critic receipts unchanged and recording the comparison in `repair.checks`;
+check the new body previews and commands, especially grouped suggestions.
+This path is local and needs no new full review; never edit immutable action
+artifacts.
 
 For changed MR facts use `reviewmatic refresh-review --draft DRAFT`, not a new empty review.
 The runner retains findings and dispositions and updates current thread bindings;

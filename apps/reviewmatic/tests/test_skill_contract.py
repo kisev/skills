@@ -221,10 +221,11 @@ def test_the_poll_is_presented_verbatim_with_a_fixed_glossary() -> None:
 
 
 def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
-    """The agent verifies the installed critic profiles before composing poll
-    options; multi-critic options require distinct models or engines, and two
-    critics on one model are never offered. The same rule lives in the
-    runtime poll text and rules (both locales)."""
+    """The agent grounds the critic pool in the harness agent inventory before
+    composing poll options; multi-critic options require distinct models or
+    engines, and two critics on one model are never offered. The same rule
+    lives in the runtime poll text and rules (both locales), and no bare
+    package CLI is part of the contract."""
     from reviewmatic import run_panel
 
     entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
@@ -232,26 +233,38 @@ def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
         (SKILL_DIR / "references" / "review-panel.md").read_text(encoding="utf-8").split()
     )
     glossary = (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8")
+    run_path = " ".join(
+        (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8").split()
+    )
     for text in (entry, panel):
-        assert "agentomatic agent list" in text
+        assert "`agents/*.md` in the harness-global and project config directories" in text
+        assert "`agent` key" in text
         assert "distinct models or engines" in text
         assert "two critics on the same single model" in text
+    assert "never propose two critics on the same single model" in run_path
     normalized_glossary = " ".join(glossary.split())
     assert (
         "an independent subagent on the current session's agent, provider, and model"
         in normalized_glossary
     )
     assert (
-        "a subagent on the same model as the session, or a selected specialist profile"
+        "a subagent on the same model as the session, or a selected specialist agent."
+        in normalized_glossary
+    )
+    assert "the agent definition carries no model" in normalized_glossary or (
+        "An agent defined without a model runs on the primary session's model"
         in normalized_glossary
     )
     for locale in ("en", "ru"):
         rules = run_panel.poll_rules(locale)
-        assert "agentomatic agent list" in rules
+        assert "~/.config/opencode/agents/*.md" in rules  # runtime text, not the portable archive
+        assert ".opencode/agents/*.md" in rules
         if locale == "en":
             assert "never propose two critics on the same single model" in rules
+            assert "record the installed pool as unknown - never" in rules
         else:
             assert "двух критиков на одной и той же модели" in rules
+            assert "делает пул неизвестным - не пустым" in rules
         poll = run_panel.poll(locale, "normal", 500)
         if locale == "en":
             assert (
@@ -261,6 +274,95 @@ def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
         else:
             assert "два критика на одной и той же модели - не независимая проверка" in poll["text"]
             assert "субагент на той же модели или выбранный профильный агент" in poll["text"]
+
+
+def test_no_bare_package_cli_grounds_the_critic_pool() -> None:
+    """The bare ``agentomatic agent list`` is gone from the skill contract;
+    the pool is grounded on the host's agent inventory files and the
+    ``agent`` key of opencode.json, and an unreadable source records the
+    pool as unknown, never empty."""
+    for document in skill_documents():
+        assert "agentomatic" not in document.read_text(encoding="utf-8"), document.name
+
+
+def test_the_review_requires_a_user_checkout() -> None:
+    """``run``/``start-review`` require ``--repo-root``: the skill asks the
+    user for a checkout, the runner never clones for the MR, and a fork MR
+    reaches its head through a registered fork remote or an anonymous URL."""
+    run_path = " ".join(
+        (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8").split()
+    )
+    for marker in (
+        "The checkout is required: ask the",
+        "the run never clones or creates a repository for the MR",
+        "register the fork as a new remote with `git remote add`",
+        "an instructive error naming the missing remote — never substitute silently",
+        "--repo-root",
+    ):
+        assert marker in run_path, marker
+
+
+def test_the_stage_router_maps_stages_to_single_files_with_per_file_caps() -> None:
+    """The router carries a stage → file table and has no single read-list of
+    every reference; the mandatory start is `run-path.md`, a stage reads only
+    its own file, and every reference file stays within the per-file cap.
+    There is no total cap on the corpus — its combined weight is an audit
+    signal reported by the executor, never a test (decision 7)."""
+    router = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    assert "| Stage | File |" in router
+    assert "The mandatory start is `run-path.md`" in router
+    assert "a stage reads only its own file" in router
+    assert "never the whole set up front" in router
+    stage_rows = {row: "references/run-path.md" in row for row in router.splitlines()}
+    assert any(row for row in stage_rows), "the router maps the run path stage"
+    # No single read-list: the router never enumerates the whole corpus in one
+    # paragraph (the stage table is the only mapping surface), and the forced
+    # read-everything pattern of the pre-router wave must not return.
+    assert "Read `references/run-path.md`, `references/review-panel.md`," not in router
+    assert "For a GitLab MR also read" not in router
+    documents = sorted(SKILL_DIR.glob("references/*.md"))
+    assert documents, "the reference corpus must exist"
+    for document in documents:
+        size = document.stat().st_size
+        assert size <= 16_384, f"{document.name} is {size} bytes; the per-file cap is 16 KiB"
+
+
+def test_the_discussion_contract_carries_conventional_comments_and_validation() -> None:
+    """Thread replies open with a Conventional Comments label, and the
+    validation question ('does the change solve the problem it was made
+    for?') is assigned to critics and weighed by the arbitrator."""
+    panel = " ".join(
+        (SKILL_DIR / "references" / "review-panel.md").read_text(encoding="utf-8").split()
+    )
+    stages = " ".join(
+        (SKILL_DIR / "references" / "remote-review-stages.md").read_text(encoding="utf-8").split()
+    )
+    boxed = " ".join(
+        (SKILL_DIR / "references" / "finding-examples.md").read_text(encoding="utf-8").split()
+    )
+    assert "does the change solve the problem it was made for" in panel
+    assert "the arbitrator weighs those answers" in panel
+    assert "Conventional Comments" in stages
+    for label in ("`suggestion`", "`issue`", "`question`", "`note`", "`praise`", "`todo`"):
+        assert label in stages, label
+    assert "the arbitrator resolves that observation as explicitly as a critic" in stages
+    assert "no severity or evidence labels" in boxed
+
+
+def test_the_context_package_contract_lists_related_issues() -> None:
+    """The scope lists the MR's related issues collected from `closes_issues`
+    with author_text origin, and a failed collection leaves the linkage
+    unknown, never empty."""
+    stages = " ".join(
+        (SKILL_DIR / "references" / "remote-review-stages.md").read_text(encoding="utf-8").split()
+    )
+    package = " ".join(
+        (SKILL_DIR / "references" / "context-package.md").read_text(encoding="utf-8").split()
+    )
+    assert "`closes_issues`" in stages
+    assert "author_text" in stages
+    assert "the linkage is unverified" in stages or "leaves the linkage unknown" in stages
+    assert "collected related" in package or "related issues" in package
 
 
 def test_the_compact_background_contract_is_documented() -> None:

@@ -190,6 +190,19 @@ def claim_notice() -> str:
     )
 
 
+def issue_origin_notice(related: dict[str, Any] | None) -> str | None:
+    component = related if isinstance(related, dict) else {}
+    notice = component.get("notice")
+    if isinstance(notice, str) and notice:
+        return notice
+    if isinstance(component.get("complete"), bool) and component["complete"] is True:
+        return None
+    return (
+        f"the linked issues were not collected ({component.get('endpoint') or 'closes_issues'} "
+        "request unavailable), so their presence is unknown rather than empty"
+    )
+
+
 def mr_scope(
     *,
     evidence: dict[str, Any],
@@ -199,6 +212,7 @@ def mr_scope(
     artifact_root: str,
     draft_path: str | None,
     repo_root: str | None,
+    related_issues: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     evidence_object = cast("dict[str, Any]", evidence.get("object") or {})
     changed = evidence.get("changed_files")
@@ -235,6 +249,28 @@ def mr_scope(
         },
         "discussions": _discussions_overview(evidence),
         "pipelines": _pipelines_overview(evidence),
+        "related_issues": {
+            "source": "author_text",
+            "complete": isinstance(related_issues, dict) and related_issues.get("complete") is True,
+            "items": [
+                {
+                    "iid": item.get("iid"),
+                    "title": item.get("title"),
+                    "state": item.get("state"),
+                    "web_url": item.get("web_url"),
+                }
+                for item in (
+                    cast("list[object]", related_issues.get("items"))
+                    if isinstance(related_issues, dict)
+                    and isinstance(related_issues.get("items"), list)
+                    else []
+                )
+                if isinstance(item, dict)
+            ]
+            if isinstance(related_issues, dict) and related_issues.get("complete") is True
+            else [],
+            "notice": issue_origin_notice(related_issues),
+        },
         "shas": {
             "base_sha": evidence.get("base_sha"),
             "start_sha": evidence.get("start_sha"),
