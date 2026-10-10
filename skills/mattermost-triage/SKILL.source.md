@@ -2,8 +2,11 @@
 name: mattermost-triage
 description: >-
   Triage recent Mattermost or Band (a Mattermost fork) direct and group
-  conversations into durable private evidence, attention items, and digest-bound
-  manual response commands. Never publishes automatically. Russian discovery terms: триаж Mattermost, разобрать чаты Mattermost, триаж бэнда, разобрать бэнд, бенд.
+  conversations into durable private evidence, attention items, and
+  digest-bound manual response commands. Use when the user asks to review
+  recent Mattermost or Band direct and group conversations for items needing
+  attention. Never publishes automatically.
+  Russian discovery terms: триаж Mattermost, разобрать чаты Mattermost, триаж бэнда, разобрать бэнд, бенд.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

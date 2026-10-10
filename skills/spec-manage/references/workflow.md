@@ -39,14 +39,19 @@ then resume their existing authorization. This skill itself edits only `specs/`.
 Plans, roadmaps, and user documentation are not canonical specification work.
 Apply `references/documentation-review.md` to impact selection and review reuse.
 
-Read only the required resources under this skill's own root:
+Read stage files when entering the stage that needs them; never the whole set
+up front. This router maps each stage to its files:
 
-- always: `references/canonical-contract.md`, `references/requirements.md`, `references/architecture.md`, `references/interviewing.md`, and `references/validation.md`;
-- for brownfield: `references/onboarding.md`;
-- for ADR: `references/adr.md`;
-- for `spec-update`: `references/consolidation.md`;
-- for audit: `references/auditing.md`.
-- when judging sufficient content depth: `references/content-states.md` and, only as a compact illustration, `references/minimal-example.md`.
+| Stage or mode | Files |
+| - | - |
+| Every mode: language authority and tree structure | `references/canonical-contract.md` |
+| Interview (spec-init, spec-onboard) | `references/interviewing.md` |
+| Brownfield investigation (spec-onboard) | `references/onboarding.md` |
+| Writing requirements, architecture viewpoints, or ADRs | `references/requirements.md`, `references/architecture.md`, `references/adr.md` |
+| Consolidation before a target-state change (spec-update) | `references/consolidation.md` |
+| Judging sufficient content depth | `references/content-states.md`, and only as a compact illustration `references/minimal-example.md` |
+| Formal validation before reporting success | `references/validation.md` |
+| Audit (spec-review) | `references/auditing.md` |
 
 Use `templates/` as normative content guidance. Use the example only to judge
 minimum meaningful depth; it is not a second template. Do not copy example facts,

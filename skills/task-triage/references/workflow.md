@@ -39,18 +39,16 @@ Every issue assessment must contain:
   `unknown`, with rationale and confidence;
 - duplicate candidates, preferring an older task when evidence supports a true duplicate;
 - quality verdict and evidence-backed findings with minimal recommended changes;
-- required structured `issue_relations` (use an explicit empty list when none are
-  found), each with an observed target, relation type, rationale, observed link
-  state, an exact matching link proposal when absent, and an optional contextual
-  comment only when it transfers a concrete decision, constraint, or research result;
+- required structured `issue_relations` (use an explicit empty list when none
+  are found), fielded per `references/analysis-contract.md`, with an optional
+  contextual comment only when it transfers a concrete decision, constraint, or
+  research result;
 - related and closing merge requests, their state, and whether the relationship is explicit;
 - one `release_plan` following `references/release-planning-contract.md`, including
   the autonomous planning decision, task SemVer, selected release, and milestone;
 - existing severity and priority labels, or proposed severity and priority when absent;
-- one `agent_recommendation` containing a primary proposal, rationale, assumptions,
-  confidence, alternatives, and the evidence that would change it, plus optional
-  `proposed_changes` for title, description, labels, issue links, and role-authored
-  issue or MR messages;
+- one `agent_recommendation` with its optional `proposed_changes` for title,
+  description, labels, issue links, and role-authored issue or MR messages;
 - `information_requests` for questions, follow-up pings, stale closure, and
   provably quiet-fixed closure, each bound to observed GitLab notes from the
   authenticated user.
@@ -108,12 +106,9 @@ groups. Select at most five first tasks from observed severity/priority labels,
 impact, urgency, risk, cost of delay, dependency unblocking, and confidence.
 Authority-free signals — +1 comments, emoji reactions, labels set by bots — carry
 no priority weight; explain every ordering with authoritative evidence, and
-SemVer alone never determines priority.
-`top_five[]` contains exactly `evidence_digest` and `rationale`;
-`parallel_groups[]` contains exactly a non-empty `evidence_digests` list and
-`rationale`. Digests are unique within each structure, bind collected items, and
-never appear in more than one parallel group. Only accepted tasks may appear in
-top-five or parallel execution groups.
+SemVer alone never determines priority. Only accepted tasks may appear in
+top-five or parallel execution groups, and a digest never appears in more than
+one parallel group; field shapes live in `references/analysis-contract.md`.
 
 Continue all independent analysis before asking questions. Ask only for authority,
 priority, an already-made decision, private context, or a bounded technical choice
@@ -201,47 +196,21 @@ type is replaced by one delete-then-create block that re-verifies the observed
 link before deleting. Refresh GitLab evidence before suppressing or retrying
 anything; a repeated block stops on its own preconditions.
 
-Each `agent_recommendation` contains exactly `proposal`, `rationale`, `assumptions`,
-`confidence`, `alternatives`, and `reconsider_if`; confidence is `low`, `medium`,
-or `high`, and assumptions and alternatives are lists. Each `issue_relations[]`
-contains exactly `target_hostname`, `target_project_id`, `target_issue_iid`,
-`relation_type`, `rationale`, nullable `existing_link`, and nullable `comment`. An
-existing link contains exactly its numeric `id` and `relation_type`. In a REST
-issue-link listing, use `issue_link_id` for that relationship ID, not `id`, which
-identifies the linked issue. An invalid explicit `issue_link_id` blocks preparation;
-do not fall back to the issue ID. Relation type
-is `relates_to`, `blocks`, or `is_blocked_by`. Its target must be an observed
-different issue on the assessed issue's GitLab host. Missing relations and type
-replacements correspond exactly to `proposed_changes.links[]`; extra, duplicate,
-self, existing, or unobserved link proposals are invalid. A type replacement emits
-two guarded manual commands: delete binds the observed link ID and writes a receipt,
-then create requires that receipt and revalidates absence before POST. An observed
-link without an explicit supported type is invalid. An ambiguous
-delete receipt is reconciled from fresh evidence: absence advances to deleted, the
-exact original link permits a safe retry, and every other state fails closed. A
-non-null comment has an exact matching role-authored message on the assessed issue. Legacy
-`related_issues` and `partial_relations` fields are invalid.
-Issue identities returned by the assessed issue's GitLab link evidence are
-observed targets, including same-host issues in another project.
+Bind every analysis object to `references/analysis-contract.md`; the publish
+runner rejects deviations. A type replacement emits delete-then-create guarded
+commands: delete binds the observed link ID and writes a receipt, then create
+requires that receipt and revalidates absence before POST. An ambiguous delete
+receipt is reconciled from fresh evidence: absence advances to deleted, the
+exact original link permits a safe retry, and every other state fails closed.
 
-Each `proposed_changes.messages[]` contains exactly `target` and `body`. Each
-`information_requests[]` contains exactly `action`, `target`, `body`,
-`prior_note_ids`, `rationale`, and `standalone_reason`. A target contains `kind` (`issue` or
-`merge_request`), observed numeric `project_id` and `iid`, and an observed
-`discussion_id` or `null` for a new standalone note. Actions are `none`, `new`,
-`ping_1`, `ping_2`, `close`, or `close_fixed`; they bind respectively zero, zero,
-one, two, three, or zero current-user note IDs, except `none`, which has no
-publication data. All
-bound notes must form the latest uninterrupted cycle and match the authenticated
-user's stable numeric ID; any intervening or later non-system note requires fresh
-assessment. Emit at most one lifecycle action for the same target and discussion
-in one package. Do not publish an information-request action to a closed issue.
-A `new` action follows the most specific relevant existing discussion whenever
-one is observed. It starts a standalone note with `discussion_id=null` only when
-`standalone_reason` explains why no existing discussion carries the relevant
-context; all other actions have `standalone_reason=null`.
-It may follow the latest non-system reply from another participant in an existing
-discussion and cannot reset an unanswered current-user question. Answer an
+All bound notes of an information request must form the latest uninterrupted
+cycle and match the authenticated user's stable numeric ID; any intervening or
+later non-system note requires fresh assessment. Emit at most one lifecycle
+action for the same target and discussion in one package. Do not publish an
+information-request action to a closed issue. A `new` action follows the most
+specific relevant existing discussion whenever one is observed. It may follow
+the latest non-system reply from another participant in an existing discussion
+and cannot reset an unanswered current-user question. Answer an
 already-addressed question before introducing a new one. All follow-ups target
 the observed discussion. `close` and `close_fixed` are valid only for an issue;
 their blocks publish the final message and close the issue in one guarded
@@ -251,17 +220,6 @@ preconditions. Treat any guard stop as unresolved and never retry
 automatically. Read
 `references/publication-protocol.md` only when explaining or diagnosing the
 command contract; do not reproduce its checks in model output.
-Keep `questions` only for user decisions that remain unanswered after the
-interaction round. Each question contains exactly `evidence_digest`, `kind`,
-`tldr`, `evidence`, `decision`, `why_now`, `planning_effect`,
-`recommendation`, `options`, and nullable `fallback`. Kinds are `authority`,
-`private_context`, and `bounded_technical`; the latter has two or three options.
-Every option has a directly selectable `label` and explanatory `description`, and
-the recommendation names one option with rationale. A fallback contains exactly
-`participant`, observed `target`, and `body`; its participant is an observed
-non-current participant and its target/body exactly match one non-`none`
-information request on the same item. It can never direct an authenticated issue
-author back to themselves or exist without a manual publication command.
 
 The summary separates analysis completeness from follow-up state. Analysis is
 complete when collection evidence is complete and no user question remains;

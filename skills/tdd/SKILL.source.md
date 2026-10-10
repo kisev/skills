@@ -1,11 +1,9 @@
 ---
 name: tdd
 description: >-
-  Drive feature and bug-fix work through the test-first red-green cycle: agree
-  the seams with the user, then work in vertical slices of one failing test and
-  one minimal implementation, avoiding tautological tests and horizontal
-  slicing. Use when the user asks for test-driven development, test-first
-  work, "red-green-refactor", or integration tests for new behavior.
+  Develop a feature or fix through the test-first red-green cycle. Use when
+  the user asks for test-driven development, test-first work,
+  "red-green-refactor", or integration tests for new behavior.
   Russian discovery terms: "разработка через тестирование", "тесты вперёд", "red-green".
 license: MIT
 metadata:

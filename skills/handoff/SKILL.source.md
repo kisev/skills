@@ -1,7 +1,9 @@
 ---
 name: handoff
 description: >-
-  Create a redacted handoff in workspace- and session-scoped XDG state. Russian discovery terms: передача контекста.
+  Create a redacted handoff in workspace- and session-scoped XDG state. Use
+  when ending a session whose context another agent or session must resume.
+  Russian discovery terms: передача контекста.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -12,4 +14,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

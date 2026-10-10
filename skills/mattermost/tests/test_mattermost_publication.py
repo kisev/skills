@@ -500,7 +500,13 @@ class CardTests(unittest.TestCase):
     def test_guide_examples_are_executable_contracts(self):
         guide = (SCRIPTS.parent / "references" / "cards.md").read_text()
         examples = [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", guide, re.S)]
-        self.assertEqual(6, len(examples))
+        # One example per template (AUDIT.9): standard + custom, together
+        # covering both kinds and both locales.
+        self.assertEqual(2, len(examples))
+        self.assertEqual(
+            {("issue", "en", "standard"), ("mr", "ru", "custom")},
+            {(card["kind"], card["locale"], card["template"]) for card in examples},
+        )
         for card in examples:
             with self.subTest(kind=card["kind"], locale=card["locale"], template=card["template"]):
                 self.assertEqual(card["url"], MM.publication_card(card)["title_link"])

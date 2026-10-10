@@ -1,6 +1,20 @@
 # Release preparation
 
-Read `references/interaction-contract.md`, `references/gitlab-workflow.md`, `references/portable-gitlab-contracts-v2.md`, `references/label-semantics.md`, `references/language-policy.md`, `references/release-examples.md`, and `references/changelog-register.md`. Accept exactly one release MR URL; do not infer it from a branch or prepare a batch. The skill and every helper are read-only for GitLab: they may collect evidence and write local artifacts, but they never execute a publication command.
+Read stage files when entering the stage that needs them; never the whole set
+up front. This router maps each stage to its files:
+
+| Stage | Files |
+| - | - |
+| Dialogue, confirmation, and interaction rules | `references/interaction-contract.md` |
+| GitLab reads, labels, and manual-command discipline | `references/gitlab-workflow.md`, `references/label-semantics.md` |
+| Artifact schemas of collected evidence | `references/portable-gitlab-contracts-v2.md` |
+| User-facing prose language | `references/language-policy.md` |
+| Built-in structures when the MR and the local project template are unusable | `references/release-examples.md` |
+| Changelog item drafting and its done-when checklist | `references/changelog-register.md` |
+
+Accept exactly one release MR URL; do not infer it from a branch or prepare a
+batch. The skill and every helper are read-only for GitLab: they may collect
+evidence and write local artifacts, but they never execute a publication command.
 
 ## Evidence and inventory
 

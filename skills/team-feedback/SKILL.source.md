@@ -1,9 +1,11 @@
 ---
 name: team-feedback
 description: >-
-  Prepare feedback or a difficult conversation with one named person: what was
-  observed, the impact, and the explicit request, checked against the profile
-  cautions and recorded in the journal. Russian discovery terms: подготовить фидбек, сложный разговор, обратная связь сотруднику.
+  Prepare feedback or a difficult conversation with one named person: what
+  was observed, the impact, and the explicit request, checked against the
+  profile cautions and recorded in the journal. Use when the manager prepares
+  feedback or a difficult conversation with a named person.
+  Russian discovery terms: подготовить фидбек, сложный разговор, обратная связь сотруднику.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

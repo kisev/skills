@@ -3,7 +3,9 @@ name: team-health
 description: >-
   Review team health from journal signals and delivery evidence: 1:1 cadence
   adherence, open-commitment age, feedback balance, and delivery load, with
-  an optional survey the manager runs manually. Russian discovery terms: здоровье команды, диагностика команды, климат в команде.
+  an optional survey the manager runs manually. Use when the manager asks to
+  assess team health from journal and delivery signals.
+  Russian discovery terms: здоровье команды, диагностика команды, климат в команде.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

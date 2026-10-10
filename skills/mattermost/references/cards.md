@@ -4,8 +4,9 @@ Use this opt-in format for the opening post of a discussion or review thread.
 It uses legacy Mattermost attachments, not Blocks or a server plugin. The
 publication runner accepts one `card` per message with an empty `message` and
 `files` array; use a channel/chat URL rather than a post permalink.
-See [publication](workflow.md#publication) for authentication, exact-target
-validation, immutable plans, expiry, manual Apply/Inspect, and recovery rules.
+See [authentication and publication](authentication-and-publication.md) for the
+credential flows, exact-target validation, immutable plans, expiry, manual
+Apply/Inspect, and recovery rules.
 
 ## Contract
 
@@ -72,59 +73,34 @@ select fewer labels and update `omitted_labels`. Keep the purpose and important
 facts; defer the rest to GitLab. Do not split a single object's root into several
 cards automatically.
 
-The Mattermost v10.10.0
-[attachment renderer](https://github.com/mattermost/mattermost/blob/v10.10.0/webapp/channels/src/components/post_view/message_attachments/message_attachment/message_attachment.tsx)
-wraps attachment `text` in `ShowMore` with `maxHeight={200}` and renders metadata
-fields separately. This supports using a short summary plus bounded fields, but
-does not establish the exact v10.10.19 client's behavior. Font, zoom, window
-width, and thread panel affect wrapping. Target-instance verification is still
-required: check both locales, normal channel view and narrow thread panel, long
-typical titles, and near-budget cards. Record actual viewport/zoom and whether
-the main content is visible without expansion. Do not claim a live check from
-the estimator or mock API tests. Any test publication requires the user's exact
-target/content approval and manual execution of its Apply command.
+Mattermost collapses long attachment text behind an expansion control in the
+message renderer, and the exact collapse height is a client concern: it varies
+with version, font, zoom, window width, and thread panel. The budget above is
+therefore a conservative authoring limit, not a viewport guarantee, and target-
+instance verification is still required: check both locales, normal channel
+view and narrow thread panel, long typical titles, and near-budget cards.
+Record actual viewport/zoom and whether the main content is visible without
+expansion. Do not claim a live check from the estimator or mock API tests. Any
+test publication requires the user's exact target/content approval and manual
+execution of its Apply command.
 
-## Standard examples
+## Example
 
-Each JSON block below is the `card` value, not the complete publication request.
-Names and metadata are illustrative fixtures, not fetched GitLab data.
+One worked example per template; names and metadata are illustrative fixtures,
+not fetched GitLab data. The `card` value below is the item's `card` field, not
+the complete publication request. Russian locale rendering follows the same
+field contract.
 
-### Issue, English
+### Standard issue, English
 
 ```json
 {"kind":"issue","template":"standard","locale":"en","title":"api#123 · Duplicate notifications","url":"https://gitlab.example/team/api/-/issues/123","summary":"Retries send duplicate notifications. Discuss deduplication by event key.","status":"Open","author":"Alice","assignee":"Bob","milestone":"v1.2","labels":["bug","backend"],"omitted_labels":3}
 ```
 
-### Issue, Russian
-
-```json
-{"kind":"issue","template":"standard","locale":"ru","title":"api#123 · Duplicate notifications","url":"https://gitlab.example/team/api/-/issues/123","summary":"Повторные запросы дублируют уведомления. Обсуждаем дедупликацию по ключу события.","status":"Открыта","author":"Alice","assignee":"Bob","milestone":"v1.2","labels":["bug","backend"],"omitted_labels":3}
-```
-
-### MR, English
-
-```json
-{"kind":"mr","template":"standard","locale":"en","title":"api!248 · Deduplicate notifications","url":"https://gitlab.example/team/api/-/merge_requests/248","summary":"Checks event keys before delivery. Review focus: concurrent retries.","status":"Ready for review","author":"Alice","assignee":"Bob","milestone":"v1.2","labels":["backend"],"omitted_labels":0,"pipeline":"Passed","approvals":"1/2"}
-```
-
-### MR, Russian
-
-```json
-{"kind":"mr","template":"standard","locale":"ru","title":"api!248 · Deduplicate notifications","url":"https://gitlab.example/team/api/-/merge_requests/248","summary":"Проверяет ключ события перед отправкой. На ревью: одновременные повторные запросы.","status":"Готов к ревью","author":"Alice","assignee":"Bob","milestone":"v1.2","labels":["backend"],"omitted_labels":0,"pipeline":"Успешно","approvals":"1/2"}
-```
-
-## Custom examples
+### Custom merge request, Russian
 
 Both kinds support the same custom field contract; project instructions can
 provide a reusable JSON skeleton without changing the runner.
-
-### Custom Issue, English
-
-```json
-{"kind":"issue","template":"custom","locale":"en","title":"api#123 · Duplicate notifications","url":"https://gitlab.example/team/api/-/issues/123","summary":"Agree how long event keys should be retained.","fields":[{"title":"Decision needed","value":"Retention period","short":false},{"title":"Author","value":"Alice","short":true},{"title":"Milestone","value":"v1.2","short":true}]}
-```
-
-### Custom MR, Russian
 
 ```json
 {"kind":"mr","template":"custom","locale":"ru","title":"api!248 · Deduplicate notifications","url":"https://gitlab.example/team/api/-/merge_requests/248","summary":"Нужна проверка поведения при одновременных повторах.","fields":[{"title":"Ветки","value":"fix/retry → main","short":false},{"title":"Пайплайн","value":"Успешно","short":true},{"title":"Апрувы","value":"1/2","short":true}]}

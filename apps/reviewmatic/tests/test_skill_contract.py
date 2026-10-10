@@ -175,33 +175,49 @@ def test_repair_paths_are_tiered_by_cost() -> None:
 
 
 def test_runtime_pin_and_self_report_are_documented() -> None:
-    """The skill pins the channel SHA and verifies it with runtime-info."""
+    """The skill pins the channel SHA and verifies it with runtime-info.
+
+    The procedure lives once in the SKILL.source.md entrypoint; the workflow
+    stage router delegates to it with a one-line pointer (AUDIT.3 dedup).
+    """
     entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
     workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
-    for text in (entry, workflow):
-        assert "git ls-remote" in text
-        assert "@<sha>" in text
-        assert "runtime-info" in text
+    assert "git ls-remote" in entry
+    assert "@<sha>" in entry
+    assert "runtime-info" in entry
+    assert "runtime selection and pin" in workflow
+    assert "SKILL.source.md" in workflow
+    assert "runtime-info" in workflow
     assert any(command == "runtime-info" for _file, command, _flags, _doc in parse_invocations()), (
         "the skill must invoke reviewmatic runtime-info"
     )
 
 
 def test_the_single_pinned_runtime_ignores_any_path_binary() -> None:
-    """REVIEWMATIC_FROM is the one runtime; a PATH reviewmatic is foreign."""
+    """REVIEWMATIC_FROM is the one runtime; a PATH reviewmatic is foreign.
+
+    The entrypoint owns the full procedure; the workflow router keeps the
+    pointer and the ask-when-unclear channel rule.
+    """
     entry = " ".join((SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8").split())
     workflow = " ".join(
         (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8").split()
     )
     pinned = "git+https://github.com/kisev/skills.git@<sha>#subdirectory=apps/reviewmatic"
-    for text in (entry, workflow):
-        assert "REVIEWMATIC_FROM" in text
-        assert pinned in text, "the pin is a git+URL with an exact @<sha>"
-        assert "found on `PATH` as a foreign, possibly outdated binary and ignore it" in text
-        assert 'uvx --from "$REVIEWMATIC_FROM"' in text
-        assert "runtime-info" in text
+    assert "REVIEWMATIC_FROM" in entry
+    assert pinned in entry, "the pin is a git+URL with an exact @<sha>"
+    assert "found on `PATH` as a foreign, possibly outdated binary and ignore it" in entry
+    assert 'uvx --from "$REVIEWMATIC_FROM"' in entry
+    assert "runtime-info" in entry
     assert "compare the printed resolved commit to the pinned SHA" in entry
-    assert "compare the printed `commit` to the pinned SHA" in workflow
+    assert "runtime selection and pin" in workflow
+    assert "SKILL.source.md" in workflow
+    assert "REVIEWMATIC_FROM" in workflow
+    assert "PATH-binary ban" in workflow
+    assert "runtime-info" in workflow
+    assert "never choose silently" in workflow
+    assert "repeats" in workflow
+    assert "resolution and pin" in workflow
 
 
 def test_the_contract_test_reads_the_authored_sources() -> None:

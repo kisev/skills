@@ -502,6 +502,7 @@ tasks:
     desc: Validate Agent Skills with complementary validators
     cmds:
       - mise exec -- uv run --locked python scripts/check_agnix.py
+      - mise exec -- uv run --locked python scripts/check_skill_descriptions.py
       - for:
           var: SKILLS
         cmd: mise exec -- uv run --locked agentskills validate "{{.ITEM}}"

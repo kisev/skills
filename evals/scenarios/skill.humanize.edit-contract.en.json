@@ -4,7 +4,7 @@
     "max_tokens": 4000,
     "timeout_seconds": 30
   },
-  "digest": "e2822bca7480e8062e87e95377afb9114138d34da61aa5507ba331696c663a7c",
+  "digest": "513cf78d5b649f56e5a923d697d7a2c5b42c1b073e1a5c17e50939ed3094a659",
   "expected": {
     "case_outcomes": [
       {
@@ -41,7 +41,7 @@
         {
           "expect": "The template is removed without new facts; the search speedup and the whole-pipeline rewrite are kept in the original first-person voice; `deploy --env=prod` and \"deployment OK\" stay byte-identical; the cold-node caveat is kept.",
           "id": "protected-tokens",
-          "text": "We didn't just speed up search \u2014 we rewrote the whole pipeline! Run `deploy --env=prod` and wait for the line \"deployment OK\". That said, individual failures are still possible on cold nodes.",
+          "text": "We didn't just speed up search — we rewrote the whole pipeline! Run `deploy --env=prod` and wait for the line \"deployment OK\". That said, individual failures are still possible on cold nodes.",
           "verify": {
             "avoid": ["10x", "lightning-fast"],
             "claims": [
@@ -55,7 +55,7 @@
         {
           "expect": "The sample voice is matched (short, straight to the point), but the dash from the sample is not carried into the result; the speedup claim is kept.",
           "id": "sample-conflict",
-          "sample": "Short and direct: no warm-up \u2014 straight to the point.",
+          "sample": "Short and direct: no warm-up — straight to the point.",
           "text": "Please allow me to present the results of this performance iteration: search now responds noticeably faster.",
           "verify": {
             "avoid": ["allow me", "performance iteration"],
@@ -86,11 +86,11 @@
         {
           "expect": "The hype is removed and no new facts are added; the exact quotation stays byte-identical with its dash inside the quotation marks; the prose around it introduces no forbidden characters.",
           "id": "quote-keeps-marks",
-          "text": "I am truly excited to share that we crushed it! The status page stated: \"We restored service \u2014 data was never lost.\"",
+          "text": "I am truly excited to share that we crushed it! The status page stated: \"We restored service — data was never lost.\"",
           "verify": {
             "avoid": ["crushed it", "guarantee this will never happen again"],
             "claims": ["We restored service", "data was never lost"],
-            "protected": ["\"We restored service \u2014 data was never lost.\""]
+            "protected": ["\"We restored service — data was never lost.\""]
           }
         }
       ],
@@ -115,9 +115,9 @@
       "path": "skills/humanize/references/workflow.md"
     },
     {
-      "contains": "as weak alone: 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25",
+      "contains": "the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25",
       "id": "humanize-weak-alone-set",
-      "path": "skills/humanize/references/workflow.md"
+      "path": "skills/humanize/references/patterns.md"
     },
     {
       "contains": "rewrite_case_assertions",

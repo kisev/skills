@@ -20,12 +20,12 @@
   "invariants": [
     {
       "id": "send-prepares-manual-plan",
-      "path": "skills/mattermost/references/workflow.md",
+      "path": "skills/mattermost/references/authentication-and-publication.md",
       "contains": "A send request selects this skill. Prepare a manual publication plan"
     },
     {
       "id": "agent-never-applies",
-      "path": "skills/mattermost/references/workflow.md",
+      "path": "skills/mattermost/references/authentication-and-publication.md",
       "contains": "invoke a generated publication `apply` or `inspect` command"
     }
   ],
@@ -39,7 +39,7 @@
     "max_tokens": 3000,
     "max_cost": 1
   },
-  "digest": "388203a37193232c7cc14452c7357dca8a2f23dc11739ab804a4e5e2a6bda75a",
+  "digest": "6b258cf7aa53387a33bd83c91c1e9cadcc89980d77bf01a63923dfd2549ff2b1",
   "locale": "ru",
   "pair_id": "mattermost.mutation-near-miss"
 }

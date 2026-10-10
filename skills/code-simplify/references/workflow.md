@@ -6,7 +6,7 @@ project files, and it never launches an implementation.
 
 ## Passive prevention
 
-While writing or changing code, apply the prevention ladder from
+While writing or changing code, apply the passive prevention ladder from
 `references/simplification-criteria.md` — necessity, existing code, standard
 library, native platform, installed dependency, one line, minimum — to the
 current change, and stop at the first step that satisfies the agreed need. The

@@ -1,8 +1,10 @@
 ---
 name: task-triage
 description: >-
-  Triage one GitLab issue or a bounded issue collection into persistent read-only
-  analysis, release milestones, priorities, dependencies, and manual update commands.
+  Triage one GitLab issue or a bounded issue collection into persistent
+  read-only analysis, release milestones, priorities, dependencies, and
+  manual update commands. Use when the user asks to triage a GitLab issue or
+  a bounded collection of issues.
   Russian discovery terms: разобрать задачу, провести триаж задач.
 license: MIT
 metadata:
@@ -15,4 +17,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

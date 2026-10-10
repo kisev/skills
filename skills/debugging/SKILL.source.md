@@ -1,11 +1,9 @@
 ---
 name: debugging
 description: >-
-  Debug with a feedback loop before hypotheses: build a fast red-capable
-  command for the bug, minimize the reproduction, show the user 3-5 ranked
-  falsifiable hypotheses, apply one fix, and lock it down with a regression
-  test. Use when the user reports something broken, failing, throwing, slow,
-  or asks to diagnose or debug. Russian discovery terms: "отладка", "диагностика багов", "найти причину бага".
+  Find and fix the cause of a reported failure. Use when the user reports
+  something broken, failing, throwing, slow, or asks to diagnose or debug.
+  Russian discovery terms: "отладка", "диагностика багов", "найти причину бага".
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

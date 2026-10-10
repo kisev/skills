@@ -74,7 +74,13 @@ def arguments(source: str) -> argparse.Namespace:
 
 def test_workflow_requires_user_questions_and_strict_stale_sequence() -> None:
     workflow = (ROOT / "skills/task-triage/references/workflow.md").read_text(encoding="utf-8")
+    # The JSON field contract moved to its focused file (AUDIT.2); the pin
+    # reads the workflow together with it.
+    contract = (ROOT / "skills/task-triage/references/analysis-contract.md").read_text(
+        encoding="utf-8"
+    )
     normalized = " ".join(workflow.split())
+    normalized_contract = " ".join(contract.split())
     for requirement in (
         "Continue the same invocation after the answers.",
         "question -> first ping -> second ping -> closure proposal",
@@ -90,7 +96,6 @@ def test_workflow_requires_user_questions_and_strict_stale_sequence() -> None:
         "Answer an already-addressed question before introducing a new one.",
         "separates analysis completeness from follow-up state",
         "only when the complete analyzed value is plain text",
-        "Issue identities returned by the assessed issue's GitLab link evidence",
         "use an explicit empty list when none are found",
         "one guarded block that finds or creates the milestone",
         "publishes the final message and then closes the issue in the same `&&` chain",
@@ -99,6 +104,12 @@ def test_workflow_requires_user_questions_and_strict_stale_sequence() -> None:
         "`glab`, `jq`, and `sha256sum`",
     ):
         assert requirement in normalized
+    for requirement in (
+        "Issue identities returned by the assessed issue's GitLab link evidence",
+        "references/analysis-contract.md",
+    ):
+        assert requirement in normalized or requirement in normalized_contract, requirement
+    assert "references/analysis-contract.md" in normalized
 
 
 def gitlab_response(endpoint: str) -> Any:

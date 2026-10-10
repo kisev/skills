@@ -139,6 +139,24 @@ For project scope, omit `--global`. If a newly installed skill is not visible,
 check `~/.agents/skills` or `.agents/skills` and restart the host. After a release
 renames a skill, repeat `add` for additions and remove retired names explicitly.
 
+## Check Skill-Text Changes Under Pressure
+
+Static checks and pins cannot prove that a skill text changes agent behavior.
+Before relying on a skill-text edit, run the pressure method:
+
+1. Write a scenario in which the edited rule should change what the agent does.
+2. Run that scenario as a subagent without the new wording; this no-guidance
+   baseline shows the uncontrolled behavior.
+3. Run the same scenario with the edited text, at least five times per side.
+4. Read the matches manually; a grep hit is not evidence of the behavior.
+5. Keep a micro-test — a committed static pin or eval scenario — that
+   distinguishes the guided behavior from the no-guidance control.
+
+Two standing rules follow from the method: refining one skill always includes
+its full pressure run for the edited rules, and a pressure run over the whole
+skill corpus happens only on an explicit user request; it is never part of
+future work by default.
+
 ## Boundaries
 
 - Portable skills are self-contained and do not depend on the repository or the

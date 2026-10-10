@@ -3,7 +3,9 @@ name: team-incident
 description: >-
   Facilitate a blameless postmortem for one incident from supplied materials:
   timeline, impact, contributing factors, and action items recorded as
-  agreements. Russian discovery terms: постмортем, разбор инцидента, беспричинностный разбор.
+  agreements. Use when the team needs a blameless postmortem for one incident
+  from supplied materials.
+  Russian discovery terms: постмортем, разбор инцидента, беспричинностный разбор.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

@@ -1,7 +1,11 @@
 ---
 name: slides-prompts-prepare
 description: >-
-  Prepare cohesive image prompts for presentation slides by combining a chosen theme with concise factual team and technology references. Russian discovery terms: промпты слайдов, фоновые изображения, тема презентации, графика для слайдов.
+  Prepare cohesive image prompts for presentation slides by combining a
+  chosen theme with concise factual team and technology references. Use when
+  the user asks to prepare image prompts or backgrounds for presentation
+  slides.
+  Russian discovery terms: промпты слайдов, фоновые изображения, тема презентации, графика для слайдов.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

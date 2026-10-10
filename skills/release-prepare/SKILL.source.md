@@ -1,7 +1,11 @@
 ---
 name: release-prepare
 description: >-
-  Prepare one stable GitLab release runbook from an exact tag-to-head inventory, with SemVer rationale, release notes, announcement, illustration prompt, and exactly bound manual glab commands. Russian discovery terms: подготовить релиз.
+  Prepare one stable GitLab release runbook from an exact tag-to-head
+  inventory, with SemVer rationale, release notes, announcement, illustration
+  prompt, and exactly bound manual glab commands. Use when the user asks to
+  prepare a stable release from an exact release MR.
+  Russian discovery terms: подготовить релиз.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -13,4 +17,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

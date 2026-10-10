@@ -27,8 +27,8 @@ so the agent can shorten them before preparing a new command.
 
 See the portable [card guide](../../skills/mattermost/references/cards.md) for the
 input contract, examples, and limits, and the
-[publication workflow](../../skills/mattermost/references/workflow.md#publication)
-for authentication and recovery. Cards use legacy attachments without requiring
+[authentication and publication guide](../../skills/mattermost/references/authentication-and-publication.md)
+for credentials and recovery. Cards use legacy attachments without requiring
 a GitLab plugin. Compactness limits are estimates; verify rendering in your
 Mattermost client, especially a narrow thread panel. Automatic posting and cron
 are not included.

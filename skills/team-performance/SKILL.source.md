@@ -3,7 +3,9 @@ name: team-performance
 description: >-
   Prepare a quarterly performance summary, bonus or raise justification, or a
   growth-plan draft for one named report from journal facts and the people
-  profile. Russian discovery terms: подготовить ревью, обоснование премии, план развития, квартальная оценка.
+  profile. Use when the manager prepares a performance summary, bonus or
+  raise case, or growth plan for a named report.
+  Russian discovery terms: подготовить ревью, обоснование премии, план развития, квартальная оценка.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

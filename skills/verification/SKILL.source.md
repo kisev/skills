@@ -1,12 +1,10 @@
 ---
 name: verification
 description: >-
-  Gate every completion claim behind fresh verification evidence: name the
-  command that proves the claim, run it in this session, read its output, and
-  report actual status with that evidence; never from a previous run,
-  partial check, or agent self-report. Use before declaring work complete,
-  fixed, or passing, and before commits or publications. Inside a repository,
-  its own verification contracts take precedence.
+  Gate every completion claim behind fresh verification evidence. Use before
+  declaring work complete, fixed, or passing, and before commits or
+  publications; inside a repository its own verification contracts take
+  precedence.
   Russian discovery terms: "верификация перед завершением", "докажи проверкой", "не заявляй complete".
 license: MIT
 metadata:

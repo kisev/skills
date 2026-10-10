@@ -30,6 +30,8 @@ Resolve mode from intent and evidence, inspect code, tests, schemas,
 configuration, CI, and deployment before distinguishing initialization from
 onboarding, classify claims, write bounded specs, run formal validation, perform
 semantic review where required, and report checked and `not_checked` scopes.
+Reference files are read per stage through the workflow's stage router; no
+stage reads the whole reference set up front.
 
 The adaptive interview follows the shared question contract in
 [REQ-I-001](../../requirements/interfaces/README.md#req-i-001---skill-interface).

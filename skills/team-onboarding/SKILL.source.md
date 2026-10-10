@@ -3,7 +3,9 @@ name: team-onboarding
 description: >-
   Prepare an onboarding pack and the first-weeks plan for one new member of
   the profiled team from the delivery and people contexts; also refreshes a
-  pack when the team changed. Russian discovery terms: онбординг новичка, план первой недели, пакет новичка.
+  pack when the team changed. Use when a new member joins the profiled team
+  or an existing onboarding pack needs a refresh.
+  Russian discovery terms: онбординг новичка, план первой недели, пакет новичка.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

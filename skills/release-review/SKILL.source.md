@@ -1,7 +1,9 @@
 ---
 name: release-review
 description: >-
-  Review one release GitLab merge request for release readiness. Russian discovery terms: проверить релиз.
+  Review one release GitLab merge request for release readiness. Use when the
+  user asks to review a release merge request for release readiness.
+  Russian discovery terms: проверить релиз.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -13,4 +15,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

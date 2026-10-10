@@ -3,7 +3,9 @@ name: team-1on1
 description: >-
   Prepare a 1:1 with one named report from open commitments, recent journal
   entries, and the people profile, then record its outcomes back into the
-  journal. Russian discovery terms: подготовка один на один, подготовка 1:1, итоги встречи с сотрудником.
+  journal. Use when the manager prepares a one-to-one with a named report or
+  records its outcomes.
+  Russian discovery terms: подготовка один на один, подготовка 1:1, итоги встречи с сотрудником.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

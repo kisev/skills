@@ -1,7 +1,9 @@
 ---
 name: mr-prepare
 description: >-
-  Prepare a title, description, and publication plan for a GitLab merge request. Russian discovery terms: подготовить MR.
+  Prepare a title, description, and publication plan for a GitLab merge
+  request. Use when the user asks to prepare a merge request for publication.
+  Russian discovery terms: подготовить MR.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -12,4 +14,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

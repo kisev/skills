@@ -1,7 +1,12 @@
 ---
 name: code-review
 description: >-
-  Review one GitLab merge request or local WIP for concrete risks and proportionate fixes, preserving agreed scope and prior decisions in follow-ups. Include GitLab labels, SemVer, and manual publication commands for remote reviews. Russian discovery terms: ревью кода.
+  Review one GitLab merge request or local WIP for concrete risks and
+  proportionate fixes, preserving agreed scope and prior decisions in
+  follow-ups. Include GitLab labels, SemVer, and manual publication commands
+  for remote reviews. Use when the user asks to review a GitLab merge request
+  or local work-in-progress changes.
+  Russian discovery terms: ревью кода.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -38,4 +43,4 @@ refresh and finalization remain supported; the runtime has no interactive TUI.
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

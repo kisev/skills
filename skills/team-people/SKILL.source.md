@@ -4,6 +4,8 @@ description: >-
   Maintain the private people context for a manager: set up and update the
   people profile with stable facts about reports and stakeholders, record
   durable outcomes in the journal, and review open commitments per person.
+  Use when the manager maintains the private people profile, journal, or open
+  commitments.
   Russian discovery terms: контекст людей, профиль команды, открытые петли, кто что обещал.
 license: MIT
 metadata:

@@ -1,7 +1,9 @@
 ---
 name: team-sprint-close
 description: >-
-  Close a sprint from supplied team context. Russian discovery terms: закрытие спринта.
+  Close a sprint from supplied team context. Use when the manager asks to
+  close the current sprint cycle from supplied context.
+  Russian discovery terms: закрытие спринта.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -12,4 +14,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

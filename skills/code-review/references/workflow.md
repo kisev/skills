@@ -64,23 +64,12 @@ window to answer a question the runtime response already answers.
 
 ## Select and pin the runtime
 
-Select the runtime Git ref before starting: the exact release tag matching
-the stable skill, or `dev`; when the channel is unclear, ask — never choose
-silently. On the moving `dev`
-channel resolve the tip first — `git ls-remote https://github.com/kisev/skills.git refs/heads/dev`
-prints the current commit — and pin it:
-`REVIEWMATIC_FROM='git+https://github.com/kisev/skills.git@<sha>#subdirectory=apps/reviewmatic'`.
-Keep that exact pinned value for the whole review. Treat every `reviewmatic`
-found on `PATH` as a foreign, possibly outdated binary and ignore it; the only
-runtime is the pinned `uvx --from "$REVIEWMATIC_FROM"` install. Invoke every
-runtime command, including each returned continuation action, as
-`uvx --from "$REVIEWMATIC_FROM" reviewmatic ...`. Immediately after the first
-invocation, run `reviewmatic runtime-info` once and compare the printed `commit`
-to the pinned SHA: a mismatch or `unknown` means a stale uvx cache or an
-unpinned install — re-pin with the exact `@<sha>` (adding
-`--refresh-package reviewmatic` to the `uvx` invocation when the cache is
-stale) before continuing the review. A fresh checkout of the moving `dev` ref
-repeats the same resolution and pin.
+Before the first `reviewmatic` call, apply the runtime selection and pin
+procedure exactly as `SKILL.source.md` specifies it — that entrypoint owns the
+channel choice (when the channel is unclear, ask — never choose silently), the
+`dev` tip resolution, the `REVIEWMATIC_FROM` pin, the PATH-binary ban, and the
+`runtime-info` verification. A fresh checkout of the moving `dev` ref repeats
+the same resolution and pin.
 
 ## Invocation mode
 
@@ -95,9 +84,6 @@ or acceptance criteria unclear, ask for the missing context once with
 `question-guidelines` and wait; when it started automatically (delegated,
 routed, or scheduled), do not stop for questions and build the package from
 what is available, recording unknown goal and acceptance criteria explicitly.
-Release MRs — those that publish or tag a version — route to the
-`release-review` skill; review one here only on an explicit request.
-
 A release MR — one that publishes or tags a version — routes to the
 `release-review` skill, which owns the release verdict and its gates. Review
 such an MR here only when the user explicitly requests this skill in addition.

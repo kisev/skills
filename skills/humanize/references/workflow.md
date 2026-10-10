@@ -74,28 +74,7 @@ Before returning the text, run one pass over the complete result:
 
 ## Patterns to check
 
-`references/patterns.md` maps the complete catalog of 26 categories with worked before/after examples; the same moves exist in every language, and the project documentation carries a bilingual example set. Apply these rules rather than a fixed vocabulary blacklist: model word habits change, while unsupported claims and templated structure remain concrete editing problems.
-
-Strong patterns justify an edit on one sighting:
-
-- A staged contrast such as "not just X, but Y" or an appended "X, not Y" tail when the rejected alternative was never claimed. State the supported point directly. Keep a contrast that corrects a real belief or where both sides add information.
-- A dramatic fragment, slogan, or one-line closer that only repeats the preceding point.
-- A staged opener such as "Let's dive in," "Great question," or "Here's what you need to know" before routine content.
-- A fake-profound saying such as "the real question is" or "at its core" that dresses an ordinary point as a hidden truth.
-- An unraised objection or fake alternative such as "Some might say" or "A tempting approach would be" when no reader needs it resolved.
-- Inflated significance, borrowed authority, sales language, or a vague association in place of a concrete fact. Name the actual source or relationship when the input provides it; otherwise remove only the unsupported claim.
-- Chat residue such as generic praise, an offer to continue, or "I hope this helps" in prose that should stand on its own.
-- A knowledge-limit disclaimer or a plausible guess standing in for a fact; state what the source does not show instead.
-- A reply that re-explains what the reader already knows before reaching the decision; act on this only when the surrounding conversation is visible or the text plainly is a reply, and lead with the decision, keeping the facts the reader lacks.
-
-Treat the following catalog categories as weak alone: 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25. Change them only when several occur together or they obscure the meaning:
-
-- forced triads and repeated sentence openings;
-- stacked qualifiers, unnecessary hyphenated pairs, and passive voice that hides the actor;
-- stock AI words and shallow participial riders such as "underscoring" or "symbolizing";
-- decorative bold labels, decorative headings, and a heading repeated in the first sentence;
-- mechanical avoidance of simple verbs such as "is," "are," and "has";
-- a text describing its own assembly instead of its subject.
+`references/patterns.md` maps the complete catalog of 26 categories with worked before/after examples; the same moves exist in every language, and the project documentation carries a bilingual example set. Apply these rules rather than a fixed vocabulary blacklist: model word habits change, while unsupported claims and templated structure remain concrete editing problems. A pattern the catalog does not mark weak alone justifies an edit on one sighting; the weak-alone catalog categories change only when several occur together or they obscure the meaning.
 
 The mandatory punctuation bans do not follow this classification: outside
 protected fragments, a single forbidden dash or quotation mark is enough to

@@ -12,4 +12,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` to conversation and reports, not to the independently declared language of canonical `specs/` prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` to conversation and reports, not to the independently declared language of canonical `specs/` prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

@@ -33,7 +33,7 @@ standing profile or a global default.
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply
+Follow `references/workflow.md`. Apply
 `references/language-policy.md` for user-facing prose. Preserve exact code,
 commands, paths, IDs, JSON fields, and quotations. For the full editing
 catalog with before/after examples, read `references/patterns.md`.

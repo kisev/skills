@@ -1,9 +1,11 @@
 ---
 name: team-agreements
 description: >-
-  Record agreements from a call, chat, or meeting as dated journal entries and
-  list what remains open per person; built for the moment right after a
-  conversation ends. Russian discovery terms: зафиксировать договорённости, лог договорённостей, кто что обещал.
+  Record agreements from a call, chat, or meeting as dated journal entries
+  and list what remains open per person; built for the moment right after a
+  conversation ends. Use when a conversation, call, or meeting just ended and
+  its agreements must be recorded.
+  Russian discovery terms: зафиксировать договорённости, лог договорённостей, кто что обещал.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

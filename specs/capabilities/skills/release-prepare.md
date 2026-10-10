@@ -17,7 +17,9 @@ Input is one exact MR URL and release boundary. Output is a verified, target-sco
 
 Resolve the boundary, collect exact evidence, decide version, milestone, people,
 items, and image style, then draft, finalize, and report. After merge, a read-only
-helper refreshes the same runbook with post-merge commands.
+helper refreshes the same runbook with post-merge commands. Reference files are
+read per stage through the workflow's stage router; no stage reads the whole
+reference set up front.
 
 ## Dependencies
 

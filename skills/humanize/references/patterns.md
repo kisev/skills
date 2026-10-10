@@ -4,9 +4,9 @@ The complete editing catalog for `humanize`, mapped to the 26 categories of
 [blader/humanizer](https://github.com/blader/humanizer), which draws on
 Wikipedia's "Signs of AI writing". Groups A through E are numbered strongest
 first. A pattern without the "weak alone" mark justifies an edit on one
-sighting; the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and
-25, and one weak-alone sighting that does not obstruct the meaning is not
-enough for an edit. The mandatory punctuation and no-invention rules apply
+sighting; the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25,
+and one weak-alone sighting that does not obstruct the meaning is not enough
+for an edit. The mandatory punctuation and no-invention rules apply
 regardless of this classification.
 
 Two boundaries differ from that upstream catalog and always win:

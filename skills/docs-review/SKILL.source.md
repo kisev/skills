@@ -1,7 +1,10 @@
 ---
 name: docs-review
 description: >-
-  Review user documentation for accuracy, completeness, and usability. Russian discovery terms: проверить документацию.
+  Review user documentation for accuracy, completeness, and usability. Use
+  when the user asks to check or review project documentation for accuracy,
+  completeness, or usability.
+  Russian discovery terms: проверить документацию.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -12,4 +15,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

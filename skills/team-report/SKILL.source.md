@@ -3,7 +3,9 @@ name: team-report
 description: >-
   Prepare a stakeholder-facing quarterly report or demo theses from delivery
   evidence and journal facts; the outward roll-up that keeps the team's own
-  retrospective in team-retro. Russian discovery terms: квартальный отчёт, отчёт руководителю, тезисы для демо.
+  retrospective in team-retro. Use when stakeholders need a quarterly report
+  or demo theses from delivery evidence.
+  Russian discovery terms: квартальный отчёт, отчёт руководителю, тезисы для демо.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"

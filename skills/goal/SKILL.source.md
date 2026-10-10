@@ -2,7 +2,10 @@
 name: goal
 description: >-
   Prepare a read-only structured goal of at most 4000 characters as an
-  assignment for an LLM agent, not a human-facing work item. Russian discovery terms: проверяемая цель.
+  assignment for an LLM agent, not a human-facing work item. Use when the
+  next executor is an LLM agent and the assignment must be a verifiable
+  read-only goal, not a human-facing work item.
+  Russian discovery terms: проверяемая цель.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -14,4 +17,4 @@ metadata:
 
 Before asking the user, apply `references/question-guidelines.md`.
 
-Follow `references/workflow.md` when it is present. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.

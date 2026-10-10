@@ -827,7 +827,18 @@ def test_humanize_weak_alone_classification_is_consistent() -> None:
     assert marked == WEAK_ALONE_CATEGORIES
 
     workflow = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
-    assert "as weak alone: 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25" in workflow
+    # The itemized pattern lists collapsed into the catalog pointer (AUDIT.4);
+    # the classification fact is pinned on the catalog, the routing on the
+    # workflow.
+    normalized_catalog = " ".join(catalog.split())
+    assert (
+        "the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25"
+        in normalized_catalog
+    )
+    assert (
+        "A pattern the catalog does not mark weak alone justifies an edit on one sighting"
+        in workflow
+    )
     # The mandatory punctuation bans hold regardless of the strong/weak split.
     assert "do not follow this classification" in workflow
     assert "regardless of this classification" in catalog
@@ -972,35 +983,41 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
 def test_code_simplify_prevention_and_audit_contract() -> None:
     entrypoint = (ROOT / "skills/code-simplify/SKILL.source.md").read_text(encoding="utf-8")
     normalized = " ".join(entrypoint.split())
+    # AUDIT.1: the description carries only triggers and anti-triggers; the
+    # process markers moved to the workflow pin block below.
     for marker in (
+        "Use when the user asks to simplify code",
         "passive prevention ladder",
         "without scanning any repository",
-        "a targeted caller search by exact name",
-        "SIMPLIFY debt marker",
-        "On an explicit request",
         "report-only",
-        "delete, stdlib, native, reuse, yagni, or shrink",
-        "debt-marker registry section",
         "Never cancel a clarification or confirmation gate",
+        "Do not trigger on prose or text simplification",
         "asd-ste100, humanize, and eli5",
+        "merge-request reviews route to code-review",
+        "specification audits route to spec-manage",
+        "audit one explicitly requested scope",
     ):
         assert marker in normalized, marker
 
     workflow = (ROOT / "skills/code-simplify/references/workflow.md").read_text(encoding="utf-8")
     for marker in (
+        "passive prevention ladder",
         "references/simplification-criteria.md",
         "only on an explicit user request",
         "is not repository scanning",
+        "targeted mechanical search for callers",
+        "its exact name, is part of the change",
         "`SIMPLIFY: <ceiling> -> <trigger>`",
         "binds only code this diff adds or changes",
         "is pre-existing debt, never a new",
         "one runnable check",
         "never cancels a clarification or",
-        "debt-marker registry",
+        "debt-marker registry section",
         "`no-trigger`",
         "including dynamic references",
         "merge-request review routes to `code-review`",
         "`spec-manage`",
+        "`delete`, `stdlib`, `native`, `reuse`, `yagni`, or `shrink`",
     ):
         assert marker in workflow, marker
 

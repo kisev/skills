@@ -1,9 +1,12 @@
 ---
 name: team-retro
 description: >-
-  Prepare an evidence-based team retrospective, monthly delivery review, report,
-  or presentation from a private team profile; it collects its own planning and
-  delivery evidence, unlike briefing. Russian discovery terms: ретро, итоги месяца, месячный отчёт, презентация команды.
+  Prepare an evidence-based team retrospective, monthly delivery review,
+  report, or presentation from a private team profile; it collects its own
+  planning and delivery evidence, unlike briefing. Use when the team runs a
+  retrospective or monthly delivery review, or needs a report or presentation
+  from its own profile.
+  Russian discovery terms: ретро, итоги месяца, месячный отчёт, презентация команды.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
