@@ -503,7 +503,7 @@ def test_preflight_missing_pinned_image_retains_diagnostics_without_substitution
 
     def run(args: list[str], **_kwargs: Any) -> CompletedProcess[str]:
         calls.append(args)
-        value = "Docker Compose version v2.29.7" if args[0] == "docker-compose" else "glab 1.120.0"
+        value = "Docker Compose version v2.29.7" if args[0] == "docker-compose" else "glab 1.121.0"
         if args[1] == "info":
             value = json.dumps({"MemTotal": 16 * 1024**3, "NCPU": 4})
         missing = args[1:3] == ["image", "inspect"]

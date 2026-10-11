@@ -4,7 +4,7 @@
 
 These tests use the shared [development environment](../../../dev/README.md):
 GitLab CE `18.11.11-ce.0`, GitLab Runner `v18.11.0`
-and the repository's `glab 1.120.0`. Runner executes shell jobs inside its own
+and the repository's `glab 1.121.0`. Runner executes shell jobs inside its own
 container, with no host Docker socket. Docker executor and paid EE features are
 outside scope. Ordinary `task check` needs no running server.
 
@@ -48,7 +48,7 @@ do not start/stop containers or initialize accounts; `env:gitlab:up` prepares th
 Tasks default to `docker-compose`; set `COMPOSE="docker compose"` for the CLI plugin.
 `GL_TEST_PORT` selects the loopback HTTPS port (default `443`). Keep it for subsequent
 commands. There is one `skills-dev` Compose project; images are not overridable.
-Use the default port for full workflow checks: `glab 1.120.0` rejects a port in
+Use the default port for full workflow checks: `glab 1.121.0` rejects a port in
 `--hostname`. Nonstandard ports support API/lifecycle checks only.
 `env:gitlab:up` prints the manual-group URL; lifecycle commands and cleanup are
 documented in the development guide. Missing readiness or fixture preparation

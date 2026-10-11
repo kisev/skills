@@ -33,12 +33,23 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(name="fixture")
-def fake_glab_fixture() -> Iterator[ReviewFixture]:
-    fixture = make_review_fixture()
+def fake_glab_fixture(request: pytest.FixtureRequest) -> Iterator[ReviewFixture]:
+    fixture = make_review_fixture(getattr(request, "param", None))
     try:
         yield fixture
     finally:
         fixture.close()
+
+
+# The linked related issue seeds the closes_issues endpoint for the live
+# acceptance asserts: the run must collect it with its author_text origin.
+ACCEPTANCE_RELATED_ISSUE: dict[str, Any] = {
+    "iid": 5,
+    "title": "Bound the retry writes behind an idempotency key",
+    "state": "opened",
+    "web_url": "https://gitlab.example/group/project/-/issues/5",
+}
+ACCEPTANCE_FIXTURE_OVERRIDES: dict[str, Any] = {"closesIssues": [ACCEPTANCE_RELATED_ISSUE]}
 
 
 def low_finding() -> dict[str, Any]:
@@ -317,6 +328,7 @@ def test_replace_artifact_rewinds_downstream_and_rejects_unbound_artifacts(
         )
 
 
+@pytest.mark.parametrize("fixture", [ACCEPTANCE_FIXTURE_OVERRIDES], indirect=True)
 def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: Any) -> None:
     callbacks = _write_callbacks(fixture)
     participants = _write(fixture, "participants.json", ONE_MODEL_CRITIC)
@@ -365,8 +377,39 @@ def test_run_completes_the_cycle_with_callbacks(fixture: ReviewFixture, capsys: 
         assert expected in steps, f"{expected} must be logged with its timing"
     assert result["total_seconds"] > 0
     assert result["report"]["status"] == "ok"
-    runbook = Path(str(_progress(Path(str(result["artifact_root"])), "plan_path")))
+    root = Path(str(result["artifact_root"]))
+    runbook = Path(str(_progress(root, "plan_path")))
     assert runbook.exists()
+
+    # Live-acceptance asserts over the completed full cycle (the deterministic
+    # acceptance layer; the agent layer is `task test:integration:skills:acceptance`).
+    # (a) The poll stop is accepted in test_run_waits_prints_manual_commands_and_resumes:
+    # the poll text verbatim plus the agent-catalog grounding rules.
+    # (b) The instructive no-checkout error is accepted in
+    # test_run_without_repo_root_names_the_checkout_instruction; linked, not duplicated.
+    # (c) Related issues are collected from closes_issues into the review context
+    # with their author_text origin, never silently empty.
+    assert "projects/19/merge_requests/7/closes_issues" in fixture.request_endpoints()
+    context_payload = contract.read_json(
+        Path(str(_progress(root, "context_path"))), "review context"
+    )["payload"]
+    related = context_payload["related_issues"]
+    assert related["source"] == "author_text"
+    assert related["complete"] is True
+    assert related["items"] == [{**ACCEPTANCE_RELATED_ISSUE, "source": "author_text"}]
+    # (d) Thread-reply skeletons carry their Conventional Comments label into the
+    # publication plan's reply body artifact.
+    bodies = list((root / "artifacts" / "review_plan" / "bodies").glob("*.md"))
+    assert any(
+        path.read_text(encoding="utf-8").startswith(
+            "note: The exact reviewed code handles this path."
+        )
+        for path in bodies
+    ), sorted(path.name for path in bodies)
+    # (e) The whole cycle ran through the one fake glab from the shared fixture:
+    # no second or third glab stub exists anywhere in the fixture tree.
+    stubs = [path for path in fixture.tmp.rglob("glab") if path.is_file()]
+    assert stubs == [fixture.tmp / "bin" / "glab"]
     _print_timings("run with callbacks", result)
 
 
@@ -386,6 +429,17 @@ def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, ca
     assert waiting["stage"] == "critic_missing"
     assert waiting["template_kind"] == "participants"
     assert waiting["manual_argv"][0] == "reviewmatic"
+    # (a) The run hands the agent the verbatim poll text plus the grounding rules
+    # that tie the offered critic options to this host's agent catalog input;
+    # the wording contracts are pinned in test_skill_contract.py.
+    poll = waiting["poll"]
+    assert poll["text"].startswith("One poll for this review.\n")
+    assert "- Mode: normal review." in poll["text"]
+    rules = waiting["rules"]
+    assert "Present the poll text verbatim" in rules
+    assert "~/.config/opencode/agents/*.md" in rules
+    assert ".opencode/agents/*.md" in rules
+    assert "`opencode.json`" in rules
     contract.write_json(Path(waiting["template_path"]), ONE_MODEL_CRITIC)
     participants = waiting["template_path"]
 
@@ -399,7 +453,15 @@ def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, ca
     assert waiting["participant"] == "critic-1"
     assert "record-run-critic" in waiting["manual_command"]
     _fill_template(waiting["template_path"], {"run_id": "critic-run", "session_id": "critic-s"})
-    _run_manual(capsys, waiting["manual_argv"])
+    imported = _run_manual(capsys, waiting["manual_argv"])
+    # The panel continuation routes back into the one-process run: following
+    # the printed next_action must never leave the run path for the draft-era
+    # finalize chain (the live acceptance caught exactly that deviation).
+    continuation = imported["next_action"]["argv"]
+    assert continuation[:3] == ["reviewmatic", "run", "--resume"]
+    assert "--url" in continuation and imported["next_action"]["command"].startswith(
+        "reviewmatic run --resume"
+    )
 
     assert cli_main([*base[:-1], "--resume", "--participants", participants, "--json"]) == 0
     waiting = _stdout_json(capsys)
@@ -417,7 +479,13 @@ def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, ca
             ],
         },
     )
-    _run_manual(capsys, waiting["manual_argv"])
+    decided = _run_manual(capsys, waiting["manual_argv"])
+    # The decision continuation routes back into the one-process run: the
+    # draft-era content chain is the repair interface, never the tail (the
+    # live acceptance caught the agent following the printed deviation).
+    continuation = decided["next_action"]["argv"]
+    assert continuation[:3] == ["reviewmatic", "run", "--resume"]
+    assert decided["next_action"]["command"].startswith("reviewmatic run --resume")
 
     assert cli_main([*base, "--resume"]) == 0
     waiting = _stdout_json(capsys)
@@ -543,12 +611,12 @@ def _stdout_json(capsys: Any) -> dict[str, Any]:
     return cast("dict[str, Any]", json.loads(capsys.readouterr().out))
 
 
-def _run_manual(capsys: Any, argv: list[str]) -> None:
+def _run_manual(capsys: Any, argv: list[str]) -> dict[str, Any]:
     assert argv[0] == "reviewmatic"
     capsys.readouterr()
     code = cli_main([*argv[1:], "--json"])
     assert code == 0, capsys.readouterr().out
-    capsys.readouterr()
+    return cast("dict[str, Any]", json.loads(capsys.readouterr().out))
 
 
 def _fill_template(path: str, changes: dict[str, Any]) -> None:
@@ -615,7 +683,7 @@ def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
         "        'assessment': 'fixed',\n"
         "        'rationale': 'The exact reviewed code addresses the remark.',\n"
         "        'outcome': 'resolve' if thread.get('state', 'open') == 'open' else thread['outcome'],\n"
-        "        'proposed_response': 'The exact reviewed code handles this path.',\n"
+        "        'proposed_response': 'note: The exact reviewed code handles this path.',\n"
         "    })\n"
         "for candidate in value.get('rejected_candidates', []):\n"
         "    candidate['reason'] = 'Not observable in the exact reviewed head.'\n"

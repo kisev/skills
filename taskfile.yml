@@ -152,6 +152,25 @@ tasks:
     cmds:
       - task: build:skills
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand live --compose '{{.COMPOSE}}'
+  test:integration:skills:acceptance:
+    desc: Run the explicitly configured live code-review acceptance on the fake-glab fixture
+    cmds:
+      - task: build:skills
+      - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.skill_acceptance
+  acceptance:
+    desc: Run the explicitly configured live acceptance umbrella over every skill (user-run; report goes to the master session)
+    vars:
+      SKILL: "{{.SKILL}}"
+    cmds:
+      - task: build:skills
+      - >-
+        mise exec -- uv run --locked python -m tests.integration.acceptance
+        {{if .SKILL}}--skill '{{.SKILL}}'{{end}} {{.CLI_ARGS}}
+  acceptance:plan:
+    desc: Print the acceptance umbrella coverage plan without running anything
+    cmds:
+      - task: build:skills
+      - mise exec -- uv run --locked python -m tests.integration.acceptance --plan-only
   test:integration:mattermost:live:
     desc: Run explicitly configured optional Mattermost agent evaluation
     cmds:

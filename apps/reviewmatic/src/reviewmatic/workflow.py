@@ -425,13 +425,27 @@ def complete_run_panel(root_value: str) -> dict[str, Any]:
     merged = run_panel.aggregate(panel, str(progress["evidence_digest"]), scope)
     path, digest = portable.write_artifact(root, "critic_receipt", merged)
     bind_critic_receipt(root, progress, path, digest)
+    # The run panel exists only on the one-process run path: the continuation
+    # routes back into `run --resume`, never into the draft-era finalize chain
+    # (the repair path has no panel and never reaches this response).
+    _, evidence = context.review_evidence_from_root(root)
+    target = evidence.get("target")
+    url = target.get("url") if isinstance(target, dict) else None
+    if not portable.nonempty_string(url):
+        raise portable.WorkflowError(
+            "the run panel continuation requires the collected merge request URL"
+        )
+    continuation = ["run", "--resume", "--url", str(url)]
+    repo_root = progress.get("repo_root")
+    if isinstance(repo_root, str) and repo_root:
+        continuation.extend(("--repo-root", repo_root))
     return {
         "status": "ok",
         "stage": "finalize_missing",
         "artifact_path": str(path),
         "digest": digest,
         "panel": run_panel.summary(panel),
-        "next_action": context.runner_action("finalize", "--artifact-root", str(root)),
+        "next_action": context.runner_action(*continuation),
         "external_mutations": False,
     }
 
@@ -591,15 +605,27 @@ def decide(args: argparse.Namespace) -> dict[str, Any]:
         plan_digest=None,
     )
     tail.remember_intents(root, digest, publication_intents)
+    # The recorded decision stays on the one-process run path: the run resumes
+    # into the shared render and the prose stop itself. The draft-era content
+    # chain (template-review/scaffold-review) is the repair interface, never
+    # the run's continuation.
+    url = evidence.get("target")
+    url = url.get("url") if isinstance(url, dict) else None
+    if not portable.nonempty_string(url):
+        raise portable.WorkflowError(
+            "the decision continuation requires the collected merge request URL"
+        )
+    continuation = ["run", "--resume", "--url", str(url)]
+    repo_root = progress.get("repo_root")
+    if isinstance(repo_root, str) and repo_root:
+        continuation.extend(("--repo-root", repo_root))
     return {
         "status": "ok",
         "artifact_path": str(path),
         "digest": digest,
         "external_mutations": False,
         "stage": "content_missing",
-        "next_action": context.runner_action(
-            "template-review", "--artifact-root", str(root), "--kind", "content"
-        ),
+        "next_action": context.runner_action(*continuation),
     }
 
 

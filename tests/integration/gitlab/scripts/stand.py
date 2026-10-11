@@ -324,7 +324,7 @@ def new_report(action: str) -> dict[str, Any]:
         "declared_versions": {
             "server_image": "gitlab/gitlab-ce:18.11.11-ce.0",
             "runner_image": "gitlab/gitlab-runner:v18.11.0",
-            "glab": "1.120.0",
+            "glab": "1.121.0",
         },
     }
 
@@ -379,7 +379,7 @@ def main() -> int:
                     if (
                         versions["server"]["version"] != "18.11.11"
                         or not re.search(r"Version:\s+18\.11\.0\b", versions["runner"])
-                        or not re.search(r"\b1\.120\.0\b", versions["cli"])
+                        or not re.search(r"\b1\.121\.0\b", versions["cli"])
                     ):
                         raise RuntimeError(
                             "Observed server/Runner/glab version differs from the pinned contract"

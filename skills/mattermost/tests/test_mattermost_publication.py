@@ -501,10 +501,12 @@ class CardTests(unittest.TestCase):
         guide = (SCRIPTS.parent / "references" / "cards.md").read_text()
         examples = [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", guide, re.S)]
         # One example per template (AUDIT.9): standard + custom, together
-        # covering both kinds and both locales.
-        self.assertEqual(2, len(examples))
+        # covering both kinds and both locales; the merge-request pair stays
+        # bilingual because the live acceptance derives per-locale near-miss
+        # fixtures from it (tests/integration/mattermost/scripts/checks.py).
+        self.assertEqual(3, len(examples))
         self.assertEqual(
-            {("issue", "en", "standard"), ("mr", "ru", "custom")},
+            {("issue", "en", "standard"), ("mr", "en", "standard"), ("mr", "ru", "custom")},
             {(card["kind"], card["locale"], card["template"]) for card in examples},
         )
         for card in examples:

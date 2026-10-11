@@ -3,6 +3,7 @@
   "pairs": [
     { "en": "docs/reference/cli.md", "ru": "docs/ru/reference/cli.md" },
     { "en": "docs/how-to/documentation-review.md", "ru": "docs/ru/how-to/documentation-review.md" },
+    { "en": "docs/how-to/skill-acceptance.md", "ru": "docs/ru/how-to/skill-acceptance.md" },
     { "en": "docs/how-to/memomatic.md", "ru": "docs/ru/how-to/memomatic.md" },
     { "en": "docs/how-to/taskmatic.md", "ru": "docs/ru/how-to/taskmatic.md" },
     {

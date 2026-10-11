@@ -131,8 +131,9 @@ def run(stand: Any, report_dir: Path, _environment: dict[str, str]) -> dict[str,
         "Use the supplied scripts and write only under this isolated workspace and XDG state."
     )
     argv = adapter.host_command(configured["host"], configured["host"], configured["model"], prompt)
+    # --standalone belongs to the `run` subcommand on opencode v2.
     if configured["host"] == "opencode":
-        argv.insert(1, "--standalone")
+        argv.insert(2, "--standalone")
     watched = [
         value
         for name, value in stand.manifest["channels"].items()
@@ -221,8 +222,11 @@ def run(stand: Any, report_dir: Path, _environment: dict[str, str]) -> dict[str,
         candidates = []
         for item in analysis["candidates"]:
             candidate = dict(item)
-            candidate["source_post_ids"] = sorted(
-                {quote["post_id"] for quote in item["cited_excerpts"]}
+            # The triage contract requires source_post_ids to equal the
+            # cited excerpts' deduplicated id order exactly; sorting here
+            # would contradict the validator and fail a correct analysis.
+            candidate["source_post_ids"] = list(
+                dict.fromkeys(quote["post_id"] for quote in item["cited_excerpts"])
             )
             candidate["cited_excerpts"] = [
                 {"post_id": q["post_id"], "quote": q["quote"]} for q in item["cited_excerpts"]

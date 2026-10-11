@@ -38,8 +38,8 @@ def run(stand: Stand, directory: Path, *, browser: bool) -> dict[str, Any]:
         if not re.search(r"\bv2\.", compose):
             raise RuntimeError("Docker Compose v2 is required")
         cli = observe("glab", ["glab", "--version"])
-        if not re.search(r"\b1\.120\.0\b", cli):
-            raise RuntimeError("Pinned glab 1.120.0 is required")
+        if not re.search(r"\b1\.121\.0\b", cli):
+            raise RuntimeError("Pinned glab 1.121.0 is required")
         for name, image in (
             ("server_image", "gitlab/gitlab-ce:18.11.11-ce.0"),
             ("runner_image", "gitlab/gitlab-runner:v18.11.0"),

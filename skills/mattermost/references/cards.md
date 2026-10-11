@@ -97,6 +97,12 @@ field contract.
 {"kind":"issue","template":"standard","locale":"en","title":"api#123 · Duplicate notifications","url":"https://gitlab.example/team/api/-/issues/123","summary":"Retries send duplicate notifications. Discuss deduplication by event key.","status":"Open","author":"Alice","assignee":"Bob","milestone":"v1.2","labels":["bug","backend"],"omitted_labels":3}
 ```
 
+### Standard merge request, English
+
+```json
+{"kind":"mr","template":"standard","locale":"en","title":"api!248 · Deduplicate notifications","url":"https://gitlab.example/team/api/-/merge_requests/248","summary":"Checks event keys before delivery. Review focus: concurrent retries.","status":"Ready for review","author":"Alice","assignee":"Bob","milestone":"v1.2","labels":["backend"],"omitted_labels":0,"pipeline":"Passed","approvals":"1/2"}
+```
+
 ### Custom merge request, Russian
 
 Both kinds support the same custom field contract; project instructions can

@@ -7,6 +7,7 @@ import os
 import shutil
 import signal
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -65,11 +66,23 @@ def run(stand: Any, f: dict[str, Any], directory: Path) -> dict[str, Any]:
         f"runbook (absolute path) and title (observed MR title) to {output}."
     )
     argv = adapter.host_command(configured["host"], configured["host"], configured["model"], prompt)
+    # --standalone belongs to the `run` subcommand on opencode v2.
     if configured["host"] == "opencode":
-        argv.insert(1, "--standalone")
+        argv.insert(2, "--standalone")
     endpoint = f["prefix"] + f"/merge_requests/{f['mr']['iid']}"
-    before = stand.request("GET", endpoint)
+    # GitLab writes the fixture MR's system notes (branch restore, commit
+    # lists) asynchronously, seconds after the API calls that created them.
+    # Capturing the boundary baseline before that settle reads the agent run
+    # as a publication mutation; wait for the discussion stream to stabilize
+    # before snapshotting it.
     notes_before = stand.request("GET", endpoint + "/discussions")
+    for _ in range(10):
+        time.sleep(2)
+        settled = stand.request("GET", endpoint + "/discussions")
+        if settled == notes_before:
+            break
+        notes_before = settled
+    before = stand.request("GET", endpoint)
     with subprocess.Popen(
         argv,
         cwd=workspace,

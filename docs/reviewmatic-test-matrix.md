@@ -79,3 +79,70 @@ Node-script fake `glab` onto `PATH` and records every request. The Python port
 rewrites this helper as a Python fake with the same recorded-request contract;
 the ported request-log tests carry the parity evidence. This keeps the package
 tests standard-library-only instead of depending on a Node runtime.
+
+## Skill acceptance layers
+
+The code-review skill has two acceptance layers on top of its ordinary test
+suite (solution 64: committing a broken review cycle must be impossible
+deterministically, or immediately visible agentically).
+
+The deterministic layer lives inside the full-cycle tests. The run-cycle test
+seeds `closes_issues` and asserts the completed run by artifacts and the
+fixture request log: the poll stop hands the agent the verbatim poll text plus
+the agent-catalog grounding rules; related issues are collected with their
+`author_text` origin; authored Conventional Comments reply labels survive into
+the publication plan; and the whole cycle talks to the one fake glab from
+`tests/helpers/review_fixture.py`. They run inside `task check` through the
+ordinary pytest suite.
+
+The agent layer is `task test:integration:skills:acceptance`
+(`tests/integration/gitlab/scripts/skill_acceptance.py`). It builds the
+fake-glab fixture, pre-seeds the host agent catalog, pins the reviewmatic
+runtime to the current checkout, and asks one real
+`opencode run --standalone` session to drive the complete review cycle from
+the temporary checkout. Verification is machine-only, over artifacts and the
+host's stdout JSONL events: the poll presented verbatim, the critic receipt
+imported, the prose authored, the reading discipline respected (zero
+out-of-stage `references/` reads), no publication mutation against the fake
+glab, and an independent `reviewmatic report-review` revalidation. It never
+parses the host session database.
+
+Honest boundaries of the agent layer: the GitLab host is the fake-glab
+fixture rather than a real server, publication stays unexecuted, and
+provider/model behavior is not deterministic — a green verdict means one real
+model completed the cycle and passed every machine check, with a retry only
+for transport-level failures. The critic panel keeps its independence
+contract: the acceptance requires the critic to run as an independent
+subagent session (opencode's subagent tool provides one) and fails a receipt
+signed with the primary session's identity.
+The task runs with defaults (the `zai-coding-plan/glm-5.3-flash` model, a
+90-minute timeout, and generous token/cost budgets) and stays fully
+configurable through the `EVAL_MODEL`, `EVAL_TIMEOUT`, `EVAL_MAX_TOKENS`, and
+`EVAL_MAX_COST` environment variables; provider credentials are always
+explicit. It is
+deliberately outside `task check`, `check:core`, the Lefthook pre-push gate,
+the CI matrix, and `gate-registry.json` (same class as `eval:live`).
+
+Run the agent layer on every wave that touches the code-review skill texts,
+and before a release. Run the deterministic layer whenever anything in the
+repository changes; it is an ordinary test.
+
+## The acceptance umbrella
+
+`task acceptance` (`tests/integration/acceptance.py`) is the single launcher
+over every live skill family: it drives the agent layer above, the GitLab and
+Mattermost live runs, and one minimal behavioral probe per uncovered skill
+(`tests/integration/acceptance_probes.py`). Each probe installs only its
+skill into an isolated host sandbox, seeds small fixture files, and
+machine-checks the produced artifact; skills a synthetic fixture cannot
+exercise are skipped with their reason in the report. Every run writes
+`result.json` and `summary.md` under `.build/acceptance/<timestamp>/` and
+prints line-by-line progress (skill, family, stage, model, elapsed). The
+default model is the cheap flash class; any `EVAL_*` variable overrides it,
+and a non-cheap model requires explicit `--yes` or `ACCEPT_EXPENSIVE=1`.
+The full code-review cycle wall clock is an acceptance criterion of its own:
+30 minutes on the fixture above, per stage timed, an overrun is a red
+verdict. How to run it, where reports land, and how to hand a report to the
+master session live in [the how-to](how-to/skill-acceptance.md). The
+umbrella stays outside `task check`, `check:core`, Lefthook, CI, and the
+gate registry.
