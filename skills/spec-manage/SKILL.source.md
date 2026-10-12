@@ -13,3 +13,5 @@ metadata:
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` to conversation and reports, not to the independently declared language of canonical `specs/` prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+When the target project contains `openspec/`, read `references/openspec.md` for the OpenSpec coexistence map before acting on `openspec/` artifacts; it bounds what this skill writes there.

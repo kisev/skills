@@ -8,6 +8,18 @@ All notable changes to this project are documented in this file. Entries follow
 
 ## \[Unreleased]
 
+### Added
+
+- `spec-manage` keeps an OpenSpec coexistence map (`references/openspec.md`): in
+  projects that use OpenSpec (`openspec/`), the skill complements it without
+  duplicating its core — a proposal gate before `/opsx:propose` (interview,
+  validation-versus-verification, acceptance bar), an append-only ADR journal
+  in `openspec/decisions/` that carries significant `design.md` decisions
+  forward across archives, a read-only quality audit of OpenSpec capability
+  specs, post-archive consolidation prepared as an OpenSpec delta change
+  rather than hand edits, and a check of missing non-functional requirement
+  domains; a router entry sends OpenSpec projects to the map.
+
 ### Changed
 
 - `team-roadmap` aligns its document contract with curated roadmap practices
