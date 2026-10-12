@@ -77,7 +77,12 @@ artifact file behind the runtime's back, and never read contract references to
 re-derive a refusal: the printed message is the complete repair contract. The run then
 invokes the shared renderer, materializes `content-prose-<digest>.json`, and
 returns `template_kind=prose` with `reviewmatic record-prose --artifact-root <root> --input <prose>`.
-Edit prose, semantic choices, and fix payloads only. Do not author positions,
+The prose stop also prints `vocabularies` — every accepted status vocabulary
+for the prose surface (chat-assessment statuses, label statuses, SemVer
+impacts, thread states/assessments/outcomes/fix modes): treat that payload as
+the complete dictionary and never open a contract schema or reference to
+learn an accepted value; a refusal names the field, the received value, and
+the same vocabulary. Edit prose, semantic choices, and fix payloads only. Do not author positions,
 range counters, patch paths/digests, revisions, or `update_issue`.
 Return the prepared `finding_id` unchanged. Never create or reconstruct machine
 identities, substitute another identifier, or send unknown rows. Use

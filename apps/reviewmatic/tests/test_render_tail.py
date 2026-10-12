@@ -88,7 +88,7 @@ def _prose_fill(prose: dict[str, Any]) -> dict[str, Any]:
                 "rationale": f"The observed {field} is sufficient.",
                 "recommendation": None,
             }
-            for field in ("title", "description", "labels", "workflow_state", "overall")
+            for field in prose["mr_metadata_assessment"]
         },
         "label_assessments": [
             {
@@ -116,7 +116,7 @@ def _prose_fill(prose: dict[str, Any]) -> dict[str, Any]:
                 # The fixture thread is open (machine state); a closing
                 # assessment resolves it.
                 "outcome": "resolve",
-                "proposed_response": "The exact reviewed code handles this path.",
+                "proposed_response": "note: The exact reviewed code handles this path.",
             }
             for item in prose["thread_decisions"]
         ],

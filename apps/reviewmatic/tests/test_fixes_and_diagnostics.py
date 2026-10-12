@@ -209,3 +209,204 @@ def _git(root: Path, *arguments: str) -> str:
     )
     result["stdout"] = completed.stdout
     return completed.stdout.strip()
+
+
+def test_chat_assessment_refusal_names_field_value_and_vocabularies() -> None:
+    """Decision 72 (MR !538 evidence): the chat-assessment refusal is
+    field-level - the offending field, the received value, and the accepted
+    statuses - because the live record-prose acceptance met the bare
+    "review chat assessment is invalid" and dug the statuses out of the
+    schema."""
+    from reviewmatic import context as review_context
+
+    guessed_status = {
+        "necessity": {"status": "confirmed", "rationale": "The chat shows it."},
+        "relevance": {"status": "current", "rationale": "The discussion is live."},
+        "change": "The retry became idempotent.",
+    }
+    with pytest.raises(
+        contract.WorkflowError,
+        match=(
+            r"review chat assessment is invalid: necessity.status is 'confirmed'; "
+            r"expected supported, doubtful, unconfirmed"
+        ),
+    ):
+        review_context.validate_chat_assessment(guessed_status)
+    wrong_keys = {
+        "necessity": {"status": "supported", "rationale": "The chat shows it."},
+        "relevance": {"status": "current", "rationale": "The discussion is live."},
+        "changes": "The retry became idempotent.",
+    }
+    with pytest.raises(
+        contract.WorkflowError,
+        match=(
+            r"review chat assessment is invalid: keys are \['changes', 'necessity', "
+            r"'relevance'\]; expected exactly change, necessity, relevance"
+        ),
+    ):
+        review_context.validate_chat_assessment(wrong_keys)
+
+
+def test_prose_unknown_key_refusal_names_the_accepted_keys() -> None:
+    """Decision 72 (MR !538 evidence): a wrong prose key is refused with the
+    complete accepted-key list, so the author never reconstructs the surface
+    shape from a schema (~30 record-prose retries in the live acceptance)."""
+    from reviewmatic import render
+
+    content = {"locale": "en", "summary": "Text."}
+    with pytest.raises(
+        contract.WorkflowError,
+        match=(
+            r"the prose surface carries only prose and semantic fields; findings_list is "
+            r"machine-rendered - edit it only through a recorded repair kind; "
+            r"accepted keys: locale, chat_assessment"
+        ),
+    ):
+        render.apply_prose(content, {"findings_list": []})
+    merged = render.apply_prose(content, {"summary": "Updated."})
+    assert merged["summary"] == "Updated."
+
+
+def test_authoring_vocabularies_match_the_validators() -> None:
+    """Decision 72: the printed dictionaries in the prose stop are the same
+    tuples the validators enforce, so a stop never teaches a wrong value."""
+    from reviewmatic import context as review_context
+    from reviewmatic.portable.portable_gitlab import review_semver
+
+    vocabularies = review_context.AUTHORING_VOCABULARIES
+    assert vocabularies["chat_assessment.necessity.status"] == (
+        "supported",
+        "doubtful",
+        "unconfirmed",
+    )
+    assert vocabularies["chat_assessment.relevance.status"] == (
+        "current",
+        "partly_outdated",
+        "outdated",
+    )
+    assert set(vocabularies["semver_impact"]) == review_semver.IMPACTS
+    assert vocabularies["thread_decisions[*].outcome"] == contract.THREAD_OUTCOMES
+    assert vocabularies["thread_decisions[*].fix_mode"] == contract.THREAD_FIX_MODES
+    assert vocabularies["label_assessments[*].status"] == (
+        "applicable",
+        "inapplicable",
+        "unresolved",
+    )
+
+
+def test_metadata_drift_split_notifies_metadata_and_blocks_code() -> None:
+    """Decision 72 (MR !521 evidence): end-of-run drift is split - metadata
+    drift (merge, labels, catalog, discussions, pipelines) notifies with the
+    fields named and never drops the authoring chain, while code drift still
+    blocks the report."""
+    from reviewmatic import context as review_context
+
+    def evidence(state: str = "opened", label: str = "kind::feature") -> dict[str, Any]:
+        return {
+            "target": {"kind": "merge_request", "iid": 7},
+            "head_sha": "a" * 40,
+            "base_sha": "b" * 40,
+            "start_sha": "b" * 40,
+            "object": {
+                "state": state,
+                "title": "One line",
+                "labels": [label],
+                "assignees": [{"username": "kim"}],
+            },
+            "labels": {"complete": True, "items": [{"name": label}]},
+            "discussions": [{"root_note_id": "note_1"}],
+            "changed_files": ["a.py"],
+            "commits": [],
+            "pipelines": {"status": "success"},
+            "retrieval_complete": True,
+        }
+
+    merged = review_context.metadata_drift_report(evidence(), evidence(state="merged"))
+    assert merged is not None and merged["blocking"] is False
+    assert merged["metadata"] == ["object"] and merged["code"] == []
+    assert "state: merged" in merged["details"]
+    catalog = review_context.metadata_drift_report(evidence(), evidence(label="type::bug"))
+    assert catalog is not None and catalog["blocking"] is False
+    assert sorted(catalog["metadata"]) == ["labels", "object"]
+    assert any("label catalog" in detail for detail in catalog["details"])
+    code = dict(evidence())
+    code["head_sha"] = "c" * 40
+    pushed = review_context.metadata_drift_report(evidence(), code)
+    assert pushed is not None and pushed["blocking"] is True
+    assert pushed["code"] == ["head_sha"]
+    assert review_context.metadata_drift_report(evidence(), evidence()) is None
+    notice = review_context.drift_notice_lines(merged, "en", {"command": "reviewmatic prepare"})
+    assert notice[0] == "### Metadata drift after the reviewed snapshot"
+    assert any("state: merged" in line for line in notice)
+    assert any("`reviewmatic prepare`" in line for line in notice)
+    russian = review_context.drift_notice_lines(merged, "ru", None)
+    assert russian[0] == "### Дрейф метаданных после снимка ревью"
+
+
+def test_semver_templates_print_the_impact_vocabulary(repo: Path) -> None:
+    """Decision 72 (MR !538 evidence): the SemVer templates and refusals print
+    the accepted impact vocabulary inline, so the author never opens the
+    schema to learn one accepted value."""
+
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            ["git", "-C", str(repo), *arguments],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+    from reviewmatic.portable.portable_gitlab import review_semver
+
+    (repo / "file.txt").write_text("one\n")
+    git("add", ".")
+    git("commit", "-m", "base")
+    git("config", "tag.gpgsign", "false")
+    tag_sha = git("rev-parse", "HEAD")
+    git("tag", "v1.2.3")
+    (repo / "file.txt").write_text("one\ntwo\n")
+    git("commit", "-am", "target")
+    target_sha = git("rev-parse", "HEAD")
+    evidence = {
+        "artifact_root": "/tmp/x",
+        "base_sha": tag_sha,
+        "head_sha": target_sha,
+        "start_sha": tag_sha,
+        "object": {"target_branch": "main"},
+    }
+    context = {
+        "release_evidence": {
+            "target_branch": "main",
+            "target_sha": target_sha,
+            "releases": {"complete": True, "items": []},
+            "tags": {
+                "complete": True,
+                "items": [{"name": "v1.2.3", "commit": {"id": tag_sha}}],
+            },
+            "errors": [],
+        },
+        "exact_git": {"repo_root": str(repo)},
+    }
+    rendered = review_semver.rendered_template(evidence, context)
+    assert rendered["mode"] == "release"
+    assert rendered["release_impact"].startswith(
+        "<IMPACT: major, minor, patch, none, or not_applicable"
+    )
+    with pytest.raises(contract.WorkflowError) as raised:
+        review_semver.validate(
+            {
+                "policy": "Tags follow semver.",
+                "sources": ["Collected tags catalog"],
+                "mode": "release",
+                "baseline": {"name": "v1.2.3", "sha": tag_sha, "source": "tags"},
+                "target_branch": "main",
+                "target_sha": target_sha,
+                "target_revision": "current",
+                "fallback_reason": None,
+                "release_impact": None,
+                "release_rationale": None,
+            },
+            evidence,
+            context,
+        )
+    assert "release_impact is one of major, minor, patch, none, not_applicable" in str(raised.value)

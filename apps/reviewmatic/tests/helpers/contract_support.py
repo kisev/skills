@@ -262,10 +262,18 @@ def review_plan_payload() -> dict[str, Any]:
                 "description": "Align the producer and schema.",
                 "labels": ["type::bug"],
                 "workflow_state": "merged",
+                "milestone": None,
             },
             "assessment": {
                 name: _metadata_item(name)
-                for name in ("title", "description", "labels", "workflow_state", "overall")
+                for name in (
+                    "title",
+                    "description",
+                    "labels",
+                    "workflow_state",
+                    "milestone",
+                    "overall",
+                )
             },
         },
         "chat_assessment": {

@@ -166,10 +166,10 @@ def _thread_decisions_for(draft_path: Any) -> list[dict[str, Any]]:
             "id": thread["id"],
             "assessment": "fixed",
             "rationale": "The exact reviewed code already addresses the remark.",
-            "outcome": "no_publication" if thread["state"] == "resolved" else "resolve",
+            "outcome": "no_reply" if thread["state"] == "resolved" else "resolve",
             "proposed_response": None
             if thread["state"] == "resolved"
-            else "The exact reviewed code now handles this path.",
+            else "note: The exact reviewed code now handles this path.",
         }
         for thread in _read(draft_path)["content"]["thread_decisions"]
     ]
@@ -784,7 +784,7 @@ def test_record_input_updates_an_existing_thread_by_id_and_rejects_forged_bindin
                             "assessment": "fixed",
                             "rationale": "The exact reviewed code already addresses the remark.",
                             "outcome": "resolve",
-                            "proposed_response": "The exact reviewed code now handles this path.",
+                            "proposed_response": "note: The exact reviewed code now handles this path.",
                         }
                     ]
                 }

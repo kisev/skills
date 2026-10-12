@@ -204,7 +204,7 @@ def review(input_path: Path) -> dict[str, Any]:
     for thread in content["thread_decisions"]:
         thread["assessment"] = "neutral"
         thread["rationale"] = "Synthetic placement probe, not a claimed code defect."
-        thread["outcome"] = "reply" if thread["state"] == "open" else "no_publication"
+        thread["outcome"] = "reply" if thread["state"] == "open" else "no_reply"
         thread["proposed_response"] = (
             "Harness reviewmatic reply; correction is still pending."
             if thread["state"] == "open"

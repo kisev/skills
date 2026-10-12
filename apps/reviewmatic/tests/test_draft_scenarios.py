@@ -313,7 +313,7 @@ def test_publication_errors_are_repairable_in_the_same_draft_before_a_decision(
     completed = draft_module.finish_review(str(result["draft_path"]))
     assert completed["status"] == "ok"
     _, plan = contract.artifact_payload(Path(str(completed["artifact_path"])), "review_plan")
-    assert plan["thread_decisions"][0]["outcome"] == "no_publication"
+    assert plan["thread_decisions"][0]["outcome"] == "no_reply"
     assert _thread_actions(plan) == []
     discussion = _thread_discussion(Path(str(result["artifact_root"])), "42")
     assert "Retry needs an idempotency key" in discussion["notes"][0]["body"]

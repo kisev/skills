@@ -558,9 +558,30 @@ def artifact_payload(path: Path, kind: str) -> tuple[dict[str, Any], dict[str, A
 
 
 def exact_keys(value: object, required: set[str], label: str) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != required:
-        raise WorkflowError(f"{label} has unknown or missing fields")
-    return value
+    """Accept exactly the required keys; the refusal names every offender.
+
+    Decision 72: a key-set refusal is the environment's answer, so it prints
+    the missing and unexpected keys plus the accepted set instead of leaving
+    the author to dig the shape out of a schema (MR !538 evidence)."""
+    if not isinstance(value, dict):
+        raise WorkflowError(f"{label} must be an object")
+    keys = set(value)
+    if keys == required:
+        return value
+    missing = sorted(required - keys)
+    unexpected = sorted(keys - required)
+    detail = "; ".join(
+        part
+        for part in (
+            f"missing {missing}" if missing else "",
+            f"unknown {unexpected}" if unexpected else "",
+        )
+        if part
+    )
+    raise WorkflowError(
+        f"{label} has unknown or missing fields: {detail}; accepted keys are exactly "
+        + ", ".join(sorted(required))
+    )
 
 
 def nonempty_string(value: object) -> bool:
@@ -670,6 +691,26 @@ def duplicate_detailed_finding_ids(value: object) -> list[list[str]]:
     return [item_ids for item_ids in groups.values() if len(item_ids) > 1]
 
 
+# Decision 72: one printed source for the thread vocabularies. The validators
+# and the authoring stops read the same tuples, so a refusal and a template
+# never disagree and the schema stays closed (MR !538 evidence).
+THREAD_STATES = ("open", "resolved", "plain")
+THREAD_ASSESSMENTS = (
+    "accepted",
+    "fixed",
+    "false_positive",
+    "duplicate",
+    "not_related",
+    "question",
+    "neutral",
+)
+# Decision 75.5: no_reply replaces no_publication everywhere, and an open
+# thread with a confirmed, unattempted defect also takes no_reply instead of
+# being forced into a reply.
+THREAD_OUTCOMES = ("no_reply", "local_fix", "reply", "resolve", "reopen")
+THREAD_FIX_MODES = ("suggestion", "patch", "not_required")
+
+
 def thread_decisions_are_valid(value: object) -> bool:
     legacy = {"id", "url", "state", "assessment", "rationale", "outcome", "proposed_response"}
     current = legacy | {"last_note_id", "last_note_body_sha256", "thread_sha256"}
@@ -715,21 +756,11 @@ def _thread_decision_is_valid(
         and nonempty_string(item.get("rationale"))
     ):
         return False
-    if item.get("state") not in {"open", "resolved", "plain"}:
+    if item.get("state") not in THREAD_STATES:
         return False
-    if item.get("assessment") not in {
-        "accepted",
-        "fixed",
-        "false_positive",
-        "duplicate",
-        "not_related",
-        "question",
-        "neutral",
-    }:
+    if item.get("assessment") not in THREAD_ASSESSMENTS:
         return False
-    if item.get("outcome") not in {"no_publication", "local_fix", "reply", "resolve", "reopen"}:
-        return False
-    if item.get("state") == "open" and item.get("outcome") == "no_publication":
+    if item.get("outcome") not in THREAD_OUTCOMES:
         return False
     if item.get("proposed_response") is not None and not nonempty_string(
         item.get("proposed_response")
@@ -755,7 +786,7 @@ def _thread_decision_is_valid(
             item.get("fix_mode") != "patch" and patch is None
         )
         if (
-            item.get("fix_mode") not in {"suggestion", "patch", "not_required"}
+            item.get("fix_mode") not in THREAD_FIX_MODES
             or not fixing_commit_valid
             or not patch_valid
         ):
@@ -779,14 +810,19 @@ def _thread_decision_is_valid(
     return True
 
 
-def finding_publications_are_valid(value: object, require_fixes: bool = False) -> bool:
+def finding_publications_are_valid(
+    value: object, require_fixes: bool = False, comment_only: bool = False
+) -> bool:
     legacy = {"finding_id", "revision", "type", "path", "line", "old_line", "body"}
     fixed = legacy | {"fix_mode", "patch", "patch_path", "patch_sha256"}
     allowed = (fixed,) if require_fixes else (legacy, fixed)
     extensible = {"suggestions", "split_rationale", "patch_reason", "thread_id"}
     if not isinstance(value, list):
         return False
-    return all(_finding_publication_is_valid(item, allowed, extensible, legacy) for item in value)
+    return all(
+        _finding_publication_is_valid(item, allowed, extensible, legacy, comment_only)
+        for item in value
+    )
 
 
 def _finding_publication_is_valid(
@@ -794,6 +830,7 @@ def _finding_publication_is_valid(
     allowed: tuple[set[str], ...],
     extensible: set[str],
     legacy: set[str],
+    comment_only: bool = False,
 ) -> bool:
     if not isinstance(item, dict):
         return False
@@ -821,6 +858,20 @@ def _finding_publication_is_valid(
     ):
         return False
     if keys == legacy:
+        return True
+    if (
+        comment_only
+        and item.get("type") == "general"
+        and item.get("fix_mode") == "not_required"
+        and item.get("patch") is None
+        and item.get("patch_path") is None
+        and item.get("patch_sha256") is None
+        and item.get("path") is None
+        and item.get("line") is None
+        and item.get("old_line") is None
+        and "suggestions" not in item
+    ):
+        # Decision 75.3: an auto plan publishes findings as comment-only rows.
         return True
     if item.get("fix_mode") not in {"suggestion", "patch"}:
         return False
@@ -855,7 +906,7 @@ def mr_metadata_assessment_is_valid(value: object) -> bool:
     if not isinstance(value, dict) or set(value) != {"observed", "assessment"}:
         return False
     observed, assessment = value["observed"], value["assessment"]
-    fields = {"title", "description", "labels", "workflow_state"}
+    fields = {"title", "description", "labels", "workflow_state", "milestone"}
     assessment_fields = fields | {"overall"}
     return (
         isinstance(observed, dict)
@@ -865,6 +916,7 @@ def mr_metadata_assessment_is_valid(value: object) -> bool:
         and isinstance(observed.get("labels"), list)
         and all(isinstance(item, str) for item in observed["labels"])
         and nonempty_string(observed.get("workflow_state"))
+        and (observed.get("milestone") is None or isinstance(observed.get("milestone"), str))
         and isinstance(assessment, dict)
         and set(assessment) == assessment_fields
         and all(metadata_assessment_item_is_valid(assessment[field]) for field in assessment_fields)
@@ -893,6 +945,7 @@ def review_metadata_labels(locale: str) -> dict[str, str]:
         {
             "title": "Заголовок",
             "description": "Описание",
+            "milestone": "Майлстоун",
             "workflow_state": "Состояние",
             "overall": "Итог оформления",
         }
@@ -900,6 +953,7 @@ def review_metadata_labels(locale: str) -> dict[str, str]:
         else {
             "title": "Title",
             "description": "Description",
+            "milestone": "Milestone",
             "workflow_state": "State",
             "overall": "Metadata summary",
         }
@@ -1148,6 +1202,17 @@ def review_publication_preview_is_valid(value: object) -> bool:
     keys = set(value)
     if keys == manual_keys:
         return _manual_preview_is_valid(value)
+    if keys == manual_keys | {"proposal"}:
+        proposal = value.get("proposal")
+        return (
+            _manual_preview_is_valid(value)
+            and isinstance(proposal, dict)
+            and (
+                set(proposal) == {"publication_id", "body"}
+                and nonempty_string(proposal.get("publication_id"))
+                and nonempty_string(proposal.get("body"))
+            )
+        )
     if keys == structured_keys:
         return _structured_preview_is_valid(value)
     if keys not in (legacy_keys, current_keys):
@@ -1258,7 +1323,7 @@ def _manual_preview_is_valid(value: dict[str, Any]) -> bool:
         and nonempty_string(item.get("publication_id"))
         and is_plain_int(item.get("revision"))
         and cast("int", item["revision"]) >= 1
-        and item.get("kind") in {"finding", "thread", "issue"}
+        and item.get("kind") in {"finding", "thread", "issue", "proposal"}
         and nonempty_string(item.get("path"))
         and isinstance(item.get("path"), str)
         and item["path"].startswith("/")
@@ -1292,6 +1357,10 @@ def _manual_preview_is_valid(value: dict[str, Any]) -> bool:
         for item in actions
         if isinstance(item, dict) and item.get("publication_id") is not None
     }
+    if "proposal" in value:
+        # Decision 75.3 (auto mode): ready comment bodies ship without
+        # execution commands; every action still needs its body.
+        return len(action_ids) == len(set(action_ids)) and manual_action_body_ids <= manual_body_ids
     return len(action_ids) == len(set(action_ids)) and manual_body_ids == manual_action_body_ids
 
 
@@ -2749,7 +2818,14 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         verdict_pair_present = optional_verdict_keys & set(payload)
         if verdict_pair_present and verdict_pair_present != optional_verdict_keys:
             raise WorkflowError("review plan merge verdict requires both fields")
-        actual_keys = set(payload) - {"review_source", *optional_verdict_keys}
+        actual_keys = set(payload) - {
+            "review_source",
+            "session_mode",
+            *optional_verdict_keys,
+        }
+        auto_plan = payload.get("session_mode") == "auto"
+        if not auto_plan and "session_mode" in payload:
+            raise WorkflowError("review plan session mode must be auto when present")
         if actual_keys not in (
             minimal_required,
             legacy_required,
@@ -2849,7 +2925,9 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
                         version in (3, 4, 5, 6, 7)
                         and (
                             not finding_publications_are_valid(
-                                payload.get("finding_publications"), require_fixes=True
+                                payload.get("finding_publications"),
+                                require_fixes=True,
+                                comment_only=auto_plan,
                             )
                             or not all(
                                 isinstance(item, dict)
@@ -3060,7 +3138,26 @@ def validate_v2_artifact(value: dict[str, Any], kind: str) -> None:
         }
         payload_keys = set(payload)
         if not required <= payload_keys or not payload_keys <= required | optional:
-            raise WorkflowError("review decision payload has unknown or missing fields")
+            missing = sorted(required - payload_keys)
+            unexpected = sorted(payload_keys - required - optional)
+            raise WorkflowError(
+                "review decision payload has unknown or missing fields: "
+                + "; ".join(
+                    part
+                    for part in (
+                        f"missing {missing}" if missing else "",
+                        f"unknown {unexpected}" if unexpected else "",
+                    )
+                    if part
+                )
+                + "; required keys are "
+                + ", ".join(sorted(required))
+                + "; optional keys are "
+                + ", ".join(sorted(optional))
+                + ". findings carries only the primary review's findings - critic findings "
+                "arrive through the critic receipt and the machine-derived critic_findings "
+                "and accepted_findings, never through findings"
+            )
         responses = payload["responses"]
         if (
             payload["schema"] != "portable-gitlab/review-decision/v2"
@@ -5568,11 +5665,19 @@ def validate_decision(
             or full_match("[A-Za-z0-9][A-Za-z0-9._-]{0,63}", item_id) is None
             for item_id in finding_ids
         ):
+            counted = [str(item.get("id")) for item in finding_subjects if isinstance(item, dict)]
+            duplicates = sorted(
+                {identifier for identifier in counted if counted.count(identifier) > 1}
+            )
             raise WorkflowError(
                 _validation_record(
-                    "finding identities are unique and namespace-safe",
+                    "finding identities are unique and namespace-safe"
+                    + (f" (duplicates: {', '.join(duplicates)})" if duplicates else ""),
                     "$.findings[*].id",
-                    "distinct strings matching [A-Za-z0-9][A-Za-z0-9._-]{0,63}",
+                    "distinct strings matching [A-Za-z0-9][A-Za-z0-9._-]{0,63}; findings "
+                    "carries only the primary review's findings - a critic finding lives in "
+                    "the critic receipt and is answered through its own response, while "
+                    "critic_findings and accepted_findings are machine-derived, never authored",
                 )
             )
         if any(

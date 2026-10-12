@@ -100,6 +100,8 @@ class ReviewRun:
         self.mode: str = getattr(namespace, "reviewMode", None) or "normal"
         self.locale: str = getattr(namespace, "locale", None) or "en"
         self.incremental: str = getattr(namespace, "incremental", None) or "auto"
+        self.session_mode: str = getattr(namespace, "sessionMode", None) or "manual"
+        self.fix_policy: str | None = getattr(namespace, "fixPolicy", None)
         self.participants: str | None = getattr(namespace, "participants", None)
         self.ocr_provider: str | None = getattr(namespace, "ocrProvider", None)
         self.ocr_model: str | None = getattr(namespace, "ocrModel", None)
@@ -172,6 +174,8 @@ class ReviewRun:
                         review_mode=self.mode,
                         locale=self.locale,
                         incremental=self.incremental,
+                        session_mode=self.session_mode,
+                        fix_policy=self.fix_policy,
                     ),
                     bundle,
                 ),
@@ -582,6 +586,9 @@ class ReviewRun:
             "artifact_root": str(self.root),
             "reason": status.get("reason"),
             "template_path": state["prose_path"],
+            "vocabularies": {
+                name: list(values) for name, values in context.AUTHORING_VOCABULARIES.items()
+            },
             "manual_command": action["command"],
             "manual_argv": action["argv"],
             "resume_command": self.resume_command(),

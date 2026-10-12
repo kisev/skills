@@ -46,7 +46,7 @@ def _review_publication_block(fixture: ReviewFixture, state_action: str) -> str:
                 "assessment": "accepted",
                 "severity": "medium",
                 "outcome": "reopen",
-                "proposed_response": "The resolved thread still needs this correction.",
+                "proposed_response": "issue: The resolved thread still needs this correction.",
                 "fix_mode": "suggestion",
                 "suggestions": [
                     {
@@ -81,7 +81,7 @@ def _run_fake_glab_block(
     log_path = tmp_path / "glab-log.jsonl"
     glab = binary_dir / "glab"
     glab.write_text(
-        "#!/usr/bin/env python3\n"
+        "#!/usr/bin/python3\n"
         "import json, os, sys\n"
         "argv = sys.argv[1:]\n"
         "method_index = argv.index('--method')\n"
@@ -129,7 +129,7 @@ def test_direct_commands_preserve_arguments_and_never_evaluate_shell_content() -
         command_argv("reviewmatic publication apply --action old")
 
 
-def test_manual_sends_make_one_write_can_fail_and_repeat_and_keep_no_publication_state(
+def test_manual_sends_make_one_write_can_fail_and_repeat_and_keep_no_reply_state(
     fixture: ReviewFixture,
 ) -> None:
     started = draft_module.start_review(url=fixture.url, repo_root=str(fixture.repo))

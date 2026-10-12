@@ -54,6 +54,18 @@ def _base(finding_id: str, publication_type: str) -> dict[str, Any]:
 
 
 def _variant_block(finding_id: str, variant: str) -> dict[str, Any]:
+    if variant == "general+not_required":
+        # Decision 75.3 (auto mode): a comment-only finding publication - prose
+        # with its Conventional Comments label, no fix payload at all.
+        return {
+            **_base(finding_id, "general"),
+            "body": (
+                "<BODY: a Conventional Comments label (suggestion, issue, question, note, "
+                "praise, or todo), then prose for the comment>"
+            ),
+            "fix_mode": "not_required",
+            "patch": None,
+        }
     if variant == "general+patch":
         return {
             **_base(finding_id, "general"),

@@ -115,8 +115,11 @@ def test_thread_decisions_validate_shape_outcome_and_patch_bindings() -> None:
     }
     assert contract.thread_decisions_are_valid([current]) is True
     assert contract.thread_decisions_are_valid([{**current, "suggestion_applicable": True}]) is True
-    open_silent = {**current, "outcome": "no_publication"}
-    assert contract.thread_decisions_are_valid([open_silent]) is False
+    open_silent = {**current, "outcome": "no_reply"}
+    # Decision 75.5: an open thread with an unattempted confirmed defect takes
+    # no_reply; the shape predicate accepts it and the plan validator couples
+    # it to the assessment and fix policy.
+    assert contract.thread_decisions_are_valid([open_silent]) is True
     assert contract.thread_decisions_are_valid([{**open_silent, "state": "resolved"}]) is True
     patch = "diff --git a/f b/f\n"
     materialized = {
@@ -281,6 +284,7 @@ def test_metadata_assessment_validates_observed_fields() -> None:
             "description": None,
             "labels": ["type::bug"],
             "workflow_state": "merged",
+            "milestone": None,
         },
         "assessment": {
             "title": {"status": "ok", "rationale": "sufficient", "recommendation": None},
@@ -291,6 +295,7 @@ def test_metadata_assessment_validates_observed_fields() -> None:
             },
             "labels": {"status": "unverified", "rationale": "unknown", "recommendation": None},
             "workflow_state": {"status": "ok", "rationale": "sufficient", "recommendation": None},
+            "milestone": {"status": "ok", "rationale": "sufficient", "recommendation": None},
             "overall": {"status": "ok", "rationale": "sufficient", "recommendation": None},
         },
     }
@@ -298,6 +303,25 @@ def test_metadata_assessment_validates_observed_fields() -> None:
     assert (
         contract.mr_metadata_assessment_is_valid(
             {**valid, "observed": {**valid["observed"], "title": 5}}
+        )
+        is False
+    )
+    # Decision 75: the milestone field follows the same shape contract.
+    assert (
+        contract.mr_metadata_assessment_is_valid(
+            {**valid, "observed": {**valid["observed"], "milestone": "v1.2"}}
+        )
+        is True
+    )
+    assert (
+        contract.mr_metadata_assessment_is_valid(
+            {
+                **valid,
+                "assessment": {
+                    **valid["assessment"],
+                    "milestone": {"status": "unknown", "rationale": "x", "recommendation": None},
+                },
+            }
         )
         is False
     )
@@ -540,3 +564,65 @@ def test_artifact_timestamp_contract_rejects_compact_iso_forms() -> None:
     assert contract._iso_format_is_valid("2026-02-30T00:00:00+00:00") is False
     assert contract._iso_format_is_valid("2026-10-05T24:00:00+00:00") is False
     assert contract._iso_format_is_valid("2026-10-05T00:60:00+00:00") is False
+
+
+def test_exact_keys_refusal_names_missing_and_unknown_keys() -> None:
+    """Decision 72 (MR !538 evidence): a key-set refusal prints the missing and
+    unexpected keys plus the accepted set. The live prose acceptance met a
+    bare "unknown or missing fields" and dug the expected shape out of the
+    JSON schema behind the templates."""
+    with workflow_error(
+        r"review plan content has unknown or missing fields: missing \['locale', 'summary'\]; "
+        r"unknown \['summaryy'\]; accepted keys are exactly locale, summary"
+    ):
+        contract.exact_keys({"summaryy": "text"}, {"summary", "locale"}, "review plan content")
+    with workflow_error(r"must be an object"):
+        contract.exact_keys(["summary"], {"summary"}, "review plan content")
+
+
+def test_decision_refusal_names_duplicates_and_the_finding_namespace() -> None:
+    """Decision 72 (MR !517 evidence): a critic finding copied into the
+    decision's findings collides by id; the refusal names the duplicates and
+    the primary/critic namespace rule because the live arbitration flailed for
+    13 minutes on a bare uniqueness message."""
+    report = decision_payload()
+    duplicated = {
+        **report,
+        "findings": [
+            detailed_finding(),
+            detailed_finding(id="rejected-1", summary="A critic finding copied verbatim."),
+        ],
+    }
+    with workflow_error(
+        r"finding identities are unique and namespace-safe \(duplicates: rejected-1\); "
+        r"path: \$\.findings\[\*\]\.id; valid form: distinct strings matching "
+        r"\[A-Za-z0-9\]\[A-Za-z0-9._-\]\{0,63\}; findings carries only the primary "
+        r"review's findings - a critic finding lives in the critic receipt and is "
+        r"answered through its own response, while critic_findings and accepted_findings "
+        r"are machine-derived, never authored"
+    ):
+        contract.validate_decision(duplicated, DIGEST, critic_payload(), "normal", DIGEST, DIGEST)
+
+
+def test_thread_vocabulary_constants_match_the_validator() -> None:
+    """Decision 72: the printed thread vocabularies are the validator's own
+    tuples, so a stop payload and a refusal can never disagree."""
+    assert contract.THREAD_OUTCOMES == (
+        "no_reply",
+        "local_fix",
+        "reply",
+        "resolve",
+        "reopen",
+    )
+    assert "accepted" in contract.THREAD_ASSESSMENTS
+    assert contract.THREAD_FIX_MODES == ("suggestion", "patch", "not_required")
+    sample = {
+        "id": "thread:abc",
+        "url": "https://gitlab.example/g/p/-/merge_requests/1#note_1",
+        "state": contract.THREAD_STATES[0],
+        "assessment": "accepted",
+        "rationale": "Confirmed.",
+        "outcome": "reply",
+        "proposed_response": "Agreed.",
+    }
+    assert contract.thread_decisions_are_valid([sample]) is True

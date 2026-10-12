@@ -19,7 +19,11 @@ from typing import Any, cast
 from reviewmatic import draft as draft_module
 from reviewmatic.portable.portable_gitlab import contract
 
-FAKE_GLAB = """#!/usr/bin/env python3
+# The fake glab pins its interpreter absolutely: the fixture isolates
+# XDG_STATE_HOME per AGENTS.md, and a PATH-resolved python3 (a mise shim on
+# this class of host) re-reads its trust state from the isolated root and
+# refuses to run - the shebang must never depend on the environment under test.
+FAKE_GLAB = """#!/usr/bin/python3
 import json
 import os
 import sys
@@ -396,7 +400,7 @@ def complete_draft(draft: dict[str, Any], started: dict[str, Any]) -> dict[str, 
         thread["assessment"] = "fixed"
         thread["rationale"] = "The exact reviewed code already addresses the remark."
         thread["outcome"] = (
-            "no_publication"
+            "no_reply"
             if thread["state"] == "resolved"
             else "reply"
             if thread["state"] == "plain"
@@ -405,7 +409,7 @@ def complete_draft(draft: dict[str, Any], started: dict[str, Any]) -> dict[str, 
         thread["proposed_response"] = (
             None
             if thread["state"] == "resolved"
-            else "The exact reviewed code now handles this path."
+            else "note: The exact reviewed code now handles this path."
         )
     assert content["finding_publications"] == []
     return draft

@@ -122,6 +122,8 @@ def test_the_python_command_surface_is_explicit_and_contains_no_terminal_ui() ->
         "run",
         "replace-artifact",
         "worktree list",
+        "profile-setup",
+        "profile-show",
         "publication [mode]",
         "capabilities",
         "marker-run [mutation...]",

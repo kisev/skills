@@ -68,7 +68,7 @@ disposition for every previous finding, stable finding revisions, non-blocking
 recommended issues, and an exhaustive applicability decision for every exact
 project or inherited-group label name and description. The runtime derives the
 add/remove delta and requires a unique matching compatibility label for a closed
-SemVer impact. Existing-thread outcomes are `no_publication`, `local_fix`,
+SemVer impact. Existing-thread outcomes are `no_reply`, `local_fix`,
 `reply`, `resolve`, or `reopen`. Contract 3 assigns each actionable finding and
 thread correction a closed `fix_mode`: an exact current-line fix uses one
 single-line or bounded multi-line `suggestion`; every other actionable fix uses
@@ -77,9 +77,16 @@ correction. Patches are checked against the exact reviewed head in a temporary
 Git index, reject binary, symlink, rename, traversal, and oversized content, and
 are stored as immutable private `.patch` files without changing the checkout.
 Every new review invocation reassesses every open and resolved discussion and all
-of its non-system replies. A resolved thread needs a reply only when it adds
-information. Explicitly select `no_publication` when an existing explanation or
-applied suggestion is confirmed by current code, regardless of the resolver.
+of its non-system replies. The six-case thread matrix (decision 75.5) decides
+every outcome: a resolved thread without a problem takes `no_reply`; a resolved
+thread with the same or a related problem takes `reply` plus `reopen` (with a
+suggestion when the fix policy asks for one); an open fixed thread takes `reply`
+plus `resolve`; an open thread with an unattempted confirmed defect takes
+`no_reply`; an open thread with an attempted fix takes `reply` (with a
+suggestion when the fix policy asks for one); an open thread the review does not
+confirm takes `reply` plus `resolve`. Explicitly select `no_reply` when an
+existing explanation or applied suggestion is confirmed by current code,
+regardless of the resolver.
 Published patches use one copy-ready `sh` heredoc invoking
 `git apply`. A `resolve` or `reopen` action follows, but is separate from, the
 action that publishes its explanation.

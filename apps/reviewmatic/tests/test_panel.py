@@ -176,11 +176,11 @@ def _arbitration_content(content: dict[str, Any]) -> dict[str, Any]:
                 "id": thread["id"],
                 "assessment": "fixed",
                 "rationale": "The exact reviewed code already addresses the remark.",
-                "outcome": "no_publication" if thread["state"] == "resolved" else "resolve",
+                "outcome": "no_reply" if thread["state"] == "resolved" else "resolve",
                 "proposed_response": (
                     None
                     if thread["state"] == "resolved"
-                    else "The exact reviewed code now handles this path."
+                    else "note: The exact reviewed code now handles this path."
                 ),
                 "fix_mode": "not_required",
                 "patch": None,

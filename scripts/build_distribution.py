@@ -60,26 +60,37 @@ def revision() -> str:
     return completed.stdout.strip()
 
 
-def archive(skill: Path) -> bytes:
+def archive(skill: Path, extra_files: dict[str, bytes] | None = None) -> bytes:
     payload = io.BytesIO()
     with (
         gzip.GzipFile(fileobj=payload, mode="wb", mtime=0) as compressed,
         tarfile.open(fileobj=compressed, mode="w") as document,
     ):
-        for source in sorted(skill.rglob("*")):
+        members: list[tuple[str, Path | None, bytes | None]] = [
+            (source.relative_to(skill).as_posix(), source, None)
+            for source in sorted(skill.rglob("*"))
             if (
-                source.is_symlink()
-                or not source.is_file()
-                or "__pycache__" in source.parts
-                or source.suffix in {".pyc", ".pyo"}
-            ):
-                continue
-            info = tarfile.TarInfo(source.relative_to(skill).as_posix())
-            content = source.read_bytes()
-            info.size = len(content)
+                not source.is_symlink()
+                and source.is_file()
+                and "__pycache__" not in source.parts
+                and source.suffix not in {".pyc", ".pyo"}
+            )
+        ]
+        members.extend(
+            (name, None, content) for name, content in sorted((extra_files or {}).items())
+        )
+        for name, source, content in members:
+            if source is not None:
+                data = source.read_bytes()
+            else:
+                if content is None:
+                    raise DistributionError(f"archive member without content: {name}")
+                data = content
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
             info.mode = 0o644
             info.mtime = 0
-            document.addfile(info, io.BytesIO(content))
+            document.addfile(info, io.BytesIO(data))
     return payload.getvalue()
 
 
@@ -126,6 +137,7 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
     ):
         raise DistributionError("public skill inventory is invalid")
     output.parent.mkdir(parents=True, exist_ok=True)
+    source_revision = stored_revision or revision()
     with tempfile.TemporaryDirectory(prefix="skills-dist-", dir=output.parent) as temporary:
         staged = Path(temporary) / "skills"
         archives = staged / "archives" / "sha256"
@@ -134,7 +146,25 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
         for skill in sorted(BUILT_SKILLS.iterdir()):
             if not skill.is_dir() or not (skill / "SKILL.md").is_file():
                 continue
-            content = archive(skill)
+            # Decision 76 stage 3: the resolved source revision is stitched
+            # into the code-review archive as its runtime pin, so a session
+            # reads the pinned commit from the installed tree and never runs
+            # git ls-remote per review ("skills update" installs exactly this
+            # archive, carrying the pin with it).
+            extra_files = (
+                {
+                    "references/runtime-pin.json": canonical(
+                        {
+                            "schema": "@kisev/skills/runtime-pin/v1",
+                            "version": version,
+                            "source_revision": source_revision,
+                        }
+                    )
+                }
+                if skill.name == "code-review"
+                else None
+            )
+            content = archive(skill, extra_files)
             digest = hashlib.sha256(content).hexdigest()
             destination = archives / f"{digest}.tar.gz"
             destination.write_bytes(content)
@@ -151,7 +181,7 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
             "schema": "@kisev/skills/index/v1",
             "package": "@kisev/skills",
             "version": version,
-            "source_revision": stored_revision or revision(),
+            "source_revision": source_revision,
             "skills": entries,
         }
         lock = {

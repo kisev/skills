@@ -416,6 +416,11 @@ def review_content(critic_finding: dict[str, Any], template: dict[str, Any]) -> 
                 "rationale": "The MR is open and remains commentable.",
                 "recommendation": None,
             },
+            "milestone": {
+                "status": "ok",
+                "rationale": "No milestone applies to this correction.",
+                "recommendation": None,
+            },
             "overall": {
                 "status": "needs_change",
                 "rationale": "Title and labels need clearer release metadata.",
@@ -502,7 +507,7 @@ def review_content(critic_finding: dict[str, Any], template: dict[str, Any]) -> 
                 "assessment": "fixed",
                 "rationale": "The existing thread can be acknowledged and resolved.",
                 "outcome": "resolve",
-                "proposed_response": "I tracked the remaining risk in the current finding. Closing.",
+                "proposed_response": "note: I tracked the remaining risk in the current finding. Closing.",
                 "fix_mode": "not_required",
                 "patch": None,
                 "fixing_commit": None,
@@ -734,7 +739,7 @@ def test_unchanged_second_run_does_not_republish_findings_or_issues(
             "rationale": "The proposal changed.",
             "action": "Update the proposal.",
             "publication_action": "update_issue",
-            "publication_body": "Update the proposal.",
+            "publication_body": "note: Update the proposal.",
             "critic_required": False,
         }
     ]

@@ -129,6 +129,7 @@ def content_from_decision(
     evidence: dict[str, Any],
     intents: list[dict[str, Any]],
     authored: dict[str, Any] | None = None,
+    fix_policy: str | None = None,
 ) -> dict[str, Any]:
     """Use the same renderer for the draft and the real run."""
     by_id = {str(row["finding_id"]): row for row in intents}
@@ -164,7 +165,7 @@ def content_from_decision(
         content["semver_assessment"] = review_semver.rendered_template(evidence, review_context)
         content["finding_publications"] = []
     else:
-        content = render.render_content(dummy, review_context, evidence)
+        content = render.render_content(dummy, review_context, evidence, fix_policy=fix_policy)
     if authored:
         previous_semver = authored.get("semver_assessment") or {}
         previous_basis = previous_semver.get("baseline")
@@ -221,30 +222,57 @@ def content_from_decision(
 def prepare(root: Path) -> dict[str, Any]:
     progress, review_context, evidence = selected(root)
     decision_artifact = context.progress_artifact(root, progress, "decision", "review_decision")
-    if decision_artifact is None:
-        raise contract.WorkflowError("the prose tail requires the recorded decision")
-    decision = decision_artifact[1]
     state = load(root)
+    if decision_artifact is None:
+        pending = (state or {}).get("pending_delta")
+        if isinstance(pending, dict) and pending.get("template_path"):
+            # Decision 72 (MR !521 evidence): a drift re-anchor resets the chain
+            # to its delta check; the prose tail must say so instead of a bare
+            # demand that sent a live run into a blind refusal loop.
+            raise contract.WorkflowError(
+                "the prose tail waits on a drift re-anchor, not a fresh decision; complete "
+                "the pending delta check first: reviewmatic record-delta --artifact-root "
+                f"{root} --input {pending['template_path']} - the recorded decision and "
+                "authored prose are checkpointed and preserved by that step"
+            )
+        raise contract.WorkflowError(
+            "the prose tail requires the recorded decision; no decision artifact is bound "
+            "to the current progress - resume the run (reviewmatic run --resume --url "
+            "<mr-url>) and author the decision stop before record-prose"
+        )
+    decision = decision_artifact[1]
     if state is None or state.get("decision_digest") != progress["decision_digest"]:
         state = {"decision_digest": progress["decision_digest"], "intents": []}
     if "content" not in state:
         state["content"] = content_from_decision(
-            decision, review_context, evidence, state["intents"]
+            decision,
+            review_context,
+            evidence,
+            state["intents"],
+            fix_policy=cast("str | None", progress.get("fix_policy")),
         )
         state["content"]["locale"] = progress["locale"]
         state["applied"] = False
         path = render.prose_file(root, str(progress["decision_digest"]))
         prose = render.prose_projection(state["content"], review_context, evidence)
         existing = {str(row["finding_id"]) for row in state["intents"]}
+        fix_policy = cast("str | None", progress.get("fix_policy"))
         for finding in decision.get("accepted_findings", []):
             if str(finding["id"]) not in existing:
                 prose["finding_publications"].append(
                     {
                         "finding_id": finding["id"],
-                        "publication": {
-                            "kind": "<KIND: line, general, local_fix, existing_thread>",
-                            "fix_mode": "<FIX_MODE: suggestion or patch>",
-                        },
+                        "publication": (
+                            {
+                                "kind": "general",
+                                "fix_mode": "not_required",
+                            }
+                            if fix_policy == "none"
+                            else {
+                                "kind": "<KIND: line, general, local_fix, existing_thread>",
+                                "fix_mode": "<FIX_MODE: suggestion or patch>",
+                            }
+                        ),
                         "body": "<BODY: publication explanation>",
                     }
                 )
@@ -274,17 +302,24 @@ def record_prose(root: Path, input_path: str) -> dict[str, Any]:
             "finding_publications[*].finding_id: return a prepared finding identifier unchanged; unknown or substituted identities are forbidden"
         )
     intents = {str(row["finding_id"]): copy.deepcopy(row) for row in state["intents"]}
+    fix_policy = cast("str | None", progress.get("fix_policy"))
     for row in incoming.get("finding_publications", []):
         publication = row.pop("publication", None)
         if publication is not None:
+            allowed_fix_modes = (
+                {"patch", "suggestion", "not_required"}
+                if fix_policy == "none"
+                else {"patch", "suggestion"}
+            )
             if (
                 not isinstance(publication, dict)
                 or publication.get("kind")
                 not in {"general", "line", "local_fix", "existing_thread"}
-                or publication.get("fix_mode") not in {"patch", "suggestion"}
+                or publication.get("fix_mode") not in allowed_fix_modes
             ):
                 raise contract.WorkflowError(
-                    "publication intent requires kind general/line/local_fix/existing_thread and fix_mode patch/suggestion"
+                    "publication intent requires kind general/line/local_fix/existing_thread "
+                    f"and fix_mode one of {', '.join(sorted(allowed_fix_modes))}"
                 )
             if isinstance(row.get("target"), dict):
                 publication["target"] = copy.deepcopy(row["target"])
@@ -298,7 +333,12 @@ def record_prose(root: Path, input_path: str) -> dict[str, Any]:
     if artifact is None:
         raise contract.WorkflowError("the run decision changed before prose application")
     content = content_from_decision(
-        artifact[1], review_context, evidence, list(intents.values()), state["content"]
+        artifact[1],
+        review_context,
+        evidence,
+        list(intents.values()),
+        state["content"],
+        fix_policy=cast("str | None", progress.get("fix_policy")),
     )
     resolved = render.resolve_prose_fixes(content, incoming, review_context, evidence)
     content = render.apply_prose(content, resolved)

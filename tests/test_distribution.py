@@ -97,6 +97,20 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
                 assert "scripts/mattermost_publication.py" in document.getnames()
+            if entry["name"] == "code-review":
+                # Decision 76 stage 3: the resolved commit is stitched into the
+                # installed tree as its runtime pin, so a session reads the
+                # pin locally and never runs git ls-remote per review.
+                member = document.extractfile("references/runtime-pin.json")
+                assert member is not None
+                pin = json.loads(member.read().decode("utf-8"))
+                assert pin == {
+                    "schema": "@kisev/skills/runtime-pin/v1",
+                    "version": release["version"],
+                    "source_revision": release["source_revision"],
+                }
+            else:
+                assert "references/runtime-pin.json" not in names
 
 
 def test_distribution_is_byte_reproducible(tmp_path: Path) -> None:
@@ -264,6 +278,11 @@ def test_pages_install_is_self_contained_for_both_hosts_and_scopes(tmp_path: Pat
                     "XDG_CONFIG_HOME": str(home / ".config"),
                     "XDG_STATE_HOME": str(home / ".state"),
                     "PYTHONPATH": str(tmp_path / "missing-pythonpath"),
+                    # The install flow runs outside the repository checkout, so
+                    # the mise shim has no project config to resolve node/npx
+                    # from and would fall back to a possibly broken system npx;
+                    # point it at this repository's pinned toolchain explicitly.
+                    "MISE_CONFIG_FILE": str(ROOT / "mise.toml"),
                 }
                 command = [
                     *PINNED_SKILLS,

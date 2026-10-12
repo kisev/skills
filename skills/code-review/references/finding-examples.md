@@ -36,12 +36,16 @@ raw SHAs out of user-facing prose.
 | [note_42](https://gitlab.example/group/project/-/merge_requests/7#note_42) | open | accepted | The exact reviewed path still retries without an idempotency key. | local_fix |
 ```
 
-Valid outcomes are `no_publication`, `local_fix`, `reply`, `resolve`, and
-`reopen`: natural prose from the authenticated user's factual role with
+Valid outcomes are `no_reply`, `local_fix`, `reply`, `resolve`, and
+`reopen`, following the six-case matrix: natural prose from the authenticated
+user's factual role with
 informal second person, and no severity or evidence labels. An open thread
-must use `reply`, `resolve`, or author-mode `local_fix`; a thread resolved by
+with an attempted fix uses `reply` (or author-mode `local_fix`); an open
+thread with a confirmed but unattempted defect uses `no_reply`; an open
+thread the review confirms fixed or does not confirm uses `reply` plus
+`resolve`; a thread resolved by
 another user needs a reply only when it adds information, and
-`no_publication` applies after confirming the existing explanation or applied
+`no_reply` applies after confirming the existing explanation or applied
 suggestion remains correct.
 
 For an actionable current new-line position, prepare exactly one suggestion.

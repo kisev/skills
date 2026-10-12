@@ -441,7 +441,7 @@ def reconcile_history(
                 status = "unverified"
         if kind == "issue":
             # Follow-ups are proposals, not a second issue-publication workflow.
-            publication_action, publication_body = "no_publication", None
+            publication_action, publication_body = "no_reply", None
         elif status == "changed":
             publication_action = "reply"
             publication_body = str(
@@ -450,7 +450,7 @@ def reconcile_history(
                 or ""
             )
         else:
-            publication_action = "no_publication"
+            publication_action = "no_reply"
             publication_body = None
         rows.append(
             {
@@ -487,17 +487,21 @@ def render_content(
     draft: dict[str, Any],
     review_context: dict[str, Any],
     evidence: dict[str, Any],
+    fix_policy: str | None = None,
 ) -> dict[str, Any]:
     """Render the complete content from the recorded decision.
 
     Machine fields are derived by the same functions the validators call;
-    prose fields carry structurally detectable placeholders.
+    prose fields carry structurally detectable placeholders. Under the
+    fix=none session policy (auto mode) every accepted finding publishes as a
+    comment without suggestions or patches (decision 75.3).
     """
     decision = _decision_for_content(draft)
     exact = cast("dict[str, Any]", review_context["exact_git"])
     repo_root = Path(str(exact["repo_root"]))
     base, head = str(evidence["base_sha"]), str(evidence["head_sha"])
     locale = "ru" if str(draft.get("content", {}).get("locale", "en")) == "ru" else "en"
+    comment_only = fix_policy == "none"
     content = context.content_template(evidence, review_context, decision, locale)
     content["semver_assessment"] = review_semver.rendered_template(evidence, review_context)
     accepted = _accepted_findings(draft)
@@ -507,6 +511,11 @@ def render_content(
     for finding in accepted:
         finding_id = str(finding.get("id"))
         intent = intents.get(finding_id)
+        if comment_only:
+            # Decision 75.3: the auto runbook publishes findings as comments
+            # without suggestions or patches, whatever intent was recorded.
+            rows.append(publication_skeletons._variant_block(finding_id, "general+not_required"))
+            continue
         if intent is None or intent.get("kind") == "none":
             raise contract.WorkflowError(
                 f"accepted finding {finding_id} requires a publication intent with a concrete "
@@ -783,7 +792,8 @@ def apply_prose(content: dict[str, Any], incoming: dict[str, Any]) -> dict[str, 
         if key not in PROSE_KEYS:
             raise contract.WorkflowError(
                 f"the prose surface carries only prose and semantic fields; {key} is "
-                "machine-rendered - edit it only through a recorded repair kind"
+                "machine-rendered - edit it only through a recorded repair kind; "
+                "accepted keys: " + ", ".join(PROSE_KEYS)
             )
         if key == "semver_assessment":
             if not isinstance(value, dict) or set(value) - SEMVER_PROSE_KEYS:

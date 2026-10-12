@@ -317,7 +317,7 @@ def _fill_minimal_content(template: dict[str, Any]) -> None:
                     "rationale": f"The observed {field} is sufficient.",
                     "recommendation": None,
                 }
-                for field in ("title", "description", "labels", "workflow_state", "overall")
+                for field in template["mr_metadata_assessment"]
             },
             "label_assessments": [
                 {

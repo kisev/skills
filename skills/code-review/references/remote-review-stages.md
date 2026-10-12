@@ -48,12 +48,7 @@ action first; `check-review` rejects an unrecorded package.
 
 ## Discussion contract
 
-On every invocation, read every non-system discussion and every reply, open or resolved, code or conversation changed; never treat `resolved=true`, `Fixed`, approvals, green CI, or no conflicts as proof. For each thread decide assessment, rationale, explicit `fix_mode` (`suggestion`, `patch`, or `not_required`), optional unified `patch`, and exactly one outcome: `no_publication`, `local_fix`, `reply`, `resolve`, or `reopen`. An open
-thread cannot use `no_publication`; a resolved thread uses `no_publication`
-when the existing explanation or applied suggestion already establishes the
-fix and a new reply adds no information; prepare a reply only when it adds an
-independent confirmation or correction, and never say a resolved thread
-closes. A reply continues the complete conversation naturally, reacts to its
+On every invocation, read every non-system discussion and every reply, open or resolved, code or conversation changed; never treat `resolved=true`, `Fixed`, approvals, green CI, or no conflicts as proof. For each thread decide assessment, rationale, explicit `fix_mode` (`suggestion`, `patch`, or `not_required`), optional unified `patch`, and exactly one outcome: `no_reply`, `local_fix`, `reply`, `resolve`, or `reopen`, following the six-case matrix (decision 75.5): a resolved thread without a problem takes `no_reply`; a resolved thread with the same or a related problem takes `reply` plus `reopen`, with a suggestion when the fix policy asks for one; an open fixed thread takes `reply` plus `resolve`; an open thread with a confirmed but unattempted defect takes `no_reply`; an open thread with an attempted fix takes `reply`, with a suggestion when the fix policy asks for one; an open thread the review does not confirm takes `reply` plus `resolve`. A reply continues the complete conversation naturally, reacts to its
 latest relevant point, and is written from the authenticated user's factual
 role in the selected language: apply `humanize`, keep `;` outside code or
 exact quotations forbidden, address the participant with the informal
@@ -65,7 +60,9 @@ without guessing.
 The reply opens with a Conventional Comments
 label matching its meaning — `suggestion`, `issue`, `question`, `note`,
 `praise`, or `todo`, optionally preceded by the `blocking:` severity — so the
-reply's kind is visible before its prose. The same taxonomy covers the
+reply's kind is visible before its prose. The runtime refuses a published
+answer without its label, and the label renders in the runbook beside every
+body preview. The same taxonomy covers the
 run-path prose surfaces, and when a discussion claims the change misses its
 original purpose, the arbitrator resolves that observation as explicitly as
 a critic answer to the validation question.
@@ -74,15 +71,17 @@ Every contract-7 thread decision binds `last_note_id`,
 `last_note_body_sha256`, and `thread_sha256` for the complete discussion,
 including system notes; the runtime prepared those bindings and preserves
 them, and a stale or edited conversation invalidates the decision before plan
-creation. `accepted` requires a valid `suggestion` or `patch` and keeps a
-thread open (`reopen` when currently resolved); `fixed`, `false_positive`,
+creation. `accepted` keeps a thread open — `reply` with a validated
+`suggestion` or `patch` after an attempted fix, or `no_reply` while the
+confirmed defect stays unattempted (`reopen` plus `reply` when currently
+resolved); `fixed`, `false_positive`,
 `duplicate`, and `not_related` close an open thread with `resolve`; `question`
 and `neutral` never change state; `fixing_commit=null` without attribution, or `{title,url}` to an immutable
 GitLab commit. Resolution by somebody else never replaces the user's
 confirmation: when the user opened the thread and proposed the fix, prepare
 their concise verification reply after checking the exact head even if
 closed; `user_confirmation.status=confirmed` binds later confirmation through
-`evidence_note_ids`. Give every `no_publication` a concrete rationale;
+`evidence_note_ids`. Give every `no_reply` a concrete rationale;
 plain notifications may be omitted from prose, not from the audit.
 
 ## Modes

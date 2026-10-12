@@ -6,8 +6,10 @@ explicit drafting step; preliminary statuses, clarifying questions, and
 blocked or partial reports are written normally and do not invoke it. Keep
 label proposals exclusively in `label_assessments`; select every thread
 outcome explicitly after analysis — the draft's `reply` never instructs
-publication; choose `no_publication` privately when no new information is
-needed.
+publication; choose `no_reply` privately when no new information is
+needed. Resolve the session arguments (`mr=`, `mode=`, `fix=`, `locale=`,
+`profile=`) through `references/session-modes.md` before the first runtime
+call.
 
 ## Stage router
 
@@ -68,10 +70,16 @@ runtime response already answers.
 
 Before the first `reviewmatic` call, apply runtime selection and pin exactly
 as `SKILL.source.md` specifies — the entrypoint owns the channel choice (ask
-if unclear — never choose silently), the `dev` tip resolution, the
-`REVIEWMATIC_FROM` pin, the PATH-binary ban, and the `runtime-info`
-verification. A fresh checkout of the moving `dev` ref repeats the resolution
-and pin.
+if unclear — never choose silently), the runtime pin read from the installed
+tree's `references/runtime-pin.json` (the `skills update` flow stitched the
+resolved commit there; a session never runs `git ls-remote` when the file
+exists, and only a development checkout without the file resolves the moving
+`dev` tip once), the `REVIEWMATIC_FROM` pin, the PATH-binary ban, and the
+`runtime-info` verification. A fresh checkout of the moving `dev` ref without
+the pin file repeats the resolution and pin. The first response of the
+session opens with the version banner: the skill version from the runtime
+pin, the reviewmatic version and resolved commit from `runtime-info`, and
+`glab --version` — assembled locally, never through the network.
 
 ## Invocation mode
 

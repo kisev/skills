@@ -273,6 +273,11 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
                 "rationale": "The MR is open and remains commentable.",
                 "recommendation": None,
             },
+            "milestone": {
+                "status": "ok",
+                "rationale": "No milestone applies to this correction.",
+                "recommendation": None,
+            },
             "overall": {
                 "status": "needs_change",
                 "rationale": "Title and labels need clearer release metadata.",
@@ -360,7 +365,7 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
                 "rationale": "The existing thread can be acknowledged and resolved.",
                 "outcome": "resolve",
                 "proposed_response": (
-                    "I tracked the remaining risk in the current finding. Closing."
+                    "note: I tracked the remaining risk in the current finding. Closing."
                 ),
                 "fix_mode": "not_required",
                 "patch": None,
@@ -376,7 +381,7 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
 
     invalid_state = json.loads(json.dumps(review_content))
     invalid_state["thread_decisions"][0].update(
-        {"state": "resolved", "outcome": "no_publication", "proposed_response": None}
+        {"state": "resolved", "outcome": "no_reply", "proposed_response": None}
     )
     invalid_state_path = fixture.tmp / "invalid-state.json"
     invalid_state_path.write_text(json.dumps(invalid_state))
@@ -392,8 +397,11 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
     )
     invalid_accepted_path = fixture.tmp / "invalid-accepted.json"
     invalid_accepted_path.write_text(json.dumps(invalid_accepted))
+    # Decision 75.5: an accepted open thread either carries an attempted fix
+    # (reply/local_fix) or stays silent with no_reply until one exists.
     with pytest.raises(
-        contract.WorkflowError, match="an accepted thread requires a validated code fix"
+        contract.WorkflowError,
+        match="an unattempted confirmed defect adds no reply yet",
     ):
         review_context.scaffold_review(
             str(evidence_path), str(context_path), str(decision_path), str(invalid_accepted_path)

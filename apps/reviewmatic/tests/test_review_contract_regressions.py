@@ -135,7 +135,7 @@ def link_defect(draft: dict[str, Any]) -> None:
             "severity": "high",
             "outcome": "reopen" if thread["state"] == "resolved" else "reply",
             "rationale": "The retry still repeats a write on the exact head.",
-            "proposed_response": "Reuse the key.\n\n```suggestion\nkeyed retry\n```",
+            "proposed_response": "suggestion: Reuse the key.\n\n```suggestion\nkeyed retry\n```",
             "fix_mode": "suggestion",
         }
     )
@@ -244,7 +244,7 @@ def test_low_level_scaffold_derives_omitted_thread_blockers_and_rejects_contradi
             "outcome": "reply",
             "rationale": "The exact retry path still duplicates writes.",
             "fix_mode": "suggestion",
-            "proposed_response": "Reuse the key.\n\n```suggestion\nkeyed retry\n```",
+            "proposed_response": "suggestion: Reuse the key.\n\n```suggestion\nkeyed retry\n```",
         }
     )
     del low.decision["blocking_thread_ids"]
@@ -307,7 +307,7 @@ def test_low_level_scaffold_rejects_an_available_safe_suggestion_for_patch(
                 "severity": "medium",
                 "assessment": "accepted",
                 "outcome": "reopen",
-                "proposed_response": "Reuse the request key.",
+                "proposed_response": "suggestion: Reuse the request key.",
             }
         )
     with pytest.raises(contract.WorkflowError, match="safe bounded suggestion is available"):
@@ -353,7 +353,7 @@ def test_routing_only_replies_keep_positioned_suggestions_and_survive_repair(
             "severity": "medium",
             "outcome": "reply",
             "fix_mode": "suggestion",
-            "proposed_response": "The existing request key must cover this retry.",
+            "proposed_response": "issue: The existing request key must cover this retry.",
             "suggestions": [
                 {
                     "path": "review.txt",
@@ -434,7 +434,7 @@ def test_a_later_user_proposed_patch_and_prior_confirmation_use_the_complete_chr
     }
     decision: dict[str, Any] = {
         "assessment": "fixed",
-        "outcome": "no_publication",
+        "outcome": "no_reply",
         "user_confirmation": {"status": "required", "evidence_note_ids": []},
     }
     with pytest.raises(contract.WorkflowError, match="still needs their confirmation"):
@@ -533,7 +533,7 @@ def test_a_users_suggestion_closed_by_somebody_else_still_requires_their_confirm
         for error in checked["errors"]
     )
     thread["outcome"] = "reply"
-    thread["proposed_response"] = "Thanks, the exact retry path now reuses the key."
+    thread["proposed_response"] = "praise: Thanks, the exact retry path now reuses the key."
     write(result["draft_path"], draft)
     checked = draft_module.check_review(str(result["draft_path"]))
     assert checked["status"] == "ok", errors_of(checked)
@@ -580,7 +580,7 @@ def test_grouped_suggestions_use_the_original_position_or_link_a_new_positioned_
             "severity": "medium",
             "outcome": "reply",
             "fix_mode": "suggestion",
-            "proposed_response": "Shared explanation must not be repeated.",
+            "proposed_response": "note: Shared explanation must not be repeated.",
             "suggestions": [
                 {
                     "path": "review.txt",
@@ -608,7 +608,7 @@ def test_grouped_suggestions_use_the_original_position_or_link_a_new_positioned_
             "severity": "medium",
             "outcome": "reply",
             "fix_mode": "suggestion",
-            "proposed_response": "Shared explanation must not be repeated.",
+            "proposed_response": "note: Shared explanation must not be repeated.",
             "suggestions": thread["suggestions"],
         }
     )
@@ -700,7 +700,7 @@ def test_input_package_has_the_exact_draft_schema_and_examples_and_validation_ga
             "severity": "medium",
             "outcome": "reply",
             "fix_mode": "suggestion",
-            "proposed_response": "The parts are separate corrections.",
+            "proposed_response": "note: The parts are separate corrections.",
             "split_rationale": "The changes have independent consumers.",
             "suggestions": [
                 {"path": "review.txt", "line": 1, "body": "```suggestion:-2+0\nfixed\n```"},
@@ -752,7 +752,7 @@ def test_patch_reasons_precede_thread_patches_and_an_available_safe_suggestion_r
             "severity": "medium",
             "outcome": "reply",
             "fix_mode": "patch",
-            "proposed_response": "Add the missing policy file.",
+            "proposed_response": "issue: Add the missing policy file.",
             "patch_reason": "A new file has no existing suggestion anchor.",
             "patch": (
                 "diff --git a/policy.txt b/policy.txt\nnew file mode 100644\n--- /dev/null\n"
@@ -782,7 +782,7 @@ def test_ordinary_comment_uses_returned_discussion_identity(fixtures: Any, compl
             {
                 "assessment": "question",
                 "rationale": "The policy question is still unanswered.",
-                "proposed_response": "Does this policy cover retries?",
+                "proposed_response": "question: Does this policy cover retries?",
             }
         )
     write(result["draft_path"], draft)

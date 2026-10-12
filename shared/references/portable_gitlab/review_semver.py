@@ -200,7 +200,7 @@ def rendered_template(
             mode="release",
             baseline=selected[0],
             fallback_reason=None,
-            release_impact="<IMPACT: assess the complete future release>",
+            release_impact="<IMPACT: major, minor, patch, none, or not_applicable for the complete future release>",
             release_rationale="<RATIONALE: explain the release impact>",
         )
         return result
@@ -216,7 +216,7 @@ def rendered_template(
                 mode="release",
                 baseline=choices[0],
                 fallback_reason=None,
-                release_impact="<IMPACT: assess the complete future release>",
+                release_impact="<IMPACT: major, minor, patch, none, or not_applicable for the complete future release>",
                 release_rationale="<RATIONALE: explain the release impact>",
             )
             return result
@@ -256,7 +256,10 @@ def validate(value: object, evidence: dict[str, Any], context: dict[str, Any]) -
             elif value.get("mode") == "release":
                 field, action = (
                     "release_impact/release_rationale",
-                    "assess the future release with concrete evidence",
+                    (
+                        "assess the future release with concrete evidence; release_impact is "
+                        "one of major, minor, patch, none, not_applicable"
+                    ),
                 )
         raise portable.WorkflowError(
             f"SemVer assessment requires a release basis or explicit target fallback; semver_assessment.{field}: {action}; retain other authored fields"

@@ -103,7 +103,14 @@ The arbitrator filters; the critics never see the filter. A finding enters
 the runbook and the action list only when it moves the merge or readiness
 verdict, or joins the action list as a validated fix, thread decision, or
 recommended issue; every other candidate stays a refuted or duplicate ledger
-entry, and each critic reports everything it can support. The recording
+entry, and each critic reports everything it can support. A claim that
+behavior works now, for the first time, or since this bump is a novelty
+claim: when the change bumps a dependency, the critic verifies the claim
+against the predecessor version - the previously pinned revision - before
+reporting it, and when the predecessor is unreachable the residual
+uncertainty is recorded at low severity with the unreachable predecessor
+named; an unverified novelty claim is never a blocking finding (two false
+blockers of exactly this shape reached a live MR review). The recording
 response returns the package path and digest, question context versions,
 exact snapshot paths, receipt template, and import command — pass those exact
 paths, never rebind answers bound to another package version, join before

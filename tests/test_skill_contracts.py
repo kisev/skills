@@ -627,10 +627,10 @@ def test_code_review_requires_compact_incremental_manual_publication_contract() 
         "one-draft workflow",
         "print its `chat` field verbatim",
         "On every invocation, read every non-system discussion and every reply",
-        "resolved thread uses `no_publication`",
+        "resolved thread without a problem takes `no_reply`",
         "`git apply`",
         "thread_sha256",
-        "accepted` requires a valid `suggestion` or `patch`",
+        "keeps a thread open — `reply` with a validated",
     ):
         assert marker in workflow
     output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")

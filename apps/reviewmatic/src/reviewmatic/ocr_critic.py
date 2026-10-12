@@ -265,6 +265,23 @@ def render_ocr_background(
         lines.append(compact(background, OCR_BACKGROUND_TEXT_LIMIT, "task_narrative"))
         lines.append("")
 
+    lines.extend(
+        [
+            "## Novelty claims",
+            "",
+            (
+                "A claim that behavior works now, for the first time, or since this bump "
+                "is a novelty claim: when the change bumps a dependency, verify it "
+                "against the predecessor version (the previously pinned revision) "
+                "before reporting a finding. When the predecessor cannot be checked, "
+                "record the residual uncertainty at low severity with the unreachable "
+                "predecessor named - an unverified novelty claim is never a blocking "
+                "finding."
+            ),
+            "",
+        ]
+    )
+
     if previous_findings:
         lines.append("## Previously reported findings")
         lines.append("")

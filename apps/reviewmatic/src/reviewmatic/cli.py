@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import __version__, local_review, scope, tail, workflow, worktree
+from reviewmatic import __version__, local_review, profiles, scope, tail, workflow, worktree
 from reviewmatic import draft as draft_module
 from reviewmatic import run as run_module
 from reviewmatic.portable import state_artifacts
@@ -98,6 +98,17 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 default="auto",
                 choices=("auto", "off"),
             ),
+            OptionSpec(
+                "session-mode",
+                "session interaction mode; auto stops on any unresolved argument",
+                default="manual",
+                choices=("auto", "manual"),
+            ),
+            OptionSpec(
+                "fix-policy",
+                "session fix policy: none publishes comments only (forced in auto mode)",
+                choices=("none", "suggestion", "patch"),
+            ),
         ),
     ),
     CommandSpec(
@@ -134,6 +145,17 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "incremental baseline policy",
                 default="auto",
                 choices=("auto", "off"),
+            ),
+            OptionSpec(
+                "session-mode",
+                "session interaction mode; auto stops on any unresolved argument",
+                default="manual",
+                choices=("auto", "manual"),
+            ),
+            OptionSpec(
+                "fix-policy",
+                "session fix policy: none publishes comments only (forced in auto mode)",
+                choices=("none", "suggestion", "patch"),
             ),
         ),
     ),
@@ -418,6 +440,20 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 choices=("auto", "off"),
             ),
             OptionSpec(
+                "session-mode",
+                "session interaction mode (decision 75): auto publishes findings as "
+                "ready comments without fixes and stops on any unresolved argument; "
+                "manual asks its question rounds",
+                default="manual",
+                choices=("auto", "manual"),
+            ),
+            OptionSpec(
+                "fix-policy",
+                "session fix policy: none publishes comments only (forced in auto mode), "
+                "suggestion or patch allow authored fixes",
+                choices=("none", "suggestion", "patch"),
+            ),
+            OptionSpec(
                 "critic-cmd",
                 "shell command filling one run-panel model critic receipt; the template and "
                 "output paths arrive as $1 and $2",
@@ -469,6 +505,33 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
     CommandSpec(
         "worktree list",
         "List review worktrees recorded by local patch application",
+    ),
+    CommandSpec(
+        "profile-setup",
+        "Create or update one XDG session profile explicitly (the profile=setup flow)",
+        (
+            OptionSpec("name", "profile name", required=True),
+            OptionSpec("locale", "default response language", choices=("en", "ru")),
+            OptionSpec(
+                "fix-policy",
+                "default fix policy",
+                choices=("none", "suggestion", "patch"),
+            ),
+            OptionSpec(
+                "review-mode",
+                "default review depth",
+                choices=("fast", "normal"),
+            ),
+            OptionSpec(
+                "participants",
+                "recorded panel selection JSON stored as the critic default",
+            ),
+        ),
+    ),
+    CommandSpec(
+        "profile-show",
+        "Print one stored session profile or a missing-profile instruction",
+        (OptionSpec("name", "profile name", required=True),),
     ),
     CommandSpec(
         "publication [mode]",
@@ -898,6 +961,29 @@ def dispatch(namespace: argparse.Namespace, tokens: Sequence[str]) -> int:
     if name == "runtime-info":
         contract.emit(runtime_info())
         return EXIT_OK
+    if name == "profile-setup":
+        participants = getattr(namespace, "participants", None)
+        payload = (
+            contract.read_json(
+                contract.regular_file(Path(str(participants)), "panel selection"),
+                "panel selection",
+            )
+            if participants is not None
+            else None
+        )
+        contract.emit(
+            profiles.write_profile(
+                str(_field(namespace, "name")),
+                locale=getattr(namespace, "locale", None),
+                fix_policy=getattr(namespace, "fixPolicy", None),
+                review_mode=getattr(namespace, "reviewMode", None),
+                participants=payload,
+            )
+        )
+        return EXIT_OK
+    if name == "profile-show":
+        contract.emit(profiles.read_profile(str(_field(namespace, "name"))))
+        return EXIT_OK
     if name == "scrub-preview":
         result = draft_module.scrub_preview(str(_field(namespace, "draft")))
         contract.emit(result)
@@ -1149,6 +1235,8 @@ def _run_prepare(namespace: argparse.Namespace) -> int:
                     review_mode=_field(namespace, "reviewMode") or "normal",
                     locale=_field(namespace, "locale") or "en",
                     incremental=_field(namespace, "incremental") or "auto",
+                    session_mode=_field(namespace, "sessionMode") or "manual",
+                    fix_policy=_field(namespace, "fixPolicy"),
                 ),
                 bundle,
             )

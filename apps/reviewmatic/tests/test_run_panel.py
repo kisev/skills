@@ -125,7 +125,7 @@ def empty_content(template: dict[str, Any]) -> dict[str, Any]:
                 "rationale": f"The observed {field} is sufficient.",
                 "recommendation": None,
             }
-            for field in ("title", "description", "labels", "workflow_state", "overall")
+            for field in template["mr_metadata_assessment"]
         },
         "label_assessments": [
             {
@@ -155,7 +155,7 @@ def empty_content(template: dict[str, Any]) -> dict[str, Any]:
                 "outcome": "resolve"
                 if thread.get("state", "open") == "open"
                 else thread["outcome"],
-                "proposed_response": "The exact reviewed code handles this path.",
+                "proposed_response": "note: The exact reviewed code handles this path.",
             }
             for thread in template["thread_decisions"]
         ],
@@ -540,7 +540,7 @@ def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
         "    'mr_metadata_assessment': {\n"
         "        field: {'status': 'ok', 'rationale': 'The observed metadata is sufficient.',\n"
         "                'recommendation': None}\n"
-        "        for field in ('title', 'description', 'labels', 'workflow_state', 'overall')\n"
+        "        for field in value['mr_metadata_assessment']\n"
         "    },\n"
         "    'label_assessments': [\n"
         "        {'name': item['name'],\n"
@@ -556,7 +556,7 @@ def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
         "        'assessment': 'fixed',\n"
         "        'rationale': 'The exact reviewed code addresses the remark.',\n"
         "        'outcome': 'resolve' if thread.get('state', 'open') == 'open' else thread['outcome'],\n"
-        "        'proposed_response': 'The exact reviewed code handles this path.',\n"
+        "        'proposed_response': 'note: The exact reviewed code handles this path.',\n"
         "    })\n"
         "for candidate in value.get('rejected_candidates', []):\n"
         "    candidate['reason'] = 'Not observable in the exact reviewed head.'\n"

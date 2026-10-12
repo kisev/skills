@@ -19,6 +19,7 @@ from reviewmatic import __version__, fixes, publication, publication_skeletons, 
 from reviewmatic.portable.portable_gitlab import contract as portable
 from reviewmatic.portable.portable_gitlab import review_semver
 from reviewmatic.portable.portable_gitlab.label_assessment import (
+    LABEL_ASSESSMENT_STATUSES,
     label_catalog,
     validate_label_assessments,
 )
@@ -198,6 +199,8 @@ def empty_progress(
     mode: str | None = None,
     locale: str | None = None,
     incremental: str = "auto",
+    session_mode: str = "manual",
+    fix_policy: str | None = None,
 ) -> dict[str, Any]:
     return {
         "schema": "code-review/progress/v1",
@@ -210,6 +213,8 @@ def empty_progress(
         "mode": mode,
         "locale": locale,
         "incremental": incremental,
+        "session_mode": session_mode,
+        "fix_policy": fix_policy,
         "critic_receipt_path": None,
         "critic_receipt_digest": None,
         "finalize_report_path": None,
@@ -233,6 +238,11 @@ def validate_progress(value: object, root: Path) -> dict[str, Any]:
         or (value.get("mode") is not None and value.get("mode") not in REVIEW_MODES)
         or (value.get("locale") is not None and value.get("locale") not in SUPPORTED_LOCALES)
         or value.get("incremental") not in {"auto", "off"}
+        or value.get("session_mode") not in {"auto", "manual"}
+        or (
+            value.get("fix_policy") is not None
+            and value.get("fix_policy") not in {"none", "suggestion", "patch"}
+        )
         or (
             value.get("repo_root") is not None
             and (
@@ -298,6 +308,8 @@ def begin_review(
     mode: str = "normal",
     locale: str = "en",
     incremental: str = "auto",
+    session_mode: str = "manual",
+    fix_policy: str | None = None,
 ) -> dict[str, Any]:
     root = portable.artifact_root(Path(artifact_root))
     source = portable.regular_file(Path(evidence_path), "review evidence")
@@ -308,6 +320,9 @@ def begin_review(
         mode not in {"fast", "normal"}
         or locale not in SUPPORTED_LOCALES
         or incremental not in {"auto", "off"}
+        or session_mode not in {"auto", "manual"}
+        or fix_policy not in {None, "none", "suggestion", "patch"}
+        or (session_mode == "auto" and fix_policy != "none")
     ):
         raise portable.WorkflowError("review mode or locale cannot initialize progress")
     resolved_repo = str(Path(repo_root).resolve()) if repo_root is not None else None
@@ -318,6 +333,8 @@ def begin_review(
         mode=mode,
         locale=locale,
         incremental=incremental,
+        session_mode=session_mode,
+        fix_policy=fix_policy,
     )
     current_path = root / REVIEW_EVIDENCE_NAME
     state_path = progress_path(root)
@@ -1418,7 +1435,7 @@ def metadata_assessment_issues(assessment: object) -> list[str]:
     their contracts instead of leaving the author to guess)."""
     if not isinstance(assessment, dict):
         return ["the assessment is not an object"]
-    fields = ("title", "description", "labels", "workflow_state", "overall")
+    fields = ("title", "description", "labels", "workflow_state", "milestone", "overall")
     issues = [f"missing field {name}" for name in fields if name not in assessment]
     issues += [f"unexpected field {name}" for name in sorted(set(assessment) - set(fields))]
     for name in fields:
@@ -1466,6 +1483,11 @@ def metadata_assessment(evidence: dict[str, Any], assessment: object) -> dict[st
             "description": description,
             "labels": labels,
             "workflow_state": state,
+            "milestone": (
+                milestone.get("title")
+                if isinstance(milestone := object_value.get("milestone"), dict)
+                else None
+            ),
         },
         "assessment": assessment,
     }
@@ -1540,23 +1562,76 @@ def validate_presentation(value: object, incremental_mode: str) -> dict[str, Any
     return cast("dict[str, Any]", value)
 
 
-def validate_chat_assessment(value: object) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {"necessity", "relevance", "change"}:
-        raise portable.WorkflowError("review chat assessment is invalid")
-    necessity = value.get("necessity")
-    relevance = value.get("relevance")
-    if (
-        not isinstance(necessity, dict)
-        or set(necessity) != {"status", "rationale"}
-        or necessity.get("status") not in {"supported", "doubtful", "unconfirmed"}
-        or not portable.nonempty_string(necessity.get("rationale"))
-        or not isinstance(relevance, dict)
-        or set(relevance) != {"status", "rationale"}
-        or relevance.get("status") not in {"current", "partly_outdated", "outdated"}
-        or not portable.nonempty_string(relevance.get("rationale"))
-        or not portable.nonempty_string(value.get("change"))
+CHAT_NECESSITY_STATUSES = ("supported", "doubtful", "unconfirmed")
+CHAT_RELEVANCE_STATUSES = ("current", "partly_outdated", "outdated")
+
+# Decision 72: the printed dictionaries for the authoring stops. Every enum the
+# prose surface accepts ships in the stop payload, so the author never opens a
+# schema or a reference to learn one accepted value (MR !538 evidence).
+AUTHORING_VOCABULARIES: dict[str, tuple[str, ...]] = {
+    "chat_assessment.necessity.status": CHAT_NECESSITY_STATUSES,
+    "chat_assessment.relevance.status": CHAT_RELEVANCE_STATUSES,
+    "label_assessments[*].status": LABEL_ASSESSMENT_STATUSES,
+    "semver_impact": tuple(sorted(review_semver.IMPACTS)),
+    "semver_assessment.release_impact": tuple(sorted(review_semver.IMPACTS)),
+    "thread_decisions[*].state": portable.THREAD_STATES,
+    "thread_decisions[*].assessment": portable.THREAD_ASSESSMENTS,
+    "thread_decisions[*].outcome": portable.THREAD_OUTCOMES,
+    "thread_decisions[*].fix_mode": portable.THREAD_FIX_MODES,
+}
+
+# Decision 75.6 (MR !517/!538 evidence): every published answer opens with its
+# Conventional Comments label - real runbooks carried zero marks because the
+# validator stayed silent. The label is required, not decorative.
+CONVENTIONAL_COMMENT_RE = re.compile(
+    r"^(?:blocking:[ \t]*)?(?:suggestion|issue|question|note|praise|todo):"
+)
+CONVENTIONAL_COMMENT_FORM = (
+    "one of suggestion, issue, question, note, praise, or todo, optionally "
+    "preceded by blocking:, then a colon before the prose"
+)
+
+
+def chat_assessment_issues(value: object) -> list[str]:
+    """Field-level diagnosis for a refused review chat assessment (decision 72:
+    the refusal names the offending field, the received value, and the accepted
+    vocabulary, because the live MR !538 acceptance met a bare refusal that
+    sent the author digging statuses out of the JSON schema)."""
+    if not isinstance(value, dict):
+        return ["the assessment is not an object"]
+    issues: list[str] = []
+    expected_keys = {"necessity", "relevance", "change"}
+    if set(value) != expected_keys:
+        issues.append(
+            f"keys are {sorted(value)}; expected exactly " + ", ".join(sorted(expected_keys))
+        )
+    for name, statuses in (
+        ("necessity", CHAT_NECESSITY_STATUSES),
+        ("relevance", CHAT_RELEVANCE_STATUSES),
     ):
-        raise portable.WorkflowError("review chat assessment is invalid")
+        item = value.get(name)
+        if not isinstance(item, dict):
+            if name in value:
+                issues.append(f"{name} is not an object")
+            continue
+        if set(item) != {"status", "rationale"}:
+            issues.append(f"{name} keys are {sorted(item)}; expected status, rationale")
+            continue
+        if item.get("status") not in statuses:
+            issues.append(
+                f"{name}.status is {item.get('status')!r}; expected " + ", ".join(statuses)
+            )
+        if not portable.nonempty_string(item.get("rationale")):
+            issues.append(f"{name}.rationale must be a non-empty string")
+    if not portable.nonempty_string(value.get("change")):
+        issues.append("change must be a non-empty string describing the behavior delta")
+    return issues
+
+
+def validate_chat_assessment(value: object) -> dict[str, Any]:
+    issues = chat_assessment_issues(value)
+    if issues:
+        raise portable.WorkflowError("review chat assessment is invalid: " + "; ".join(issues[:4]))
     return cast("dict[str, Any]", value)
 
 
@@ -1990,7 +2065,7 @@ def validate_thread_fix(
     if "suggestions" in item:
         if (
             fix_mode != "suggestion"
-            or item.get("outcome") == "no_publication"
+            or item.get("outcome") == "no_reply"
             or item.get("outcome") == "local_fix"
             or suggestion_count != 0
             or item.get("patch") is not None
@@ -2028,7 +2103,7 @@ def validate_thread_fix(
         and position.get("head_sha") == head_sha
     )
     if fix_mode == "suggestion" and (
-        item.get("outcome") in {"no_publication", "local_fix"}
+        item.get("outcome") in {"no_reply", "local_fix"}
         or not current_new_line
         or suggestion_count != 1
         or item.get("patch") is not None
@@ -2061,7 +2136,7 @@ def validate_thread_fix(
             ),
         )
     if fix_mode == "patch" and (
-        item.get("outcome") == "no_publication"
+        item.get("outcome") == "no_reply"
         or not portable.nonempty_string(item.get("patch"))
         or suggestion_count != 0
     ):
@@ -2080,7 +2155,7 @@ def validate_thread_fix(
         raise portable.WorkflowError(
             "a thread without a code fix cannot contain suggestion or patch"
         )
-    if item.get("outcome") == "no_publication" and fix_mode != "not_required":
+    if item.get("outcome") == "no_reply" and fix_mode != "not_required":
         raise portable.WorkflowError("a non-published thread cannot claim a code fix")
     if item.get("outcome") == "local_fix" and fix_mode != "patch":
         raise portable.WorkflowError("a local thread fix requires a Git patch")
@@ -2238,14 +2313,14 @@ def validate_user_confirmation(
             )
         if (
             item.get("assessment") == "fixed"
-            and item.get("outcome") != "no_publication"
+            and item.get("outcome") != "no_reply"
             and (not portable.nonempty_string(confirmation.get("new_circumstances")))
         ):
             raise portable.WorkflowError(
-                "An already confirmed fix requires no_publication unless "
+                "An already confirmed fix requires no_reply unless "
                 "user_confirmation.new_circumstances explains new evidence"
             )
-    elif item.get("outcome") == "no_publication" and item.get("assessment") == "fixed":
+    elif item.get("outcome") == "no_reply" and item.get("assessment") == "fixed":
         raise portable.WorkflowError(
             "The user's proposed fix still needs their confirmation, even when another "
             "participant resolved the thread; prepare a reply or bind their later "
@@ -2268,7 +2343,9 @@ def blocking_thread_ids(
     ]
 
 
-def validate_finding_publications(value: object, finding_ids: set[str]) -> list[dict[str, Any]]:
+def validate_finding_publications(
+    value: object, finding_ids: set[str], *, fix_policy: str | None = None
+) -> list[dict[str, Any]]:
     keys = {"finding_id", "type", "path", "line", "old_line", "body", "fix_mode", "patch"}
     extensible = {"suggestions", "split_rationale", "patch_reason", "thread_id"}
     # The runtime stamps these onto the stored artifact; the input never sets them.
@@ -2298,6 +2375,13 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
         finding_id = item.get("finding_id")
         publication_type = item.get("type")
         path, line, old_line = item.get("path"), item.get("line"), item.get("old_line")
+        # Decision 75: under fix=none (auto mode) a finding publishes as a
+        # plain comment - no suggestion, no patch, nothing to fill beyond prose.
+        comment_only = (
+            fix_policy == "none"
+            and publication_type == "general"
+            and item.get("fix_mode") == "not_required"
+        )
         # A template variant answers with fill-or-delete guidance, never with
         # the rule errors its placeholders would trip over.
         placeholders = publication_skeletons.placeholder_fields(item)
@@ -2308,7 +2392,7 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
                 f"variant: fill the judgment fields {', '.join(placeholders)} or delete the "
                 "unused variant rows, keeping exactly one publication per accepted finding"
             )
-        if publication_type != "existing_thread" and "thread_id" in item:
+        if not comment_only and publication_type != "existing_thread" and "thread_id" in item:
             raise portable.WorkflowError(
                 "thread_id is valid only with type=existing_thread, where the existing thread "
                 "owns the fix; every other type must omit it"
@@ -2336,6 +2420,32 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             seen.add(cast("str", finding_id))
             result.append(cast("dict[str, Any]", item))
             continue
+        if comment_only:
+            if (
+                not portable.nonempty_string(finding_id)
+                or finding_id not in finding_ids
+                or finding_id in seen
+                or item.get("patch") is not None
+                or "suggestions" in item
+                or path is not None
+                or line is not None
+                or old_line is not None
+            ):
+                raise validation_record(
+                    "a comment-only finding publication carries prose only",
+                    f"$.finding_publications[finding_id={finding_id}]",
+                    "non-empty body with fix_mode=not_required under fix=none; no patch, "
+                    "suggestions, or positions",
+                )
+            if not CONVENTIONAL_COMMENT_RE.match(cast("str", item["body"])):
+                raise validation_record(
+                    "a published finding comment opens with its Conventional Comments label",
+                    f"$.finding_publications[finding_id={finding_id}].body",
+                    CONVENTIONAL_COMMENT_FORM,
+                )
+            seen.add(cast("str", finding_id))
+            result.append(cast("dict[str, Any]", item))
+            continue
         if (
             not portable.nonempty_string(finding_id)
             or finding_id not in finding_ids
@@ -2347,7 +2457,8 @@ def validate_finding_publications(value: object, finding_ids: set[str]) -> list[
             raise portable.WorkflowError(
                 "each finding publication requires one known finding_id used exactly once, "
                 "type general, line, local_fix, or existing_thread, non-empty prose body, and "
-                "fix_mode suggestion or patch (not_required only with existing_thread)"
+                "fix_mode suggestion or patch (not_required only with existing_thread, or "
+                "with type general under the fix=none session policy)"
             )
         fix_mode = cast("str", item["fix_mode"])
         patch = item.get("patch")
@@ -2460,19 +2571,25 @@ def validate_previous_assessments(
                 portable.nonempty_string(item.get(key))
                 for key in ("previous_status", "current_status", "rationale", "action")
             )
-            or action not in {"no_publication", "reply", "resolve", "reopen", "update_issue"}
-            or (item.get("kind") == "issue" and action not in {"no_publication", "update_issue"})
+            or action not in {"no_reply", "reply", "resolve", "reopen", "update_issue"}
+            or (item.get("kind") == "issue" and action not in {"no_reply", "update_issue"})
             or (item.get("kind") == "finding" and action == "update_issue")
             or (action == "resolve" and item.get("status") not in {"fixed", "withdrawn"})
             or (
                 action == "reopen" and item.get("status") not in {"active", "changed", "unverified"}
             )
             or (
-                (action == "no_publication" and body is not None)
-                or (action != "no_publication" and not portable.nonempty_string(body))
+                (action == "no_reply" and body is not None)
+                or (action != "no_reply" and not portable.nonempty_string(body))
             )
         ):
             raise portable.WorkflowError("previous finding assessment is invalid")
+        if action != "no_reply" and not CONVENTIONAL_COMMENT_RE.match(cast("str", body)):
+            raise validation_record(
+                "a published previous-finding reply opens with its Conventional Comments label",
+                f"$.previous_finding_assessments[id={item_id}].publication_body",
+                CONVENTIONAL_COMMENT_FORM,
+            )
         actual[cast("str", item_id)] = cast("dict[str, Any]", item)
     if set(actual) != set(expected) or any(
         actual[item_id]["kind"] != kind for item_id, kind in expected.items()
@@ -2678,6 +2795,46 @@ def finding_revisions(
     return revisions
 
 
+def metadata_proposal_comment(sources: dict[str, Any], locale: str) -> str:
+    """The ready metadata proposal comment for the auto session mode (decision
+    75.3): SemVer, labels, title, description, and milestone as one paste-ready
+    comment instead of per-item execution commands."""
+    ru = locale == "ru"
+    label_review = cast("dict[str, Any]", sources.get("label_review") or {})
+    metadata = cast(
+        "dict[str, Any]",
+        (cast("dict[str, Any]", sources.get("metadata") or {}) or {}).get("assessment") or {},
+    )
+    lines = [
+        f"note: {'Предложение по итогам ревью' if ru else 'Review proposal'}",
+        "",
+        f"- {'Вердикт' if ru else 'Verdict'}: {sources.get('verdict') or '-'}",
+        (
+            f"- {'Вклад MR / SemVer' if ru else 'MR contribution / SemVer'}: "
+            f"{str(sources.get('semver_impact') or '-').upper()}"
+            f" - {sources.get('semver_rationale') or '-'}"
+        ),
+    ]
+    add = cast("list[str]", label_review.get("add") or [])
+    remove = cast("list[str]", label_review.get("remove") or [])
+    labels_value = (
+        ", ".join([*(f"~{name}" for name in add), *(f"~~{name}" for name in remove)])
+        if add or remove
+        else ("без изменений" if ru else "unchanged")
+    )
+    lines.append(f"- {'Метки' if ru else 'Labels'}: {labels_value}")
+    labels_map = portable.review_metadata_labels(locale)
+    for field in ("title", "description", "milestone"):
+        item = cast("dict[str, Any]", metadata.get(field) or {})
+        value = (
+            item.get("recommendation")
+            or item.get("rationale")
+            or ("нет рекомендации" if ru else "no recommendation")
+        )
+        lines.append(f"- {labels_map[field]}: {value}")
+    return "\n".join(lines)
+
+
 def structured_publication_preview(
     evidence: dict[str, Any],
     context: dict[str, Any],
@@ -2690,7 +2847,13 @@ def structured_publication_preview(
     label_review: dict[str, Any],
     dry_run: bool = False,
     locale: str = "en",
+    session_mode: str = "manual",
+    proposal_sources: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """Build the publication plan. In the auto session mode (decision 75.3) the
+    plan carries ready comment bodies only - no per-item shell commands - plus
+    one metadata proposal comment; publication stays manual."""
+    auto_comments = session_mode == "auto"
     body_directory = root / "artifacts" / "review_plan" / "bodies"
     patch_directory = root / "artifacts" / "review_plan" / "patches"
     if not dry_run:
@@ -2809,6 +2972,10 @@ def structured_publication_preview(
                 "content": body,
             }
         )
+        if auto_comments:
+            # Decision 75.3: the auto runbook carries ready comment bodies, not
+            # execution commands - groundwork for future auto-posting.
+            return
         publication_operation = "reply" if operation in {"resolve", "reopen"} else operation
         action_id = f"{kind}:{publication_id}:r{revision}:{publication_operation}"
         if publication_operation == "create_line":
@@ -2974,7 +3141,7 @@ def structured_publication_preview(
         enriched_findings.append({**publication_spec, "revision": revision})
         assessment = assessment_by_id.get(finding_id)
         if previous_allowed.issuperset([finding_id]) and (
-            (assessment or {}).get("publication_action") == "no_publication"
+            (assessment or {}).get("publication_action") == "no_reply"
         ):
             continue
         if context["role"] == "author" or publication_spec.get("type") == "existing_thread":
@@ -3017,7 +3184,7 @@ def structured_publication_preview(
             assessment.get("publication_action") == "update_issue"
         ):
             raise portable.WorkflowError(
-                "a published recommended issue cannot be updated; record no_publication and "
+                "a published recommended issue cannot be updated; record no_reply and "
                 "explain the outcome in the assessment rationale"
             )
     for issue_value in recommended_issues:
@@ -3039,7 +3206,7 @@ def structured_publication_preview(
 
     for decision in enriched_threads:
         operation = cast("str", decision["outcome"])
-        if operation in {"no_publication", "local_fix"}:
+        if operation in {"no_reply", "local_fix"}:
             continue
         root_note_id = str(decision["id"])
         publication_id = f"thread-{root_note_id}"
@@ -3115,7 +3282,7 @@ def structured_publication_preview(
                 mutation={"path": part.path, "line": part.line, "old_line": None},
             )
 
-    if label_review.get("add") or label_review.get("remove"):
+    if not auto_comments and (label_review.get("add") or label_review.get("remove")):
         action_id = "labels:update"
         label_argv = ["glab", "mr", "update", str(target["iid"]), "--repo", repository_url]
         adds = cast("list[str]", label_review.get("add") or [])
@@ -3140,11 +3307,25 @@ def structured_publication_preview(
     identities = [item["id"] for item in actions]
     if len(identities) != len(set(identities)):
         raise portable.WorkflowError("publication action IDs must be unique")
+    proposal: dict[str, Any] | None = None
+    if auto_comments and proposal_sources is not None:
+        proposal = {
+            "publication_id": "metadata-proposal",
+            "body": metadata_proposal_comment(proposal_sources, locale),
+        }
+        add_body_action(
+            proposal["publication_id"], 1, "proposal", "create_general", proposal["body"]
+        )
     result = {
         "mr_state": cast("dict[str, Any]", evidence["object"])["state"],
-        "warning": "manual publication; no command was executed",
+        "warning": (
+            "auto mode: ready comments only, publish manually; no command was executed"
+            if auto_comments
+            else "manual publication; no command was executed"
+        ),
         "body_files": body_files,
         "actions": actions,
+        **({"proposal": proposal} if proposal is not None else {}),
     }
     if not portable.review_publication_preview_is_valid(result):
         raise portable.WorkflowError("structured review publication preview is invalid")
@@ -3158,7 +3339,9 @@ def review_markdown(
     content: dict[str, Any],
     metadata: dict[str, Any],
     publication: dict[str, Any],
+    session_mode: str = "manual",
 ) -> str:
+    auto = session_mode == "auto"
     assessment = cast("dict[str, dict[str, Any]]", metadata["assessment"])
     presentation = cast("dict[str, Any]", content["presentation"])
     previous = cast("list[dict[str, Any]]", content["previous_finding_assessments"])
@@ -3254,7 +3437,13 @@ def review_markdown(
             else []
         ),
         f"- code-review: {SKILL_VERSION} · contract: {REVIEW_CONTRACT_VERSION}",
-        f"- {presentation['publication_warning']}",
+        (
+            "- Авто-режим: только готовые комментарии - публикация вручную, команды не формируются"
+            if auto and ru_locale
+            else "- Auto mode: ready comments only - publish manually, no command is generated"
+            if auto
+            else f"- {presentation['publication_warning']}"
+        ),
         "",
         content["summary"],
         "",
@@ -3298,12 +3487,33 @@ def review_markdown(
         f"## {presentation['metadata_heading']}",
         "",
     ]
-    for field in ("title", "description", "workflow_state", "overall"):
+    for field in ("title", "description", "workflow_state", "milestone", "overall"):
         item = assessment[field]
         labels = portable.review_metadata_labels(locale)
         text_value = item["recommendation"] or item["rationale"]
         lines.append(f"- **{labels[field]}:** {text_value}")
     lines.append("")
+
+    proposal = cast("dict[str, Any] | None", publication.get("proposal"))
+    if auto and proposal is not None:
+        lines.extend(
+            [
+                f"## {'Комментарий-предложение (авто-режим)' if ru_locale else 'Metadata proposal comment (auto mode)'}",
+                "",
+                (
+                    "Готовый комментарий с SemVer, метками, заголовком, описанием и "
+                    "майлстоуном. Опубликуй его вручную одним сообщением."
+                    if ru_locale
+                    else "One ready comment with SemVer, labels, title, description, and "
+                    "milestone. Publish it manually as a single note."
+                ),
+                "",
+                portable.marked_preview(
+                    "METADATA PROPOSAL BODY", cast("str", proposal.get("body"))
+                ),
+                "",
+            ]
+        )
 
     panel_source = content.get("review_source")
     participants: dict[str, Any] | None = None
@@ -3431,7 +3641,7 @@ def review_markdown(
         )
         action_names = (
             {
-                "no_publication": "Нет",
+                "no_reply": "Нет",
                 "reply": "Ответ",
                 "resolve": "Закрыть",
                 "reopen": "Открыть",
@@ -3439,7 +3649,7 @@ def review_markdown(
             }
             if ru_locale
             else {
-                "no_publication": "None",
+                "no_reply": "None",
                 "reply": "Reply",
                 "resolve": "Resolve",
                 "reopen": "Reopen",
@@ -3468,9 +3678,9 @@ def review_markdown(
             lines.append("| " + " | ".join(markdown_cell(value) for value in cells) + " |")
         lines.append("")
         for item in previous:
-            if item["publication_action"] == "no_publication":
+            if item["publication_action"] == "no_reply":
                 lines.append(f"- {item['current_status']}: {item['rationale']}")
-        if any(item["publication_action"] == "no_publication" for item in previous):
+        if any(item["publication_action"] == "no_reply" for item in previous):
             lines.append("")
 
     def add_fix(fix: dict[str, Any]) -> None:
@@ -3574,6 +3784,18 @@ def review_markdown(
         lines.append("")
 
     def add_publication_action(publication_id: str) -> None:
+        if auto:
+            body = bodies.get(publication_id)
+            if body is not None:
+                lines.extend(
+                    [
+                        portable.marked_preview(
+                            f"PUBLICATION {publication_id} BODY", cast("str", body["content"])
+                        ),
+                        "",
+                    ]
+                )
+            return
         for action in actions_by_publication.get(publication_id, []):
             add_action(action)
 
@@ -3600,8 +3822,7 @@ def review_markdown(
         [
             item
             for item in thread_decisions
-            if item["state"] != "resolved"
-            and item["outcome"] not in {"no_publication", "local_fix"}
+            if item["state"] != "resolved" and item["outcome"] not in {"no_reply", "local_fix"}
         ],
     )
     add_thread_section(
@@ -3609,8 +3830,7 @@ def review_markdown(
         [
             item
             for item in thread_decisions
-            if item["state"] == "resolved"
-            and item["outcome"] not in {"no_publication", "local_fix"}
+            if item["state"] == "resolved" and item["outcome"] not in {"no_reply", "local_fix"}
         ],
     )
 
@@ -3840,7 +4060,7 @@ def review_markdown(
             add_publication_action(str(finding["id"]))
     for item in previous:
         if not any(finding["id"] == item["id"] for finding in existing_findings) and (
-            item["publication_action"] != "no_publication"
+            item["publication_action"] != "no_reply"
         ):
             lines.extend([f"### {item['current_status']}", "", item["rationale"], ""])
             add_publication_action(str(item["id"]))
@@ -3874,7 +4094,7 @@ def review_markdown(
         add_publication_action(cast("str", issue["id"]))
 
     lines.extend([f"## {presentation['checked_heading']}", ""])
-    without_publication = [item for item in thread_decisions if item["outcome"] == "no_publication"]
+    without_publication = [item for item in thread_decisions if item["outcome"] == "no_reply"]
     if not without_publication:
         lines.extend([presentation["no_items"], ""])
     else:
@@ -4202,7 +4422,7 @@ def build_finding_ledger(
         else:
             record = dict(cast("dict[str, Any]", old["record"]))
             revision = old["revision"]
-            if old["kind"] == "finding" and assessment["publication_action"] != "no_publication":
+            if old["kind"] == "finding" and assessment["publication_action"] != "no_reply":
                 publication = dict(record["publication"])
                 publication["body"] = assessment["publication_body"]
                 publication["revision"] = max(revision, action_revisions.get(item_id, revision))
@@ -4356,11 +4576,17 @@ def scaffold_review(
         },
         "review plan content",
     )
+    if content["semver_impact"] not in {"major", "minor", "patch", "none", "not_applicable"}:
+        raise validation_record(
+            "the MR contribution names a SemVer impact",
+            "$.semver_impact",
+            "one of major, minor, patch, none, not_applicable",
+            f"semver_impact is {content['semver_impact']!r}",
+        )
     if (
         content["locale"] not in SUPPORTED_LOCALES
         or not portable.nonempty_string(content["summary"])
         or not portable.nonempty_string(content["architecture_assessment"])
-        or content["semver_impact"] not in {"major", "minor", "patch", "none", "not_applicable"}
         or not portable.nonempty_string(content["semver_rationale"])
         or not isinstance(content["checks"], list)
         or not all(portable.nonempty_string(value) for value in content["checks"])
@@ -4500,8 +4726,10 @@ def scaffold_review(
         raise portable.WorkflowError(
             "changed or disputed previous findings require targeted critic coverage"
         )
+    fix_policy = cast("str | None", progress.get("fix_policy")) if progress is not None else None
+    session_mode = cast("str", progress.get("session_mode")) if progress is not None else "manual"
     finding_publications = validate_finding_publications(
-        content["finding_publications"], current_finding_ids
+        content["finding_publications"], current_finding_ids, fix_policy=fix_policy
     )
     exact_git = cast("dict[str, Any]", context["exact_git"])
     repo_root = Path(cast("str", exact_git["repo_root"]))
@@ -4533,6 +4761,10 @@ def scaffold_review(
                 raise portable.WorkflowError(
                     "existing_thread must bind an accepted thread with its own validated fix"
                 )
+            continue
+        if item["fix_mode"] == "not_required":
+            # Decision 75.3: a comment-only finding publication carries no fix
+            # payload to validate (fix=none sessions only).
             continue
         if item["fix_mode"] == "patch":
             if not portable.nonempty_string(item.get("patch_reason")):
@@ -4594,7 +4826,7 @@ def scaffold_review(
         if (
             assessment_item["kind"] == "finding"
             and item_id in current_publication_by_id
-            and assessment_item["publication_action"] != "no_publication"
+            and assessment_item["publication_action"] != "no_reply"
             and current_publication_by_id[item_id]["body"] != assessment_item["publication_body"]
         ):
             raise portable.WorkflowError(
@@ -4625,19 +4857,21 @@ def scaffold_review(
         validate_user_confirmation(item, source, context)
         if item["state"] != source["state"]:
             raise portable.WorkflowError("thread decision state does not match review context")
-        if source["state"] == "open" and item["outcome"] == "no_publication":
-            raise validation_record(
-                "an open thread gets an explicit outcome",
-                f"$.thread_decisions[id={thread_id}].outcome",
-                "reply, resolve, reopen, or local_fix - an open thread never takes no_publication",
-            )
-        if (item["outcome"] == "no_publication" and item["proposed_response"] is not None) or (
-            item["outcome"] != "no_publication"
-            and not portable.nonempty_string(item["proposed_response"])
+        if item["outcome"] == "no_reply" and item["proposed_response"] is not None:
+            raise portable.WorkflowError("thread publication outcome and body disagree")
+        if item["outcome"] != "no_reply" and not portable.nonempty_string(
+            item["proposed_response"]
         ):
             raise portable.WorkflowError("thread publication outcome and body disagree")
         if item["url"] != expected_threads[thread_id].get("url"):
             raise portable.WorkflowError("thread decision URL does not match review context")
+        if fix_policy == "none" and item["fix_mode"] != "not_required":
+            raise validation_record(
+                "the session fix policy publishes no code fixes",
+                f"$.thread_decisions[id={thread_id}].fix_mode",
+                "not_required under fix=none; suggestions and patches need fix=suggestion or "
+                "fix=patch in a manual session",
+            )
         validate_fixing_commit(item["fixing_commit"])
         if (
             set(item)
@@ -4673,34 +4907,60 @@ def scaffold_review(
         validate_patch_fallback(item, context, evidence)
         assessment = cast("str", item["assessment"])
         outcome = cast("str", item["outcome"])
-        if assessment == "accepted":
-            if item["fix_mode"] not in {"suggestion", "patch"}:
-                raise portable.WorkflowError("an accepted thread requires a validated code fix")
-            expected_outcome = "reopen" if source["state"] == "resolved" else None
-            if expected_outcome is not None and outcome != expected_outcome:
+        # Decision 75.5: the six-case thread matrix. Open threads take no_reply
+        # for an unattempted confirmed defect; every other published outcome
+        # carries its reply body above.
+        if source["state"] == "open":
+            if assessment == "accepted":
+                attempted = item["fix_mode"] in {"suggestion", "patch"}
+                if attempted and outcome not in {"reply", "local_fix"}:
+                    raise validation_record(
+                        "an attempted fix on an open thread publishes its reply",
+                        f"$.thread_decisions[id={thread_id}].outcome",
+                        "reply (or author-mode local_fix) with the fix; no_reply fits only an "
+                        "unattempted confirmed defect",
+                    )
+                if not attempted and outcome != "no_reply":
+                    raise validation_record(
+                        "an unattempted confirmed defect adds no reply yet",
+                        f"$.thread_decisions[id={thread_id}].outcome",
+                        "no_reply: the open thread keeps no new information until a fix "
+                        "exists, or resolve when the review does not confirm the defect",
+                    )
+            elif assessment in {"fixed", "false_positive", "duplicate", "not_related"}:
+                if outcome != "resolve":
+                    raise validation_record(
+                        "a closing assessment on an open thread resolves it",
+                        f"$.thread_decisions[id={thread_id}].outcome",
+                        "reply plus resolve: the review answers the thread and closes it",
+                    )
+            elif outcome not in {"reply", "no_reply"}:
+                raise validation_record(
+                    "a question or neutral open thread never changes state",
+                    f"$.thread_decisions[id={thread_id}].outcome",
+                    "reply or no_reply; resolve and reopen need a closing or accepted assessment",
+                )
+        elif assessment == "accepted":
+            if outcome != "reopen":
                 raise validation_record(
                     "an accepted fix on a resolved thread reopens it",
                     f"$.thread_decisions[id={thread_id}].outcome",
-                    "reopen: the thread owns an accepted fix and must not stay resolved",
+                    "reply plus reopen (a suggestion only when the fix policy asks for "
+                    "one): the thread owns a confirmed defect and must not stay resolved",
                 )
-            if source["state"] == "open" and outcome not in {"reply", "local_fix"}:
-                raise portable.WorkflowError("an accepted open thread must remain open")
-        if assessment in {"fixed", "false_positive", "duplicate", "not_related"}:
-            expected_outcome = "resolve" if source["state"] == "open" else None
-            if expected_outcome is not None and outcome != expected_outcome:
-                raise portable.WorkflowError(
-                    "a closing assessment on an open thread requires resolve"
-                )
-            if source["state"] == "resolved" and outcome not in {"reply", "no_publication"}:
+        elif assessment in {"fixed", "false_positive", "duplicate", "not_related"}:
+            if outcome not in {"reply", "no_reply"}:
                 raise validation_record(
                     "a closing assessment keeps a resolved thread closed",
                     f"$.thread_decisions[id={thread_id}].outcome",
-                    "reply or no_publication on an already-resolved thread; reopen only with "
-                    "an accepted assessment that reintroduces the fix",
+                    "no_reply when the existing explanation holds, or reply when it adds "
+                    "information; reopen only with an accepted assessment",
                 )
-        if assessment in {"question", "neutral"} and outcome in {"resolve", "reopen"}:
-            raise portable.WorkflowError(
-                "a neutral or question assessment cannot change thread state"
+        elif outcome not in {"reply", "no_reply"}:
+            raise validation_record(
+                "a question or neutral resolved thread never changes state",
+                f"$.thread_decisions[id={thread_id}].outcome",
+                "reply or no_reply; resolve and reopen need a closing or accepted assessment",
             )
         if item["outcome"] == "resolve" and (
             source.get("root_resolvable") is not True or source.get("root_resolved") is True
@@ -4711,18 +4971,24 @@ def scaffold_review(
             "false_positive",
             "duplicate",
             "not_related",
-            "neutral",
         }:
             raise portable.WorkflowError("resolve requires a closing thread assessment")
         if item["outcome"] == "reopen" and (
             source.get("root_resolvable") is not True or source.get("root_resolved") is not True
         ):
             raise portable.WorkflowError("reopen requires a resolved resolvable thread")
-        if item["outcome"] == "reopen" and item["assessment"] not in {
-            "accepted",
-            "question",
-        }:
-            raise portable.WorkflowError("reopen requires an actionable thread assessment")
+        if item["outcome"] == "reopen" and item["assessment"] != "accepted":
+            raise portable.WorkflowError("reopen requires an accepted thread assessment")
+        if item["outcome"] != "no_reply" and not CONVENTIONAL_COMMENT_RE.match(
+            cast("str", item["proposed_response"])
+        ):
+            # Decision 75.6: checked last, after the state machine, so an
+            # author fixing an outcome never fights a formatting refusal first.
+            raise validation_record(
+                "a published reply opens with its Conventional Comments label",
+                f"$.thread_decisions[id={thread_id}].proposed_response",
+                CONVENTIONAL_COMMENT_FORM,
+            )
     if context["role"] == "reviewer" and any(
         item["outcome"] == "local_fix" for item in thread_decisions
     ):
@@ -4814,6 +5080,16 @@ def scaffold_review(
             label_review,
             dry_run=bool((draft or {}).get("dry_run")),
             locale=cast("str", content["locale"]),
+            session_mode=session_mode,
+            proposal_sources={
+                "label_review": label_review,
+                "semver_impact": content["semver_impact"],
+                "semver_rationale": content["semver_rationale"],
+                "metadata": metadata,
+                "verdict": presentation["verdict_value"],
+            }
+            if session_mode == "auto"
+            else None,
         )
     )
     render_content = {
@@ -4835,6 +5111,7 @@ def scaffold_review(
         render.copied_presentation(render_content, evidence, visible_context),
         render.copied_presentation(metadata, evidence, visible_context),
         render.copied_presentation(publication, evidence, visible_context),
+        session_mode=session_mode,
     )
     reject_visible_raw_refs(markdown, evidence, visible_context)
     finding_ledger = build_finding_ledger(
@@ -4881,6 +5158,7 @@ def scaffold_review(
         "semver_rationale": content["semver_rationale"],
         "semver_assessment": content["semver_assessment"],
         "chat_assessment": chat_assessment,
+        **({"session_mode": "auto"} if session_mode == "auto" else {}),
         "mr_metadata_assessment": metadata,
         "label_review": label_review,
         "publication_preview": publication,
@@ -5031,6 +5309,8 @@ def restart_action(
     mode = progress.get("mode") if progress is not None else None
     locale = progress.get("locale") if progress is not None else None
     incremental = progress.get("incremental") if progress is not None else None
+    session_mode = progress.get("session_mode") if progress is not None else None
+    fix_policy = progress.get("fix_policy") if progress is not None else None
     if isinstance(repo_root, str):
         arguments.extend(("--repo-root", repo_root))
     arguments.extend(
@@ -5043,6 +5323,10 @@ def restart_action(
             cast("str", incremental) if incremental in {"auto", "off"} else "auto",
         )
     )
+    if session_mode in {"auto", "manual"}:
+        arguments.extend(("--session-mode", cast("str", session_mode)))
+    if fix_policy in {"none", "suggestion", "patch"}:
+        arguments.extend(("--fix-policy", cast("str", fix_policy)))
     return runner_action("prepare", *arguments)
 
 
@@ -5159,6 +5443,8 @@ def _review_status(artifact_root: str) -> dict[str, Any]:
         "context_path": progress.get("context_path"),
         "mode": progress.get("mode"),
         "locale": locale,
+        "session_mode": progress.get("session_mode"),
+        "fix_policy": progress.get("fix_policy"),
         "publication_plan_path": str(root / "runbook.md") if actual_stage == "plan_ready" else None,
         "plan_digest": progress.get("plan_digest") if plan is not None else None,
         "next_action": next_action_for_stage(next_stage, root, progress),
@@ -5189,6 +5475,8 @@ def review_status(artifact_root: str) -> dict[str, Any]:
             "context_path": None,
             "mode": progress.get("mode") if progress is not None else None,
             "locale": progress.get("locale") if progress is not None else "en",
+            "session_mode": progress.get("session_mode") if progress is not None else None,
+            "fix_policy": progress.get("fix_policy") if progress is not None else None,
             "publication_plan_path": None,
             "plan_digest": None,
             "next_action": restart_action(root, evidence, progress),
@@ -5255,7 +5543,7 @@ def content_template(
                     "current_status": "",
                     "rationale": "",
                     "action": "",
-                    "publication_action": "no_publication",
+                    "publication_action": "no_reply",
                     "publication_body": None,
                     "critic_required": True,
                 }
@@ -5299,7 +5587,14 @@ def content_template(
         "semver_assessment": review_semver.template(evidence, context),
         "mr_metadata_assessment": {
             field: {"status": "unverified", "rationale": "", "recommendation": None}
-            for field in ("title", "description", "labels", "workflow_state", "overall")
+            for field in (
+                "title",
+                "description",
+                "labels",
+                "workflow_state",
+                "milestone",
+                "overall",
+            )
         },
         "label_assessments": [
             {"name": item["name"], "status": "unresolved", "rationale": ""}
@@ -5668,6 +5963,171 @@ def final_checklist(locale: str) -> str:
     return _FINAL_CHECKLIST[locale]
 
 
+# Decision 72 (MR !521 evidence): a metadata drift discovered at finalization
+# notifies instead of dropping the authoring chain. Code-line drift still
+# blocks the report; metadata drift (MR object, label catalog, discussions,
+# pipelines) completes the report with a notice and an incremental-restart
+# recommendation.
+CODE_DRIFT_FIELDS = ("target", "head_sha", "base_sha", "start_sha", "changed_files", "commits")
+METADATA_DRIFT_FIELDS = ("object", "labels", "discussions", "pipelines")
+_DRIFT_OBJECT_FIELDS = ("state", "title", "description", "labels", "assignees", "milestone")
+
+_DRIFT_LABELS = {
+    "en": {
+        "heading": "### Metadata drift after the reviewed snapshot",
+        "changed": "Changed",
+        "state": "MR state",
+        "merged": "the merge request was merged after the snapshot",
+        "field": "MR field",
+        "mr_labels": "MR labels",
+        "label_catalog": "project label catalog",
+        "added": "added",
+        "removed": "removed",
+        "discussions": "discussions",
+        "new_threads": "new threads",
+        "changed_threads": "changed threads",
+        "pipelines": "pipeline evidence changed after the snapshot",
+        "notice": (
+            "The review was authored against the collected snapshot; the fields above "
+            "changed afterwards. The plan stays usable, but verify the affected "
+            "conclusions before publishing."
+        ),
+        "recommendation": "Recommended: rerun the review incrementally",
+        "runbook_notice": "Runbook notice",
+    },
+    "ru": {
+        "heading": "### Дрейф метаданных после снимка ревью",
+        "changed": "Изменилось",
+        "state": "Состояние MR",
+        "merged": "мерж-реквест смержили после снимка",
+        "field": "Поле MR",
+        "mr_labels": "Метками MR",
+        "label_catalog": "каталогом меток проекта",
+        "added": "добавлены",
+        "removed": "убраны",
+        "discussions": "обсуждения",
+        "new_threads": "новые треды",
+        "changed_threads": "изменённые треды",
+        "pipelines": "данные конвейера изменились после снимка",
+        "notice": (
+            "Ревью авторизовано по собранному снимку; перечисленные поля изменились "
+            "после него. План остаётся применимым, но перед публикацией проверьте "
+            "затронутые выводы."
+        ),
+        "recommendation": "Рекомендация: перезапустите ревью инкрементально",
+        "runbook_notice": "Уведомление в ранбуке",
+    },
+}
+
+
+def _assignee_names(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return sorted(
+        str(item.get("username"))
+        for item in value
+        if isinstance(item, dict) and portable.nonempty_string(item.get("username"))
+    )
+
+
+def _catalog_names(value: object) -> set[str]:
+    component = value if isinstance(value, dict) else {}
+    return {
+        str(item.get("name"))
+        for item in cast("list[object]", component.get("items") or [])
+        if isinstance(item, dict) and portable.nonempty_string(item.get("name"))
+    }
+
+
+def _thread_ids(value: object) -> set[str]:
+    return {
+        str(item.get("root_note_id"))
+        for item in cast("list[object]", value or [])
+        if isinstance(item, dict)
+    }
+
+
+def metadata_drift_report(
+    assessed: dict[str, Any], current: dict[str, Any]
+) -> dict[str, Any] | None:
+    """Cheap end-of-run drift detection between the assessed snapshot and now.
+
+    Split by fingerprint field: code-line drift blocks the report, metadata
+    drift notifies. The details name what moved - merge, title, description,
+    MR labels, assignees, milestone, the project label catalog, discussions,
+    pipelines - so the notice is the answer, never a riddle."""
+    before, after = portable.fingerprint(assessed), portable.fingerprint(current)
+    changed = sorted(name for name in before if before[name] != after[name])
+    if not changed:
+        return None
+    code = [name for name in changed if name in CODE_DRIFT_FIELDS]
+    metadata = [name for name in changed if name in METADATA_DRIFT_FIELDS]
+    details: list[str] = []
+    old_object = cast("dict[str, Any]", assessed.get("object") or {})
+    new_object = cast("dict[str, Any]", current.get("object") or {})
+    for field in _DRIFT_OBJECT_FIELDS:
+        old_value, new_value = old_object.get(field), new_object.get(field)
+        if old_value == new_value:
+            continue
+        if field == "assignees":
+            details.append(
+                f"assignees: {_assignee_names(old_value)} -> {_assignee_names(new_value)}"
+            )
+        elif field == "labels":
+            details.append(
+                f"mr labels: {sorted(str(item) for item in old_value or [])} -> "
+                f"{sorted(str(item) for item in new_value or [])}"
+            )
+        elif field == "state" and new_value == "merged":
+            details.append("state: merged")
+        else:
+            details.append(f"{field} changed")
+    if before.get("labels") != after.get("labels"):
+        added = sorted(_catalog_names(after.get("labels")) - _catalog_names(before.get("labels")))
+        removed = sorted(_catalog_names(before.get("labels")) - _catalog_names(after.get("labels")))
+        parts = [
+            f"label catalog: {name} {direction}"
+            for name, direction in (
+                *((name, "added") for name in added),
+                *((name, "removed") for name in removed),
+            )
+        ]
+        details.append("; ".join(parts) or "label catalog changed")
+    if before.get("discussions") != after.get("discussions"):
+        old_threads, new_threads = (
+            _thread_ids(before.get("discussions")),
+            _thread_ids(after.get("discussions")),
+        )
+        details.append(
+            f"discussions: {len(new_threads - old_threads)} new, "
+            f"{len(old_threads - new_threads)} removed"
+        )
+    if before.get("pipelines") != after.get("pipelines"):
+        details.append("pipelines changed")
+    return {
+        "changed": changed,
+        "code": code,
+        "metadata": metadata,
+        "blocking": bool(code or any(name not in METADATA_DRIFT_FIELDS for name in changed)),
+        "details": details,
+    }
+
+
+def drift_notice_lines(drift: dict[str, Any], locale: str, action: object) -> list[str]:
+    """The localized drift notice for chat and the runbook companion."""
+    labels = _DRIFT_LABELS["ru" if locale == "ru" else "en"]
+    command = cast("dict[str, Any]", action).get("command") if isinstance(action, dict) else None
+    lines = [
+        labels["heading"],
+        "",
+        f"- **{labels['changed']}:** {', '.join(drift['details']) or ', '.join(drift['metadata'])}",
+        f"- {labels['notice']}",
+    ]
+    if command:
+        lines.append(f"- **{labels['recommendation']}:** `{command}`")
+    return lines
+
+
 def blocked_chat(locale: str, stage: str, reason: str, action: object) -> str:
     command = cast("dict[str, Any]", action).get("command") if isinstance(action, dict) else None
     labels = portable.code_review_chat_labels(locale)
@@ -5692,7 +6152,13 @@ MERGE_VERDICT_LABELS = {
 }
 
 
-def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -> str:
+def review_chat(
+    plan: dict[str, Any],
+    context: dict[str, Any],
+    plan_path: str,
+    drift: dict[str, Any] | None = None,
+    recovery: object = None,
+) -> str:
     context = {
         **context,
         "historical_refs": plan.get("review_source", {})
@@ -5756,6 +6222,8 @@ def review_chat(plan: dict[str, Any], context: dict[str, Any], plan_path: str) -
             f"- **{labels['plan']}:** `{plan_path}`",
         ]
     )
+    if drift is not None:
+        lines.extend(["", *drift_notice_lines(drift, cast("str", plan["locale"]), recovery)])
     return "\n".join(lines)
 
 
@@ -5799,10 +6267,24 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
         if isinstance(review_source, dict) and "ci_snapshot" in review_source
         else evidence
     )
-    if current.get("retrieval_complete") is not True or portable.fingerprint(
-        current
-    ) != portable.fingerprint(assessed):
+    if current.get("retrieval_complete") is not True:
         blocked = {**status, "stage": "stale", "reason": "review evidence changed before report"}
+        return {
+            "status": "blocked",
+            "stage": "stale",
+            "reason": blocked["reason"],
+            "chat": blocked_chat(locale, "stale", cast("str", blocked["reason"]), recovery),
+            "next_action": recovery,
+            "external_mutations": False,
+        }
+    drift = metadata_drift_report(assessed, current)
+    if drift is not None and drift["blocking"]:
+        blocked = {
+            **status,
+            "stage": "stale",
+            "reason": "review evidence changed before report: "
+            + ", ".join(drift["code"] or drift["changed"]),
+        }
         return {
             "status": "blocked",
             "stage": "stale",
@@ -5827,8 +6309,22 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
             "next_action": recovery,
             "external_mutations": False,
         }
-    chat = review_chat(plan, context, cast("str", pointer["markdown_path"]))
+    chat = review_chat(
+        plan, context, cast("str", pointer["markdown_path"]), drift=drift, recovery=recovery
+    )
     reject_visible_raw_refs(chat, evidence, context)
+    if drift is not None:
+        notice = "\n".join(drift_notice_lines(drift, locale, recovery))
+        notice_path = root / "drift-notice.md"
+        replace_private_bytes(
+            notice_path,
+            (
+                notice
+                + "\n\n"
+                + _DRIFT_LABELS["ru" if locale == "ru" else "en"]["runbook_notice"]
+                + f": {pointer['markdown_path']}\n"
+            ).encode("utf-8"),
+        )
     return {
         "status": "ok",
         "stage": "plan_ready",
@@ -5836,6 +6332,8 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
         "publication_plan_path": pointer["markdown_path"],
         "plan_digest": pointer["plan_digest"],
         "final_checklist": final_checklist(locale),
+        **({"drift": drift} if drift is not None else {}),
+        **({"drift_notice_path": str(root / "drift-notice.md")} if drift is not None else {}),
         "next_action": None,
         "external_mutations": False,
     }

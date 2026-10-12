@@ -56,6 +56,27 @@ def test_run_content_stop_is_the_prose_surface(fixture: ReviewFixture, capsys: A
     )
     assert "thread_sha256" not in prose["thread_decisions"][0]
     assert "record-prose" in prose_stop["manual_command"]
+    # Decision 72 (MR !538 evidence): the prose stop prints every accepted
+    # vocabulary, so the schema never opens during authoring.
+    vocabularies = prose_stop["vocabularies"]
+    assert vocabularies["chat_assessment.necessity.status"] == [
+        "supported",
+        "doubtful",
+        "unconfirmed",
+    ]
+    assert vocabularies["label_assessments[*].status"] == [
+        "applicable",
+        "inapplicable",
+        "unresolved",
+    ]
+    assert vocabularies["thread_decisions[*].outcome"] == list(contract.THREAD_OUTCOMES)
+    assert set(vocabularies["semver_impact"]) == {
+        "major",
+        "minor",
+        "patch",
+        "none",
+        "not_applicable",
+    }
 
 
 def test_record_prose_merges_prose_keys_over_the_rerendered_content(
@@ -225,7 +246,7 @@ def fill_prose(prose: dict[str, Any]) -> dict[str, Any]:
                 "assessment": "fixed",
                 "rationale": "The head handles the reported path.",
                 "outcome": "resolve",
-                "proposed_response": "Checked the exact retry path.",
+                "proposed_response": "praise: Checked the exact retry path.",
             }
             for row in prose["thread_decisions"]
         ],
@@ -605,7 +626,7 @@ def authored_line_run(
             assessment="accepted",
             outcome="reply",
             fix_mode="suggestion",
-            proposed_response="Keep the key on the reviewed retry path.",
+            proposed_response="suggestion: Keep the key on the reviewed retry path.",
             target={"path": "review.txt", "before": before},
             replacement="base\nkeyed retry" if before == "base\nreviewed change" else "keyed retry",
         )
@@ -835,7 +856,7 @@ def test_new_comment_is_checked_without_losing_authorship(
     stop = output(capsys)
     assert stop["scope"]["changed_paths"] == []
     assert [row["id"] for row in stop["targets"]] == ["thread:42"]
-    response = "The alternate consumer also keeps the same key across retries."
+    response = "note: The alternate consumer also keeps the same key across retries."
     assert confirm_delta(stop, capsys, thread_response=response)["status"] == "ok"
     assert main([*args, "--resume"]) == 0
     final = output(capsys)
@@ -975,3 +996,25 @@ def test_unverified_delta_cannot_be_forced_ready_by_a_resolution(
     assert contract.read_json(Path(prose_stop["template_path"]), "prose") == authored
     assert main([*args, "--resume"]) == 0
     assert output(capsys)["template_kind"] == "delta"
+
+
+def test_drift_re_anchor_refusal_names_the_delta_continuation(
+    fixture: ReviewFixture, capsys: Any
+) -> None:
+    """Decision 72 (MR !521 evidence): when a drift re-anchor resets the chain,
+    the prose tail names the pending delta check and its exact command instead
+    of the bare "the prose tail requires the recorded decision" that dropped a
+    live finalization."""
+    args, _prose_stop, _authored, _receipt = authored_line_run(fixture, capsys)
+    capsys.readouterr()
+    advance_head(fixture, "base\nintro\nreviewed change\n")
+    assert main([*args, "--resume"]) == 0
+    delta_stop = output(capsys)
+    assert delta_stop["template_kind"] == "delta"
+    with pytest.raises(contract.WorkflowError) as raised:
+        tail.record_prose(Path(delta_stop["artifact_root"]), str(delta_stop["prose_path"]))
+    message = str(raised.value)
+    assert "waits on a drift re-anchor, not a fresh decision" in message
+    assert "record-delta --artifact-root" in message
+    assert delta_stop["template_path"] in message
+    assert "checkpointed and preserved" in message

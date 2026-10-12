@@ -470,7 +470,7 @@
         },
         "rationale": { "type": "string", "minLength": 1 },
         "outcome": {
-          "enum": ["no_publication", "local_fix", "reply", "resolve", "reopen"]
+          "enum": ["no_reply", "local_fix", "reply", "resolve", "reopen"]
         },
         "proposed_response": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
         "routing_response": { "type": "string", "minLength": 1 },
@@ -553,23 +553,25 @@
       "properties": {
         "observed": {
           "type": "object",
-          "required": ["title", "description", "labels", "workflow_state"],
+          "required": ["title", "description", "labels", "workflow_state", "milestone"],
           "properties": {
             "title": { "type": "string" },
             "description": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
             "labels": { "type": "array", "items": { "type": "string" } },
-            "workflow_state": { "type": "string", "minLength": 1 }
+            "workflow_state": { "type": "string", "minLength": 1 },
+            "milestone": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
           },
           "additionalProperties": false
         },
         "assessment": {
           "type": "object",
-          "required": ["title", "description", "labels", "workflow_state", "overall"],
+          "required": ["title", "description", "labels", "workflow_state", "milestone", "overall"],
           "properties": {
             "title": { "$ref": "#/$defs/metadata_assessment_item" },
             "description": { "$ref": "#/$defs/metadata_assessment_item" },
             "labels": { "$ref": "#/$defs/metadata_assessment_item" },
             "workflow_state": { "$ref": "#/$defs/metadata_assessment_item" },
+            "milestone": { "$ref": "#/$defs/metadata_assessment_item" },
             "overall": { "$ref": "#/$defs/metadata_assessment_item" }
           },
           "additionalProperties": false
@@ -614,7 +616,7 @@
         "finding_id": { "type": "string", "minLength": 1 },
         "publication_id": { "type": "string", "minLength": 1 },
         "revision": { "type": "integer", "minimum": 1 },
-        "kind": { "enum": ["finding", "thread", "issue"] },
+        "kind": { "enum": ["finding", "thread", "issue", "proposal"] },
         "path": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/$defs/digest" },
         "content": { "type": "string", "minLength": 1 }
@@ -766,6 +768,9 @@
             "body_files",
             "actions"
           ]
+        },
+        {
+          "required": ["mr_state", "warning", "body_files", "actions", "proposal"]
         }
       ],
       "properties": {
@@ -779,6 +784,15 @@
         "actions": {
           "type": "array",
           "items": { "$ref": "#/$defs/review_publication_action" }
+        },
+        "proposal": {
+          "type": "object",
+          "required": ["publication_id", "body"],
+          "properties": {
+            "publication_id": { "type": "string", "minLength": 1 },
+            "body": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
@@ -947,7 +961,7 @@
         "rationale": { "type": "string", "minLength": 1 },
         "action": { "type": "string", "minLength": 1 },
         "publication_action": {
-          "enum": ["no_publication", "reply", "resolve", "reopen", "update_issue"]
+          "enum": ["no_reply", "reply", "resolve", "reopen", "update_issue"]
         },
         "publication_body": {
           "anyOf": [{ "type": "string", "minLength": 1 }, { "type": "null" }]
@@ -2175,6 +2189,7 @@
                 "target": { "type": "object" },
                 "role": { "enum": ["author", "reviewer"] },
                 "mode": { "enum": ["fast", "normal", "incremental", "unchanged"] },
+                "session_mode": { "enum": ["auto"] },
                 "locale": { "enum": ["en", "ru"] },
                 "incremental": { "$ref": "#/$defs/incremental_review" },
                 "verdict": { "enum": ["ready", "not_ready", "blocked"] },

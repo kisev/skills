@@ -42,6 +42,8 @@ REPLACEMENT_KINDS: dict[str, tuple[str, str, str, tuple[str, ...]]] = {
 
 def prepared(args: argparse.Namespace, bundle: dict[str, Any]) -> dict[str, Any]:
     root = portable.artifact_root(Path(str(bundle["artifact_root"])))
+    session_mode = str(getattr(args, "session_mode", None) or "manual")
+    fix_policy = getattr(args, "fix_policy", None)
     context.begin_review(
         bundle["preview_artifact_path"],
         bundle["preview_digest"],
@@ -50,6 +52,8 @@ def prepared(args: argparse.Namespace, bundle: dict[str, Any]) -> dict[str, Any]
         args.review_mode,
         args.locale,
         args.incremental,
+        session_mode,
+        fix_policy,
     )
     # A fresh run starts a new review cycle: the per-cycle run panel from any
     # previous cycle is invalidated, so the poll is asked and answered anew
@@ -562,10 +566,17 @@ def decide(args: argparse.Namespace) -> dict[str, Any]:
     critic_findings = receipt["findings"] if receipt else []
     candidates = [*report["findings"], *critic_findings]
     ids = [item["id"] for item in candidates]
-    if len(ids) != len(set(ids)) or any(
+    duplicates = sorted({str(item) for item in ids if ids.count(item) > 1})
+    if duplicates or any(
         re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", str(item)) is None for item in ids
     ):
-        raise portable.WorkflowError("primary and critic finding IDs must be unique")
+        raise portable.WorkflowError(
+            "primary and critic finding IDs must be unique: duplicates are "
+            + ", ".join(duplicates)
+            + "; findings carries only the primary review's findings - a critic finding "
+            "lives in the critic receipt and is arbitrated through its own response, and "
+            "critic_findings/accepted_findings are machine-derived, never authored"
+        )
     responses = {item["id"]: item for item in report["responses"]}
     accepted = [item for item in candidates if responses[item["id"]]["decision"] == "accept"]
     if {str(row["finding_id"]) for row in publication_intents} - set(ids):

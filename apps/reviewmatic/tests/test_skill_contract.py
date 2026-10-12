@@ -35,6 +35,9 @@ REQUIRED_DOCUMENTED = (
     "record-run-critic",
     # Runtime identity: SHA pinning and the self report.
     "runtime-info",
+    # Session modes: explicit XDG profiles (decision 75).
+    "profile-setup",
+    "profile-show",
     # Finalization preview: the pure raw-SHA scrub.
     "scrub-preview",
     # The inverted tail: render, edit prose, re-anchor on drift.
@@ -191,6 +194,25 @@ def test_runtime_pin_and_self_report_are_documented() -> None:
     assert any(command == "runtime-info" for _file, command, _flags, _doc in parse_invocations()), (
         "the skill must invoke reviewmatic runtime-info"
     )
+
+
+def test_the_runtime_pin_reads_locally_and_the_banner_opens_the_session() -> None:
+    """Decision 76 stage 3: the installed tree carries references/runtime-pin.json;
+    a session reads the pinned commit from it (no git ls-remote per run) and
+    opens its first response with the local version banner: skill version from
+    the pin, reviewmatic from runtime-info, glab from --version."""
+    entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    assert "references/runtime-pin.json" in entry
+    assert "stitched by the distribution build" in entry
+    assert "a session never resolves the tip with `git ls-remote`" in entry
+    assert "Only when the pin file is absent" in entry
+    assert "version banner" in entry
+    assert "`glab --version` line" in entry
+    assert "no network call belongs to the banner" in entry
+    assert "references/runtime-pin.json" in workflow
+    assert "never runs `git ls-remote` when the file" in workflow
+    assert "version banner" in workflow
 
 
 def test_the_single_pinned_runtime_ignores_any_path_binary() -> None:

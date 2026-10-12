@@ -141,7 +141,7 @@ def filled_content(template: dict[str, Any], findings: list[dict[str, Any]]) -> 
                 "rationale": f"The observed {field} is sufficient.",
                 "recommendation": None,
             }
-            for field in ("title", "description", "labels", "workflow_state", "overall")
+            for field in template["mr_metadata_assessment"]
         },
         "label_assessments": [
             {
@@ -172,7 +172,7 @@ def filled_content(template: dict[str, Any], findings: list[dict[str, Any]]) -> 
                 "outcome": "resolve"
                 if thread.get("state", "open") == "open"
                 else thread["outcome"],
-                "proposed_response": "The exact reviewed code handles this path.",
+                "proposed_response": "note: The exact reviewed code handles this path.",
             }
             for thread in template["thread_decisions"]
         ],
@@ -675,7 +675,7 @@ def _write_callbacks(fixture: ReviewFixture) -> dict[str, str]:
         "    'mr_metadata_assessment': {\n"
         "        field: {'status': 'ok', 'rationale': 'The observed metadata is sufficient.',\n"
         "                'recommendation': None}\n"
-        "        for field in ('title', 'description', 'labels', 'workflow_state', 'overall')\n"
+        "        for field in value['mr_metadata_assessment']\n"
         "    },\n"
         "    'label_assessments': [\n"
         "        {'name': item['name'],\n"

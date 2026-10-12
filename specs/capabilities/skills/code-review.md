@@ -103,6 +103,70 @@ sources or dumping complete JSON schemas into the orchestrator window, and the
 whole context package is never loaded into it — bounded or delegated reads
 cover the rare inside look.
 
+## Session Modes (decision 75)
+
+The session resolves five arguments from the request line — `mr=`,
+`mode=auto|manual`, `fix=none|suggestion|patch`, `locale=en|ru`,
+`profile=<name>` — and treats the free remainder as context. The `auto` mode
+stops on any unresolved argument with the exact missing-name-and-invocation
+instruction, forces `fix=none`, and renders the runbook as ready comment
+bodies (findings without suggestions or patches, one metadata proposal
+comment with SemVer, labels, title, description, and milestone) without
+per-item shell commands; publication stays manual and `publish=auto` is out
+of scope. The `manual` mode confirms its recommendations in one round when
+data is present, follows the dependency-bounded question doctrine otherwise,
+and honors an explicit no-more-questions escape by finishing on profile
+defaults with a report note. Profiles are stored under
+`${XDG_CONFIG_HOME:-~/.config}/agent-skills/code-review/profiles/` and are
+written only by the explicit `profile-setup` invocation; a missing profile
+stops an auto session with the setup instruction and invites a poll in a
+manual session.
+
+```mermaid
+flowchart LR
+    A[Request line] --> B[Parse mr, mode, fix, locale, profile]
+    B --> C{Resolved?}
+    C -->|yes| D[reviewmatic run]
+    C -->|no| E{mode}
+    E -->|auto| F[Stop: name the missing argument\nand the exact invocation]
+    E -->|manual| G[One confirmation round\nor question doctrine]
+    G --> H{Escape?}
+    H -->|no| D
+    H -->|yes| I[Profile defaults + report note]
+```
+
+## Thread Matrix and Publication Labels (decisions 75.5-75.6)
+
+Every thread decision follows the six-case matrix; `no_reply` (the former
+`no_publication`) is the silent outcome for a resolved thread without a
+problem and for an open thread with a confirmed, unattempted defect. Every
+published answer — thread reply, finding comment, previous-finding reply —
+opens with a Conventional Comments label (`suggestion`, `issue`, `question`,
+`note`, `praise`, `todo`, optionally preceded by `blocking:`); the runtime
+refuses an unlabeled published answer and renders the label in the runbook.
+
+| # | Thread state | Review result | Outcome |
+| - | - | - | - |
+| 1 | resolved | no problem | `no_reply` |
+| 2 | resolved | same or related problem | `reply` + `reopen` (+ suggestion when the fix policy asks) |
+| 3 | open | fixed | `reply` + `resolve` |
+| 4 | open | confirmed, no fix attempted | `no_reply` |
+| 5 | open | not fixed, fix attempted | `reply` (+ suggestion when the fix policy asks) |
+| 6 | open | not confirmed | `reply` + `resolve` |
+
+## Authoring Surfaces and Drift (decision 72)
+
+Every authoring refusal is field-level: it names the offending field, the
+received value, and the accepted vocabulary, and the prose stop prints every
+accepted status vocabulary so a schema never opens during authoring. A critic
+novelty claim ("works now / for the first time") on a dependency bump is
+verified against the predecessor version; an unreachable predecessor leaves a
+low-severity uncertainty, never a blocking finding. End-of-run metadata drift
+(merge, title, description, labels, assignees, milestone, discussions, label
+catalog, pipelines) notifies in the chat and a runbook companion with an
+incremental-restart recommendation instead of dropping the authoring chain;
+code drift still blocks the report.
+
 ## Requirement
 
 ### REQ-F-105 - Review exact changes

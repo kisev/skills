@@ -43,14 +43,14 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix() -> None:
             "id": "1",
             "url": url + "#note_1",
             "state": "resolved",
-            "outcome": "no_publication",
+            "outcome": "no_reply",
             "rationale": "Existing explanation confirmed by current code.",
         },
         {
             "id": "2",
             "url": url + "#note_2",
             "state": "resolved",
-            "outcome": "no_publication",
+            "outcome": "no_reply",
             "rationale": "Applied suggestion verified against current code.",
         },
         {
@@ -125,7 +125,7 @@ def test_compact_report_keeps_one_decision_and_copyable_local_fix() -> None:
     metadata = {
         "assessment": {
             field: {"rationale": "Looks correct.", "recommendation": None}
-            for field in ("title", "description", "workflow_state", "overall")
+            for field in ("title", "description", "workflow_state", "milestone", "overall")
         }
     }
     report = review.review_markdown(
