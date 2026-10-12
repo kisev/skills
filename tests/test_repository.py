@@ -122,6 +122,7 @@ PROJECT_REFERENCES = tuple(
         "adr",
         "auditing",
         "validation",
+        "openspec",
     )
 )
 SPEC_TEMPLATE_READMES = tuple(
@@ -158,6 +159,7 @@ PROJECT_REFERENCE_CONTRACTS = {
     "references/adr.md": "do not rewrite an old adr",
     "references/auditing.md": "`implementation_ahead`",
     "references/validation.md": "spec-validate/v1",
+    "references/openspec.md": "never reproduces openspec's own surfaces",
 }
 PROJECT_TEMPLATE_SECTIONS = (
     "## purpose",

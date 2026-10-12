@@ -31,6 +31,7 @@ Enter a stage, read its files; never the whole set up front:
 | Judging sufficient content depth | `references/content-states.md`; `references/minimal-example.md` only as a compact illustration |
 | Validation before reporting success | `references/validation.md` |
 | Audit (spec-review) | `references/auditing.md` |
+| OpenSpec coexistence (project contains `openspec/`) | `references/openspec.md` |
 
 Use `templates/` as normative content guidance, the example only to judge minimum meaningful depth; never copy its facts, placeholders, or operational prompts into the specification.
 

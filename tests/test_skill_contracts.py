@@ -107,6 +107,52 @@ def test_spec_and_docs_skills_own_post_change_triggers() -> None:
     assert "stay user-initiated" in normalized["spec-manage"]
     assert "never creates a documentation set where none exists" in normalized["docs-prepare"]
 
+
+def test_spec_manage_openspec_coexistence_contract() -> None:
+    map_path = ROOT / "skills/spec-manage/references/openspec.md"
+    map_text = map_path.read_text(encoding="utf-8")
+    map_marker = " ".join(map_text.split())
+
+    # AC1: the map stays under the per-file cap and keeps every service.
+    assert map_path.stat().st_size <= 16384, map_path
+    for marker in (
+        "`openspec/specs/` is the OpenSpec project's source of truth",
+        "never create a parallel `specs/` tree",
+        "never reproduces OpenSpec's own surfaces",
+        "only writes inside `openspec/` are ADR journal files",
+        "before or with `/opsx:propose`",
+        "validation-versus-verification",
+        "`WHEN`/`THEN` scenario that fails without the change",
+        "append-only decision journal",
+        "`ADR-NNNN-short-title.md`",
+        "carry the significant accepted ones into `ADR-NNNN` entries",
+        "One fact, one place",
+        "Duplication between domains",
+        "Bounded unknowns",
+        "RFC-2119",
+        "is structural only",
+        "Post-archive consolidation",
+        "`openspec archive` merge the delta",
+        "`Consolidation: required`",
+        "`Consolidation: not required`",
+        "security",
+        "compatibility",
+        "performance or reliability",
+    ):
+        assert marker in map_marker, marker
+
+    # AC2: the entrypoint and stage router point OpenSpec projects at the map.
+    entrypoint = (ROOT / "skills/spec-manage/SKILL.source.md").read_text(encoding="utf-8")
+    assert (
+        "When the target project contains `openspec/`, read `references/openspec.md` "
+        "for the OpenSpec coexistence map" in entrypoint
+    )
+    workflow = (ROOT / "skills/spec-manage/references/workflow.md").read_text(encoding="utf-8")
+    assert (
+        "| OpenSpec coexistence (project contains `openspec/`) | `references/openspec.md` |"
+        in workflow
+    ), workflow
+
     agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
     assert "Update canonical `specs/` for material behavior" not in agents
     assert "Before completing a behavior change" not in agents
