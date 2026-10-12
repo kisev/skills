@@ -44,6 +44,8 @@ PROVIDER_KEYS = (
     "GOOGLE_GENERATIVE_AI_API_KEY",
     "OPENCODE_CONFIG_CONTENT",
     "OPENCODE_CLI_CONFIG_CONTENT",
+    "ZAI_API_KEY",
+    "ZHIPU_API_KEY",
 )
 
 MR_URL = "https://gitlab.example/group/project/-/merge_requests/7"
@@ -297,9 +299,20 @@ def prompt(workspace: Path, repo: Path, answer: Path) -> str:
         "the skill instructs, and verify the pin with `reviewmatic runtime-info`.\n"
         "- I am the user. When the run stops at the panel poll, present the poll text "
         "verbatim: echo the exact printed characters as plain text, same lines, no "
-        "blockquote markers, no rewrapping, nothing added between the lines. Then record "
-        "my answer exactly: critics: one model critic named "
-        'critic-1 with engine "model"; arbitrator: arbitrator-1.\n'
+        "blockquote markers, no rewrapping, nothing added between the lines. Then ask me "
+        "the composition question with your native interactive question tool, offering at "
+        "least the recommended composition, a single model subagent, a subagent plus an "
+        "OCR critic, and a custom composition; this run is non-interactive, so the "
+        "question tool will be cancelled — my pre-given answer then stands: critics: one "
+        'model critic named critic-1 with engine "model"; arbitrator: arbitrator-1. '
+        "Fill the selection template from that answer yourself and run the printed "
+        "command yourself; do not ask me to write JSON.\n"
+        "- A recorded refusal names the rule, the offending path, the valid form, and "
+        "when needed the exact repair command: correct the offending authored artifact "
+        "and run that printed command (it rebinds the artifact and rewinds the derived "
+        "stages). Never edit a bound artifact file behind the runtime's back, never "
+        "re-derive a refusal from contract references, and never execute publication "
+        "mutations to force a stage.\n"
         "- Exactly one authoring step is delegated: the critic receipt. Launch the critic as "
         "an independent subagent session over the collected context (your subagent tool "
         "provides real independent sessions), have it fill the receipt verbatim with its "
@@ -673,6 +686,26 @@ def verify(
     if expected_poll_text(progress) not in presented:
         raise VerificationError("the agent did not present the poll text verbatim")
 
+    # Decision 71: the composition choice is collected through the host's
+    # native interactive question tool with the minimum option set. In this
+    # non-interactive run the tool use is cancelled (state status error) — the
+    # use itself, its option set, and the imported selection are what counts.
+    question_uses = [
+        cast("dict[str, Any]", event.get("part") or {})
+        for event in events
+        if event.get("type") == "tool_use"
+        and cast("dict[str, Any]", event.get("part") or {}).get("tool") == "question"
+    ]
+    if not question_uses:
+        raise VerificationError("the agent did not ask the composition question interactively")
+    option_text = " ".join(
+        json.dumps(cast("dict[str, Any]", use.get("state") or {}).get("input") or {})
+        for use in question_uses
+    ).lower()
+    for option in ("recommended", "model subagent", "ocr", "custom"):
+        if option not in option_text:
+            raise VerificationError(f"the composition question is missing the {option!r} option")
+
     # Reading discipline: zero reads of out-of-stage reference files.
     skill_root = str(workspace / ".agents/skills/code-review")
     forbidden = []
@@ -728,6 +761,7 @@ def verify(
             {"name": "critic-import", "status": "passed"},
             {"name": "prose-authored", "status": "passed"},
             {"name": "poll-verbatim", "status": "passed"},
+            {"name": "poll-question", "status": "passed", "uses": len(question_uses)},
             {"name": "reference-discipline", "status": "passed", "reads": len(reference_reads)},
             {"name": "no-publication-mutation", "status": "passed"},
             {"name": "report-review", "status": "passed"},

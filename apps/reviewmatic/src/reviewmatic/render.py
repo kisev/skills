@@ -12,6 +12,7 @@ re-authoring the review.
 from __future__ import annotations
 
 import copy
+import json
 import re
 from datetime import UTC, datetime
 from pathlib import Path
@@ -521,9 +522,31 @@ def render_content(
             ]
             bindings = context.expected_thread_bindings(review_context)
             if len(thread_ids) != 1 or thread_ids[0] not in bindings:
+                prepared = ", ".join(sorted(bindings)[:5]) or "none"
+                example_thread_id = sorted(bindings)[0] if bindings else "<prepared-thread-id>"
+                example = json.dumps(
+                    [
+                        {
+                            "finding_id": finding_id,
+                            "publication": {"kind": "existing_thread", "fix_mode": "suggestion"},
+                            "dependencies": {
+                                "paths": [],
+                                "thread_ids": [example_thread_id],
+                                "metadata_fields": [],
+                                "ci": False,
+                            },
+                        }
+                    ]
+                )
                 raise contract.WorkflowError(
-                    f"existing_thread intent for {finding_id} needs one prepared thread in "
-                    "dependencies.thread_ids; use decision repair rather than guessing a thread"
+                    f"existing_thread intent for {finding_id} needs one prepared thread id in "
+                    "the decision's top-level `publication_intents` array; the prose file's "
+                    "dependencies.thread_ids is machine-rendered and never read. Valid record "
+                    f"(place it in the decision JSON, then rebind): {example}; thread_ids holds "
+                    f"exactly one collected discussion root note id (prepared threads: "
+                    f"{prepared}); rebind with `reviewmatic replace-artifact --artifact-root "
+                    f"{evidence['artifact_root']} --kind decision --path "
+                    "<corrected-decision.json>`"
                 )
             block["thread_id"] = thread_ids[0]
             rows.append(block)

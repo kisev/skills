@@ -22,6 +22,7 @@
   current repository configuration or canonical documentation.
 - Do not duplicate existing utilities, templates, or logic blocks.
 - Base change verification only on available facts.
+- Probe agent hosts only inside isolated environments with their own `HOME` and `XDG_CONFIG_HOME`/`XDG_CACHE_HOME`/`XDG_STATE_HOME`/`XDG_DATA_HOME` state, as the live tests do (`isolated_environment` in `scripts/eval_runner.py` plus a dedicated `opencode run --standalone` subprocess): opencode keeps its session database in `XDG_DATA_HOME`, so an unset override leaks every probe into the user's real history; a direct call to the user's installed host does the same, and spawning eval, pressure, or scenario runs through this session's own subagent tool surfaces child sessions in the user's session list too — all of these are never a verification path; drive such runs as isolated standalone subprocesses instead.
 - If data is insufficient, explicitly label the conclusion as an assumption.
 - Do not make a finding without a clear risk, impact, or minimal remediation.
 - Consider edge cases, security, input validation, compatibility, and performance.

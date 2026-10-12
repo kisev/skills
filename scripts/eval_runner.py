@@ -1351,6 +1351,7 @@ def isolated_environment(sandbox: Path) -> dict[str, str]:
         "XDG_CONFIG_HOME": str(sandbox / "xdg-config"),
         "XDG_CACHE_HOME": str(sandbox / "xdg-cache"),
         "XDG_STATE_HOME": str(sandbox / "xdg-state"),
+        "XDG_DATA_HOME": str(sandbox / "xdg-data"),
         "PATH": os.environ.get("PATH", ""),
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",

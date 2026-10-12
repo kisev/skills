@@ -101,7 +101,10 @@ fake-glab fixture, pre-seeds the host agent catalog, pins the reviewmatic
 runtime to the current checkout, and asks one real
 `opencode run --standalone` session to drive the complete review cycle from
 the temporary checkout. Verification is machine-only, over artifacts and the
-host's stdout JSONL events: the poll presented verbatim, the critic receipt
+host's stdout JSONL events: the poll presented verbatim, the composition
+question asked through the host's native interactive question tool with the
+minimum option set (decision 71; in the non-interactive run the tool use is
+cancelled and the pre-given answer stands), the critic receipt
 imported, the prose authored, the reading discipline respected (zero
 out-of-stage `references/` reads), no publication mutation against the fake
 glab, and an independent `reviewmatic report-review` revalidation. It never

@@ -60,7 +60,12 @@ def _suggestion_part_issue(suggestions: object) -> str:
     if not isinstance(suggestions, list):
         return "suggestions is not an array"
     if not suggestions:
-        return "suggestions is empty"
+        return (
+            "suggestions is empty; the array is machine-rendered from the row's semantic "
+            "fix: author `parts` (each {target: {path, before}, replacement, optional body}) "
+            "with fix_mode=suggestion, or drop to fix_mode=patch - never author suggestions "
+            "rows directly"
+        )
     if len(suggestions) > 50:
         return f"suggestions has {len(suggestions)} parts; the maximum is 50"
     for index, part in enumerate(suggestions):

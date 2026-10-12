@@ -166,6 +166,53 @@ def _progress(root: Path, field: str) -> Any:
     return progress[field]
 
 
+def test_thread_binding_refusal_names_the_prepared_ids_and_the_repair(
+    fixture: ReviewFixture,
+) -> None:
+    """The existing_thread render refusal is self-describing (decision 69/71):
+    it names the prepared thread ids and the exact replace-artifact repair
+    command, because the live acceptance caught a 37-minute flail that ended in
+    an out-of-stage contract read when the refusal said only "use decision
+    repair" and the repair surface went unnamed."""
+    from reviewmatic import context as review_context_module
+    from reviewmatic import render
+
+    _root, evidence_path, context_path = _prepare_fast(fixture)
+    _, evidence = contract.artifact_payload(Path(evidence_path), "evidence_snapshot")
+    _artifact, review_ctx = contract.artifact_payload(Path(context_path), "review_context")
+    assert isinstance(evidence, dict) and isinstance(review_ctx, dict)
+    finding = low_finding()
+    dummy = {
+        "findings": [finding],
+        "dispositions": [
+            {
+                "id": "docs-1",
+                "decision": "accept",
+                "reason": "Recorded decision.",
+                "publication": {"kind": "existing_thread", "fix_mode": "suggestion"},
+                "dependencies": {
+                    "paths": [],
+                    "thread_ids": ["guessed-thread"],
+                    "metadata_fields": [],
+                    "ci": False,
+                },
+            }
+        ],
+        "content": {"locale": "en"},
+    }
+    with pytest.raises(contract.WorkflowError) as excinfo:
+        render.render_content(dummy, review_ctx, evidence)
+    message = str(excinfo.value)
+    assert "existing_thread intent for docs-1" in message
+    assert "top-level `publication_intents` array" in message
+    assert '"finding_id": "docs-1"' in message
+    assert '"thread_ids": ["' in message
+    prepared = sorted(review_context_module.expected_thread_bindings(review_ctx))
+    assert f"prepared threads: {', '.join(prepared) if prepared else 'none'}" in message
+    assert "replace-artifact --artifact-root" in message
+    assert "--kind decision --path" in message
+
+
 def test_thread_outcome_on_a_resolved_thread_names_the_rule() -> None:
     fixture = make_review_fixture({"resolved": True})
     try:

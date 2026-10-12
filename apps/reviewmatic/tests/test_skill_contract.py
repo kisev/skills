@@ -271,8 +271,11 @@ def test_the_final_answer_carries_the_sanctioned_self_check() -> None:
 def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
     """The agent grounds the critic pool in the harness agent inventory before
     composing poll options; multi-critic options require distinct models or
-    engines, and two critics on one model are never offered. The same rule
-    lives in the runtime poll text and rules (both locales), and no bare
+    engines, and two critics on one model are never offered. The pool counts
+    only the agents the user configured (decision 71): bundled agent assets of
+    installed packages or plugins — anything under ``node_modules/`` — are
+    excluded as installation sources deployed only through ``configure agent``.
+    The same rule lives in the runtime poll text and rules (both locales), and no bare
     package CLI is part of the contract."""
     from reviewmatic import run_panel
 
@@ -289,6 +292,12 @@ def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
         assert "`agent` key" in text
         assert "distinct models or engines" in text
         assert "two critics on the same single model" in text
+        # Decision 71: only user-configured agents; package/plugin installation
+        # sources (the live run globbed node_modules assets into the pool) are
+        # excluded explicitly, in every grounded text.
+        assert "node_modules" in text
+        assert "installed packages or plugins" in text
+        assert "`configure agent`" in text
     assert "never propose two critics on the same single model" in run_path
     normalized_glossary = " ".join(glossary.split())
     assert (
@@ -303,16 +312,38 @@ def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
         "An agent defined without a model runs on the primary session's model"
         in normalized_glossary
     )
+    # Decision 71: the glossary also fixes the composition question and the
+    # empty-pool honesty.
+    assert "Composition question" in glossary
+    assert (
+        "a single model subagent, a subagent plus an OCR critic, and a custom "
+        "composition" in normalized_glossary
+    )
+    assert "a pool that reads as empty recommends the default composition" in normalized_glossary
+    assert (
+        "the agent fills the selection template from the user's answer to the "
+        "composition question" in normalized_glossary
+    )
     for locale in ("en", "ru"):
         rules = run_panel.poll_rules(locale)
         assert "~/.config/opencode/agents/*.md" in rules  # runtime text, not the portable archive
         assert ".opencode/agents/*.md" in rules
+        # Decision 71: the runtime rule carries the same configured-only
+        # grounding and the explicit package-asset exclusion, both locales.
+        assert "node_modules" in rules
+        assert "installed packages or plugins" in rules or (
+            "установленных пакетов или плагинов" in rules
+        )
+        assert "`configure agent`" in rules
+        assert "configured" in rules or "настроенных" in rules
         if locale == "en":
             assert "never propose two critics on the same single model" in rules
             assert "record the installed pool as unknown - never" in rules
+            assert "the pool is empty and the honest recommendation" in rules
         else:
             assert "двух критиков на одной и той же модели" in rules
             assert "делает пул неизвестным - не пустым" in rules
+            assert "пул пуст и честная рекомендация" in rules
         poll = run_panel.poll(locale, "normal", 500)
         if locale == "en":
             assert (
@@ -322,6 +353,58 @@ def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
         else:
             assert "два критика на одной и той же модели - не независимая проверка" in poll["text"]
             assert "субагент на той же модели или выбранный профильный агент" in poll["text"]
+
+
+def test_the_poll_collects_the_choice_interactively() -> None:
+    """Decision 71: after the verbatim fenced presentation the choice is
+    collected through the host's native interactive question tool with the
+    minimum option set; the agent fills the selection template from the answer
+    and runs the printed command itself, so the user never writes JSON, and
+    the explicit-skip fast path still records the default. The same rule is
+    pinned in the runtime poll rules (both locales)."""
+    from reviewmatic import run_panel
+
+    entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
+    panel = " ".join(
+        (SKILL_DIR / "references" / "review-panel.md").read_text(encoding="utf-8").split()
+    )
+    run_path = " ".join(
+        (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8").split()
+    )
+    glossary = " ".join(
+        (SKILL_DIR / "references" / "poll-glossary.md").read_text(encoding="utf-8").split()
+    )
+    minimum = (
+        "the recommended composition, a single model subagent, a subagent plus an "
+        "OCR critic, and a custom composition"
+    )
+    fill = "the selection template from"
+    for text in (panel, run_path, glossary):
+        assert "interactive question tool" in text
+        assert minimum in text
+        assert fill in text
+    assert "the user never writes JSON" in panel
+    assert "the user never writes JSON" in run_path
+    assert "An explicit skip records exactly the default" in panel
+    assert "an explicit skip records exactly the default" in run_path
+    assert "collect the user's choice with the host's native interactive question tool" in entry
+    assert "the user never writes JSON" in entry
+    for locale in ("en", "ru"):
+        rules = run_panel.poll_rules(locale)
+        if locale == "en":
+            assert "host's native interactive question tool" in rules
+            assert "a single model subagent" in rules
+            assert "a subagent plus an OCR critic" in rules
+            assert "custom composition" in rules
+            assert "never ask the user to write JSON" in rules
+            assert "an explicit skip records exactly the default" in rules
+        else:
+            assert "интерактивным вопросом хоста" in rules
+            assert "одного модельного субагента" in rules
+            assert "субагента плюс OCR-критика" in rules
+            assert "свой состав" in rules
+            assert "не проси пользователя писать JSON" in rules
+            assert "явный skip записывает ровно умолчание" in rules
 
 
 def test_no_bare_package_cli_grounds_the_critic_pool() -> None:

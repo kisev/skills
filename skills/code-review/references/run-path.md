@@ -31,16 +31,25 @@ note when the OCR engine is excluded (only when even the compacted background
 exceeds the CLI limit; the note reports the compacted size and the cut
 sections); when the note excludes OCR, do not offer it. Term meanings are
 fixed in `references/poll-glossary.md`; attach your recommendation, and the
-choice is the user's. Before
-proposing the option variants, ground the critic pool in the host's agent
-inventory (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`): suggest more than one
+choice is the user's. After presenting the block, collect the user's choice
+with the host's native
+interactive question tool: offer at least the recommended composition, a single
+model subagent, a subagent plus an OCR critic, and a custom composition that
+asks for its details after selection, with the recommendation attached to its
+own option. Then fill the selection template from that answer yourself and
+run the printed `reviewmatic run --resume --url <mr-url> --participants <template>`
+command yourself — the user never writes JSON; an explicit skip records
+exactly the default, one model-subagent critic and one arbitrator subagent.
+Before
+proposing the option variants, ground the critic pool in the agents the host's
+user configured — the host's agent
+inventory (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`, never the bundled agent assets of installed packages or plugins, anything under `node_modules/`: installation sources deployed only through `configure agent`): suggest more than one
 model critic only when candidate agents carry distinct models or engines, and
 never propose two critics on the same single model — two critics running one
 model are not an independent check. An agent defined without a model runs on
 the primary session's model; an inventory source that cannot be read makes
-the pool unknown, not empty. Fill the
-returned selection template with the answer and run the printed
-`reviewmatic run --resume --url <mr-url> --participants <template>` command. A `fast` review never stops for the poll: it runs without a panel. Never
+the pool unknown, not empty, and a pool that reads as empty recommends the
+same default composition. A `fast` review never stops for the poll: it runs without a panel. Never
 substitute a configuration silently: the recorded names appear in the results, and the state machine rejects a substituted configuration.
 A pipeline transition that arrives while the poll waits — a failed job, a reddening downstream pipeline, a landed note — is post-collection drift, not a poll answer: it never restarts the run, never re-collects evidence, and never adds a second critic. The OCR background was measured before the poll, and the run executes that exact render. Finish the selection; the next resume takes a re-anchor before prose whose fingerprint comparison without persisting keeps authorship for code-identical state, and a CI-only transition becomes exactly one CI delta target checked with `record-delta` while prior checks stay in history — one fresh delta check, never a second critic. A full restart with re-collection is only for changed code or changed notes.
 The emitted critic template is pre-stamped: its `run_id` already carries this reviewmatic run's identity and must not be changed, and `session_id` is the real session id of that critic subagent — never copy another critic's or the orchestrator's identity into a receipt.
@@ -59,7 +68,13 @@ The remaining stops are the decision and the prose. At the decision stop,
 launch the selected arbitrator in a separate native session: it verdicts every
 critic finding and may record `publication_intents` (one finding ID with
 `publication: {kind, fix_mode}` and optional dependencies); import the
-decision with the returned `reviewmatic finalize-review` command. The run then
+decision with the returned `reviewmatic finalize-review` command. A recorded
+refusal names the rule, the offending path, the valid form, and — for a wrong
+recorded artifact before the final plan — the exact `replace-artifact` repair
+command: correct the offending authored artifact and run that printed command;
+it rebinds the artifact and rewinds the derived stages. Never edit a bound
+artifact file behind the runtime's back, and never read contract references to
+re-derive a refusal: the printed message is the complete repair contract. The run then
 invokes the shared renderer, materializes `content-prose-<digest>.json`, and
 returns `template_kind=prose` with `reviewmatic record-prose --artifact-root <root> --input <prose>`.
 Edit prose, semantic choices, and fix payloads only. Do not author positions,

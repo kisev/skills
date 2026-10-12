@@ -857,6 +857,50 @@ def test_poll_presents_the_verbatim_locale_keyed_text() -> None:
     assert run_panel.poll_rules("en").startswith("Copy the printed fenced poll block")
 
 
+def test_poll_rules_collect_the_choice_interactively() -> None:
+    """Decision 71: after the verbatim fenced presentation, the runtime rule
+    routes the composition collection through the host's native interactive
+    question tool with the minimum option set (recommended / single model
+    subagent / subagent+OCR / custom), the agent fills the selection template
+    and runs the printed command itself, the user never writes JSON, and the
+    explicit-skip fast path stays (both locales, synchronized)."""
+    for locale in ("en", "ru"):
+        rules = run_panel.poll_rules(locale)
+        if locale == "en":
+            assert "interactive question tool" in rules
+            assert "recommended composition" in rules
+        else:
+            assert "интерактивным вопросом хоста" in rules
+            assert "рекомендованный состав" in rules
+        assert "a single model subagent" in rules or "одного модельного субагента" in rules
+        assert "a subagent plus an OCR critic" in rules or ("субагента плюс OCR-критика" in rules)
+        assert "custom composition" in rules or "свой состав" in rules
+        assert "never ask the user to write JSON" in rules or (
+            "не проси пользователя писать JSON" in rules
+        )
+        assert "an explicit skip records exactly the default" in rules or (
+            "явный skip записывает ровно умолчание" in rules
+        )
+
+
+def test_poll_rules_exclude_package_and_plugin_agent_assets() -> None:
+    """Decision 71: the critic pool counts only the agents the host's user
+    configured; everything under node_modules and the bundled agent assets of
+    installed packages or plugins are excluded installation sources that
+    deploy only through configure agent (both locales, synchronized)."""
+    for locale in ("en", "ru"):
+        rules = run_panel.poll_rules(locale)
+        assert "node_modules" in rules
+        assert "installed packages or plugins" in rules or (
+            "установленных пакетов или плагинов" in rules
+        )
+        assert "`configure agent`" in rules
+        assert "configured" in rules or "настроенных" in rules
+        assert "the pool is empty and the honest recommendation" in rules or (
+            "пул пуст и честная рекомендация" in rules
+        )
+
+
 def test_poll_block_is_the_ready_to_copy_fenced_presentation() -> None:
     """Decision 67: the stop prints the poll as a fenced block with an as-is
     note, so verbatim presentation is a copy instead of a formatting decision

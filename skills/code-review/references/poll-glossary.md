@@ -30,16 +30,27 @@ use; the runtime renders the poll text verbatim, keyed to the review locale.
 - **Arbitrator** — the separate participant that merges every critic finding
   into one verdict; never one of the critics. Its status is explicit: a
   subagent on the same model as the session, or a selected specialist agent.
-- **Installed agent** — a specialist agent installed in this host, named by
+- **Composition question** — the host's native interactive question tool that
+  collects the user's choice right after the poll is presented verbatim. Its
+  minimum option set: the recommended composition, a single model subagent, a
+  subagent plus an OCR critic, and a custom composition whose details are
+  requested after selection; the recommendation is attached to its own option
+  and the choice is the user's.
+- **Installed agent** — a specialist agent the host's user configured, named by
   the poll's composition variants only when the agent verified the pool first
-  (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`); a multi-critic
+  (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`; never the bundled agent
+  assets of installed packages or plugins, anything under `node_modules/` —
+  installation sources deployed only through `configure agent`); a multi-critic
   composition is offered only when installed agents differ in model or
   engine, and two critics on the same single model are never offered. An
   agent defined without a model runs on the primary session's model; a
-  source that cannot be read leaves the installed pool unknown, not empty.
+  source that cannot be read leaves the installed pool unknown, not empty,
+  and a pool that reads as empty recommends the default composition — one
+  model-subagent critic and one arbitrator subagent.
 - **Panel** — the recorded answer: the critics with their engines plus the
   arbitrator. It is fixed once any critic receipt is bound.
-- **Selection template** — the JSON file the stop materializes; the answer is
-  recorded by filling it and running the printed command.
+- **Selection template** — the JSON file the stop materializes; the agent
+  fills the selection template from the user's answer to the composition
+  question and runs the printed command.
 - **Mode note** — the resolved mode the poll names, with the exclusion
   reason when the OCR engine is excluded.

@@ -12,14 +12,23 @@ context. Attach your recommendation; the choice is the user's. Present the
 poll exactly as printed — every line word for word, as one unchanged block,
 never restyled into a blockquote, a summary, or new wording; on the run path
 the fenced `poll_block` the stop prints is that block, copied fences and all.
-Before
-composing the options, ground the pool in the host's agent inventory
-(`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`): options are proposed only
+Then collect the user's choice with the host's native interactive question
+tool: offer at least the recommended composition, a single model subagent, a
+subagent plus an OCR critic, and a custom composition that asks for its
+details after selection, with the recommendation attached to its own option;
+fill the selection template from that answer yourself and run the printed
+command yourself — the user never writes JSON. If the interactive
+question cannot reach the user, ask the same composition question in plain
+text. Before
+composing the options, ground the pool in the agents the host's user
+configured — the host's agent inventory
+(`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`; never the bundled agent assets of installed packages or plugins, anything under `node_modules/`: installation sources deployed only through `configure agent`): options are proposed only
 when they exist, multi-critic options only when candidate agents carry
 distinct models or engines, and two critics on the same single model are
 never proposed — that is not an independent check. An agent defined without a
 model runs on the primary session's model; a source that cannot be read
-leaves the pool unknown, never empty. An explicit skip records exactly the
+leaves the pool unknown, never empty, and a pool that reads as empty
+recommends the same default composition. An explicit skip records exactly the
 default — one subagent critic and one arbitrator subagent, both on the
 session model — while an unanswered poll is never filled silently. Never
 substitute a configuration silently: the recorded profile, provider, and

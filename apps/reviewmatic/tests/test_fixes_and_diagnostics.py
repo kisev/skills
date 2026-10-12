@@ -147,6 +147,56 @@ def test_suggestion_refusals_name_the_offending_part() -> None:
         suggestion_parts(bad_line)
     with pytest.raises(contract.WorkflowError, match="suggestions is empty"):
         suggestion_parts({"suggestions": []})
+    with pytest.raises(
+        contract.WorkflowError,
+        match=(
+            r"suggestions is empty; the array is machine-rendered from the row's semantic "
+            r"fix: author `parts` \(each \{target: \{path, before\}, replacement, optional "
+            r"body\}\) with fix_mode=suggestion, or drop to fix_mode=patch"
+        ),
+    ):
+        suggestion_parts({"suggestions": []})
+
+
+def test_semver_basis_refusal_names_the_rendered_fallback() -> None:
+    """Decision 69/71: the basis refusal says what "prepared" means - remove an
+    authored override to keep the machine-rendered fallback, never null the
+    rendered fields (the live acceptance caught null-basis guessing)."""
+    from reviewmatic.portable.portable_gitlab import review_semver
+
+    evidence = {"artifact_root": "/tmp/x", "base_sha": "a", "head_sha": "b"}
+    with pytest.raises(
+        contract.WorkflowError,
+        match=(
+            r"semver_assessment.basis: keep the machine-rendered fallback \(remove an "
+            r"authored basis override entirely - never null rendered fields\) or select "
+            r"\{name,source\} from the collected catalog"
+        ),
+    ):
+        review_semver.validate(
+            {
+                "policy": "No release policy was found.",
+                "sources": ["Collected releases catalog"],
+                "mode": "target_fallback",
+                "fallback_reason": "No confirmed stable release or tag is available.",
+                "basis": {},
+            },
+            evidence,
+            {
+                "release_evidence": {
+                    "releases": {"complete": True, "items": []},
+                    "tags": {"complete": True, "items": []},
+                }
+            },
+        )
+
+
+def test_thread_binding_refusal_names_the_repair_command() -> None:
+    """Decision 69/71: the existing_thread refusal is self-describing - it
+    names the prepared thread ids and the exact replace-artifact repair
+    command, because the live acceptance caught a 37-minute flail that ended
+    in an out-of-stage contract read when the refusal said only "use decision
+    repair"."""
 
 
 def _git(root: Path, *arguments: str) -> str:

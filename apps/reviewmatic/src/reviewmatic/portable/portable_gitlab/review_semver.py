@@ -233,7 +233,10 @@ def validate(value: object, evidence: dict[str, Any], context: dict[str, Any]) -
     if not assessment_is_valid(value):
         field, action = (
             "basis",
-            "use the prepared basis or select {name,source} from the collected catalog",
+            (
+                "keep the machine-rendered fallback (remove an authored basis override entirely - "
+                "never null rendered fields) or select {name,source} from the collected catalog"
+            ),
         )
         if isinstance(value, dict):
             if not portable.nonempty_string(value.get("policy")):

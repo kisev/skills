@@ -100,7 +100,13 @@ def run(stand: Any, report_dir: Path, _environment: dict[str, str]) -> dict[str,
     ):
         if key in os.environ:
             environment[key] = os.environ[key]
-    for variable in ("HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+    for variable in (
+        "HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+        "XDG_STATE_HOME",
+        "XDG_DATA_HOME",
+    ):
         private_directory(Path(environment[variable]))
     for name in ("mattermost", "mattermost-triage"):
         shutil.copytree(
