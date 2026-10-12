@@ -17,6 +17,12 @@
       "core": true
     },
     {
+      "name": "skills-canon",
+      "title": "Skill canon lint",
+      "task": "lint:skills",
+      "core": true
+    },
+    {
       "name": "typecheck",
       "title": "Type checks",
       "task": "typecheck",

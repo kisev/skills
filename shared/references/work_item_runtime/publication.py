@@ -811,10 +811,40 @@ def write_bundle(root: Path, files: dict[str, bytes], *, legacy: bytes | None = 
         atomic_write(plan_path, stable_markdown)
 
 
-def default_root(plan_key: str) -> Path:
+SESSION_ENV = "AGENT_SESSION_ID"
+SESSION_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def session_namespace() -> str | None:
+    """Resolve the optional per-session slot namespace from the environment.
+
+    Parallel agent sessions sharing one workspace and one plan_key would
+    otherwise interleave their stable plans in a single slot: each session
+    then meets "someone else's plan" as the prior version. A caller that
+    exports AGENT_SESSION_ID gets a private `sessions/<id>/` subtree; without
+    it the layout stays byte-compatible with the shared slot. An unsafe
+    value fails loudly instead of silently falling back to sharing.
+    """
+    value = os.environ.get(SESSION_ENV, "").strip()
+    if not value:
+        return None
+    if not SESSION_ID.fullmatch(value):
+        raise WorkflowError("AGENT_SESSION_ID must be a safe session identifier")
+    return value
+
+
+def workspace_root() -> Path:
     workspace = Path.cwd().resolve(strict=True)
     workspace_id = digest({"workspace": os.fsdecode(os.fsencode(workspace))})
-    return xdg_state_home() / "agent-skills" / "task-prepare" / workspace_id / plan_key
+    return xdg_state_home() / "agent-skills" / "task-prepare" / workspace_id
+
+
+def default_root(plan_key: str) -> Path:
+    slot = workspace_root()
+    session = session_namespace()
+    if session is not None:
+        slot = slot / "sessions" / session
+    return slot / plan_key
 
 
 def run(argv: list[str] | None = None) -> int:
@@ -846,9 +876,21 @@ def run(argv: list[str] | None = None) -> int:
             root = output_path(f"{args.output_dir}/task-publication.md").parent
         else:
             root = default_root(plan["plan_key"])
-            legacy_path = output_path(f".task-prepare/{plan['plan_key']}/task-publication.md")
-            if legacy_path.exists() and not legacy_path.is_symlink() and legacy_path.is_file():
-                legacy = legacy_path.read_bytes()
+            # Backward read: a namespaced session folds the older shared slot
+            # (and before it the workspace-relative plan) into its history as
+            # the first prior version, so existing drafts keep a read path.
+            legacy_candidates: list[Path] = []
+            if session_namespace() is not None:
+                legacy_candidates.append(
+                    workspace_root() / plan["plan_key"] / "task-publication.md"
+                )
+            legacy_candidates.append(
+                output_path(f".task-prepare/{plan['plan_key']}/task-publication.md")
+            )
+            for candidate in legacy_candidates:
+                if candidate.exists() and not candidate.is_symlink() and candidate.is_file():
+                    legacy = candidate.read_bytes()
+                    break
         files, complete = render(plan, root)
         write_bundle(root, files, legacy=legacy)
         emit(

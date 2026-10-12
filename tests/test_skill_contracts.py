@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import ast
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 from scripts.build_skills import manifest_entries
+from tests.pins import pin
 
 ROOT = Path(__file__).resolve().parents[1]
 BUILT_SKILLS = ROOT / ".build" / "skills"
@@ -113,8 +114,8 @@ def test_spec_manage_openspec_coexistence_contract() -> None:
     map_text = map_path.read_text(encoding="utf-8")
     map_marker = " ".join(map_text.split())
 
-    # AC1: the map stays under the per-file cap and keeps every service.
-    assert map_path.stat().st_size <= 16384, map_path
+    # AC1: the map keeps every service; its byte cap is enforced by the fast
+    # canon lint (scripts/check_skill_canon.py, task lint:skills).
     for marker in (
         "`openspec/specs/` is the OpenSpec project's source of truth",
         "never create a parallel `specs/` tree",
@@ -358,7 +359,12 @@ def test_project_spec_language_authority_and_extension_contract() -> None:
     assert "English-only canonical project specification" not in entrypoint
     assert "exactly one explicitly declared canonical prose language" in normalized_contract
     assert (
-        "A same-language, different-language, or mixed-language user request" in normalized_contract
+        pin(
+            eval_pin(
+                "spec-manage.update-language-preservation", "request-language-does-not-override"
+            )
+        )
+        in normalized_contract
     )
     assert (
         "obtain the user's explicit project-language choice before writing" in normalized_contract
@@ -378,7 +384,9 @@ def test_project_spec_language_authority_and_extension_contract() -> None:
     assert "minimum canonical skeleton, not a closed allowlist" in normalized_contract
     assert "`specs/capabilities/` section is valid" in normalized_contract
     assert "explicit project-language choice before preparing files" in workflow
-    assert "Never select the canonical language from the current request" in workflow
+    assert pin(
+        eval_pin("spec-manage.update-language-preservation", "update-preserves-tree-language")
+    ) in " ".join(workflow.split())
     assert "This mode never edits the reviewed project" in workflow
     assert "The conversational report may use a different language" in audit
     assert "Canonical language: PROJECT-LANGUAGE." in root_template
@@ -476,94 +484,18 @@ def test_team_profile_contract_is_distributed_without_private_values() -> None:
 
 
 def test_skills_use_english_canonical_workflows_without_locale_references() -> None:
-    cyrillic = re.compile(r"[А-Яа-яЁё]")
-    for skill in (ROOT / "skills").iterdir():
-        if not skill.is_dir() or not (skill / "SKILL.source.md").is_file():
-            continue
-        skill_text = (skill / "SKILL.source.md").read_text(encoding="utf-8")
-        frontmatter, body = skill_text.split("---", 2)[1:]
-        assert not cyrillic.search(body), skill / "SKILL.source.md"
-        cyrillic_frontmatter_lines = [
-            line for line in frontmatter.splitlines() if cyrillic.search(line)
-        ]
-        assert cyrillic_frontmatter_lines, skill / "SKILL.source.md"
-        assert all("Russian discovery terms:" in line for line in cyrillic_frontmatter_lines), (
-            skill / "SKILL.source.md"
-        )
-        workflows = list(skill.glob("references/workflow.md"))
-        assert len(workflows) == 1, skill
-        assert not cyrillic.search(workflows[0].read_text(encoding="utf-8")), workflows[0]
-        assert not (skill / "references/ru").exists(), skill
-        assert not (skill / "references/en").exists(), skill
-
-    for path in (ROOT / "shared" / "references").rglob("*.md"):
-        assert not cyrillic.search(path.read_text(encoding="utf-8")), path
-    for path in (ROOT / "skills" / "spec-manage").glob("templates/**/*.md"):
-        if "/ru/" in path.as_posix():
-            continue
-        assert not cyrillic.search(path.read_text(encoding="utf-8")), path
-
-
-def test_all_english_canonical_skill_material_is_cyrillic_free() -> None:
-    cyrillic = re.compile(r"[А-Яа-яЁё]")
-    tracked = subprocess.run(
-        ["git", "ls-files", "skills"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.splitlines()
-    for relative in tracked:
-        path = ROOT / relative
-        if not path.is_file():
-            continue
-        if "skills/spec-manage/templates/ru/" in relative:
-            continue
-        text = path.read_text(encoding="utf-8")
-        if path.name == "SKILL.source.md":
-            text = text.split("---", 2)[2]
-        if relative == "skills/spec-manage/scripts/spec_validate.py":
-            tree = ast.parse(text)
-            placeholder_assignment = next(
-                node
-                for node in tree.body
-                if isinstance(node, ast.Assign)
-                and any(
-                    isinstance(target, ast.Name) and target.id == "PLACEHOLDERS"
-                    for target in node.targets
-                )
-            )
-            lines = text.splitlines()
-            del lines[placeholder_assignment.lineno - 1 : placeholder_assignment.end_lineno]
-            text = "\n".join(lines)
-        # Card publication explicitly supports English and Russian at runtime.
-        # Permit localized string data, but keep comments and other source prose
-        # under the English-only contract. Do not exempt entire source files.
-        if relative in {
-            "skills/mattermost/scripts/mattermost.py",
-            "skills/mattermost/scripts/mattermost_cards.py",
-            "skills/mattermost/tests/test_mattermost_publication.py",
-        }:
-            tree = ast.parse(text)
-            prose = {
-                id(node.value)
-                for node in ast.walk(tree)
-                if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
-            }
-            localized = {
-                segment
-                for node in ast.walk(tree)
-                if isinstance(node, (ast.Constant, ast.JoinedStr))
-                and id(node) not in prose
-                and (segment := ast.get_source_segment(text, node))
-                and cyrillic.search(segment)
-            }
-            for segment in sorted(localized, key=len, reverse=True):
-                text = text.replace(segment, repr("localized card text"))
-        if relative == "skills/mattermost/references/cards.md":
-            # Only valid Russian JSON examples may contain translated prose.
-            def localized_example(match: re.Match[str]) -> str:
-                example = json.loads(match.group(1))
-                return "" if example.get("locale") == "ru" else match.group(0)
-
-            text = re.sub(r"```json\n(.*?)\n```", localized_example, text, flags=re.S)
-        assert not cyrillic.search(text), path
+    # The cyrillic-free canon itself lives in scripts/check_skill_canon.py
+    # (task lint:skills); this contract only proves that the fast layer runs
+    # and passes, keeping one home for the rules.
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "check_skill_canon.py")],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "skill canon sources are clean" in result.stdout
 
 
 def test_preparation_workflows_follow_the_shared_language_policy() -> None:
@@ -865,28 +797,38 @@ def test_humanize_patterns_catalog_maps_all_26_upstream_categories() -> None:
         assert re.findall(r"^### (\d+)\. ", document, re.MULTILINE) == canon_numbers
 
 
-WEAK_ALONE_CATEGORIES = frozenset({6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, 25})
+def eval_pin(scenario_stem: str, invariant_id: str) -> str:
+    """The single authored literal for a phrase pinned by both layers.
+
+    The phrase is authored once, in the eval scenario invariant (its ru/en
+    pair mirrors it verbatim by the pair contract); this contract derives
+    its expectation from that one pin instead of hardcoding a second copy,
+    so rewording never has to fix the same phrase twice.
+    """
+    scenario = json.loads(
+        (ROOT / f"evals/scenarios/{scenario_stem}.json").read_text(encoding="utf-8")
+    )
+    invariants = [item for item in scenario["invariants"] if item["id"] == invariant_id]
+    assert len(invariants) == 1, invariant_id
+    return str(invariants[0]["contains"])
 
 
 def test_humanize_weak_alone_classification_is_consistent() -> None:
-    import re
-
     catalog = (ROOT / "shared/references/humanize-patterns.md").read_text(encoding="utf-8")
     marked: set[int] = set()
     for match in re.finditer(r"^### (\d+)\. .+?( \(weak alone\))?$", catalog, re.MULTILINE):
         if match.group(2):
             marked.add(int(match.group(1)))
-    assert marked == WEAK_ALONE_CATEGORIES
+    ordered = sorted(marked)
+    derived = "the weak-alone set is " + ", ".join(str(number) for number in ordered[:-1])
+    derived = f"{derived}, and {ordered[-1]}"
+    assert derived == eval_pin("skill.humanize.edit-contract", "humanize-weak-alone-set")
 
     workflow = (ROOT / "skills/humanize/references/workflow.md").read_text(encoding="utf-8")
     # The itemized pattern lists collapsed into the catalog pointer (AUDIT.4);
     # the classification fact is pinned on the catalog, the routing on the
     # workflow.
-    normalized_catalog = " ".join(catalog.split())
-    assert (
-        "the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25"
-        in normalized_catalog
-    )
+    assert pin(eval_pin("skill.humanize.edit-contract", "humanize-weak-alone-set")) in pin(catalog)
     assert (
         "A pattern the catalog does not mark weak alone justifies an edit on one sighting"
         in workflow

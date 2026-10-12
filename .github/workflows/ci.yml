@@ -64,6 +64,8 @@ jobs:
             task: version:check
           - name: Lint
             task: lint
+          - name: Skill canon lint
+            task: lint:skills
           - name: Type checks
             task: typecheck
           - name: Secret scanning

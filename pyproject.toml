@@ -108,6 +108,9 @@
         "S603",                                                             # Arguments are fixed release-verification commands.
         "S607",                                                             # Git and npm are required PATH-resolved tools.
       ]
+      "scripts/check_skill_canon.py" = [
+        "S607",                                                             # Git is a required PATH-resolved build dependency.
+      ]
       "scripts/release_channel.py" = [
         "S603",                                                             # Arguments are a fixed git ancestry vector.
         "S607",                                                             # Git is a required PATH-resolved release tool.

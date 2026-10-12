@@ -16,7 +16,10 @@ import pytest
 
 from scripts.eval_runner import (
     EvalError,
+    assertions_for_invariants,
+    describe_invariant,
     offline_observation,
+    print_failure_report,
     result_for,
     run_with_deadline,
     scenario_digest,
@@ -822,3 +825,98 @@ def test_child_environment_is_allowlisted() -> None:
             environment={"SECRET_FOR_EVAL": "must-not-reach-child"},
         )
         assert result.returncode == 0
+
+
+def test_invariant_pins_survive_paragraph_reflow(tmp_path: Path) -> None:
+    target = tmp_path / "reference.md"
+    target.write_text(
+        "The rule says one thing here and the very same wording\ncontinues on"
+        " the next line after reflow.\n",
+        encoding="utf-8",
+    )
+    scenario = {
+        "invariants": [
+            {
+                "id": "wrapped-contains",
+                "path": "reference.md",
+                "contains": "wording continues on the next",
+            },
+            {
+                "id": "wrapped-absent",
+                "path": "reference.md",
+                "absent": "absent phrase across\nlines",
+            },
+        ]
+    }
+    statuses = {
+        item["id"]: item["status"] for item in assertions_for_invariants(scenario, tmp_path)
+    }
+
+    assert statuses == {"wrapped-contains": "passed", "wrapped-absent": "passed"}
+
+
+def test_offline_failure_report_names_scenarios_and_assertions(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    results: list[dict[str, Any]] = [
+        {
+            "scenario_id": "skill.humanize.edit-contract",
+            "status": "failed",
+            "assertions": [
+                {"id": "humanize-weak-alone-set", "status": "failed"},
+                {"id": "selected:skill:humanize", "status": "passed"},
+            ],
+            "error": {"classification": None},
+        },
+        {
+            "scenario_id": "broken.runner",
+            "status": "error",
+            "assertions": [],
+            "error": {"classification": "offline_runner_timeout", "message": "timed out"},
+        },
+    ]
+    selected = [
+        {
+            "id": "skill.humanize.edit-contract",
+            "invariants": [
+                {
+                    "id": "humanize-weak-alone-set",
+                    "path": "shared/references/humanize-patterns.md",
+                    "contains": "the weak-alone set is 6, 7",
+                }
+            ],
+        }
+    ]
+
+    print_failure_report(results, selected)
+    report = capsys.readouterr().err
+
+    assert "evaluation is not passed: 2 of 2 scenarios failed" in report
+    assert "[failed] skill.humanize.edit-contract" in report
+    assert (
+        "assertion humanize-weak-alone-set: shared/references/humanize-patterns.md"
+        " must contain 'the weak-alone set is 6, 7'" in report
+    )
+    assert "[error] broken.runner" in report
+    assert "error offline_runner_timeout: timed out" in report
+    assert "selected:skill:humanize" not in report
+
+
+def test_describe_invariant_renders_absent_and_bare_paths() -> None:
+    result = {"scenario_id": "scenario", "status": "failed", "assertions": [], "error": {}}
+    scenarios = {
+        "scenario": {
+            "id": "scenario",
+            "invariants": [
+                {"id": "gone", "path": "docs/x.md", "absent": "retired phrase"},
+                {"id": "bare", "path": "docs/y.md"},
+            ],
+        }
+    }
+
+    assert (
+        describe_invariant(scenarios, result, "gone")
+        == "docs/x.md must not contain 'retired phrase'"
+    )
+    assert describe_invariant(scenarios, result, "bare") == "docs/y.md"
+    assert describe_invariant(scenarios, result, "unknown") == ""

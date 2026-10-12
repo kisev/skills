@@ -284,7 +284,9 @@ def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int
                         or stat.S_IMODE(target.stat().st_mode)
                         != stat.S_IMODE(source.stat().st_mode)
                     ):
-                        raise BuildError(f"build artifact drift: {relative}")
+                        raise BuildError(
+                            f"build artifact drift: {relative} (refresh with task generate)"
+                        )
             for target in output.rglob("*"):
                 if (
                     target.is_file()
@@ -292,7 +294,10 @@ def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int
                     and "__pycache__" not in target.parts
                     and not (staged / target.relative_to(output)).is_file()
                 ):
-                    raise BuildError(f"unexpected build artifact: {target.relative_to(output)}")
+                    raise BuildError(
+                        f"unexpected build artifact: {target.relative_to(output)}"
+                        " (refresh with task generate)"
+                    )
             print(f"checked {len(entries)} portable materialization(s)")
             return 0
         if output.exists():

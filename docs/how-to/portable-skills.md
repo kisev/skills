@@ -157,6 +157,23 @@ its full pressure run for the edited rules, and a pressure run over the whole
 skill corpus happens only on an explicit user request; it is never part of
 future work by default.
 
+### Standing evidence rules
+
+- Run the no-guidance control in a clean environment without the repository
+  checkout: a checkout leaks the edited wording into the baseline subagent
+  through the `skills/` tree or project instructions.
+- Put full absolute paths in subagent prompts. A relative path lets the
+  subagent rationalize a wrong location (the `skills/skills/` antipattern)
+  instead of failing on the missing file.
+- Plan rate-limit capacity for at least two retries per side of a comparison;
+  a run that cannot retry stops producing evidence exactly when it matters.
+- Never accept a single "honest stop" as the verdict. In measured waves the
+  protocol decided better than a one-shot stop (3-7% lost matches against
+  8-15%); escalate through more iterations instead of trusting one refusal.
+- Read npm and node:test results only from a written file. Piping the live
+  output through another command shows false failures from the parallel
+  reporter interleaving streams.
+
 ## Boundaries
 
 - Portable skills are self-contained and do not depend on the repository or the

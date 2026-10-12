@@ -213,6 +213,11 @@ tasks:
       - lint:jsts
       - lint:python
 
+  lint:skills:
+    desc: Fast source-only canon lint for skill texts (no build needed)
+    cmds:
+      - mise exec -- uv run --locked python scripts/check_skill_canon.py
+
   lint:yaml:
     desc: Lint yaml
     cmds:
@@ -572,6 +577,7 @@ tasks:
     desc: Run the always-on core shared by every push gate
     cmds:
       - task: gates:check
+      - task: lint:skills
       - task: build:skills
       - task: version:check
       - task: lint

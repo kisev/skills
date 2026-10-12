@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 from fnmatch import fnmatch
@@ -21,6 +22,7 @@ COMMAND = re.compile(
 PATH = re.compile(r"(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+")
 LIST_ITEM = re.compile(r"^\s*(?:[-+*]|\d+[.)])\s+")
 TABLE_ROW = re.compile(r"^\s*\|.*\|\s*$")
+QUOTE_GLUE = re.compile(r"\S > | > \S")
 
 
 class LocaleError(Exception):
@@ -47,10 +49,60 @@ def _pair(value: object, label: str) -> tuple[str, str]:
     return value["en"], value["ru"]
 
 
-def _records(root: Path, manifest: dict[str, object]) -> list[tuple[str, str, bool]]:
+def _shared_quotes(value: object) -> bool:
+    """Whether a pair record marks its quote content as language-shared."""
+    return isinstance(value, dict) and value.get("shared_quotes") is True
+
+
+def _quote_gluing(text: str) -> list[int]:
+    """Quote lines whose body carries a glued inline quote marker.
+
+    Hard-wrapped quote continuations collapsed into one line keep their `>`
+    markers as visible text (`... text > more text`); that is corruption, not
+    wrapping, and it lands symmetrically in both locales, so pair parity
+    alone cannot catch it.
+    """
+    return [
+        number
+        for number, line in enumerate(text.splitlines(), start=1)
+        if line.lstrip().startswith(">") and QUOTE_GLUE.search(line)
+    ]
+
+
+def _quote_blocks(text: str) -> list[str]:
+    """Whitespace-normalized quote-block contents in document order."""
+    blocks: list[str] = []
+    current: list[str] = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(">"):
+            current.append(stripped.lstrip(">"))
+        elif current:
+            blocks.append(" ".join(" ".join(current).split()))
+            current = []
+    if current:
+        blocks.append(" ".join(" ".join(current).split()))
+    return blocks
+
+
+def _repeated_sentences(quote: str) -> bool:
+    """Detect a sentence repeated verbatim back to back inside one quote.
+
+    Paste damage triplicates a wrapped paragraph inside a Before block; the
+    repetition lands identically in both locales, so pair parity is blind to
+    it. Intentional non-adjacent repeats (dramatic closers) stay allowed.
+    """
+    sentences = [item.strip() for item in re.split(r"(?<=[.!?])\s+", quote) if item.strip()]
+    return any(left == right and len(left) > 10 for left, right in itertools.pairwise(sentences))
+
+
+def _records(root: Path, manifest: dict[str, object]) -> list[tuple[str, str, bool, bool]]:
     pairs = cast("list[object]", manifest["pairs"])
     patterns = cast("list[object]", manifest["patterns"])
-    records = [(*_pair(item, f"pair {index}"), True) for index, item in enumerate(pairs)]
+    records = [
+        (*_pair(item, f"pair {index}"), True, _shared_quotes(item))
+        for index, item in enumerate(pairs)
+    ]
     for index, item in enumerate(patterns):
         english, russian = _pair(item, f"pattern {index}")
         if "*" not in english or "/ru/" not in russian:
@@ -66,6 +118,7 @@ def _records(root: Path, manifest: dict[str, object]) -> list[tuple[str, str, bo
                         relative,
                         relative.replace("templates/", "templates/ru/", 1),
                         exception is None,
+                        False,
                     )
                 )
     return records
@@ -243,17 +296,23 @@ def _links(root: Path, source: str, text: str) -> set[str]:
 def validate(root: Path = ROOT, built: Path | None = None) -> int:
     manifest = load_manifest(root)
     records = _records(root, manifest)
-    paths = [path for english, russian, _ in records for path in (english, russian)]
+    paths = [path for english, russian, _, _ in records for path in (english, russian)]
     if len(paths) != len(set(paths)):
         raise LocaleError("duplicate translated path")
     neutral = cast("list[str]", manifest["neutral"])
     if len(neutral) != len(set(neutral)):
         raise LocaleError("neutral paths must be unique")
-    for english, russian, require_language_link in records:
+    for english, russian, require_language_link, shared_quotes in records:
         en_file, ru_file = root / english, root / russian
         if not en_file.is_file() or not ru_file.is_file():
             raise LocaleError(f"missing documentation pair: {english}, {russian}")
         en_text, ru_text = en_file.read_text(encoding="utf-8"), ru_file.read_text(encoding="utf-8")
+        for label, content in ((english, en_text), (russian, ru_text)):
+            glued = _quote_gluing(content)
+            if glued:
+                raise LocaleError(f"quote lines keep glued '>' markers: {label}: lines {glued[:5]}")
+            if any(_repeated_sentences(block) for block in _quote_blocks(content)):
+                raise LocaleError(f"quote block repeats a sentence back to back: {label}")
         en_front = en_text.split("---", 2)[1] if en_text.startswith("---\n") else ""
         ru_front = ru_text.split("---", 2)[1] if ru_text.startswith("---\n") else ""
         if en_front != ru_front:
@@ -266,6 +325,8 @@ def validate(root: Path = ROOT, built: Path | None = None) -> int:
             raise LocaleError(f"section structure differs: {english}, {russian}")
         if _block_signature(en_text) != _block_signature(ru_text):
             raise LocaleError(f"block structure differs: {english}, {russian}")
+        if shared_quotes and _quote_blocks(en_text) != _quote_blocks(ru_text):
+            raise LocaleError(f"shared example quotes differ: {english}, {russian}")
         en_links = _links(root, english, en_text)
         ru_links = _links(root, russian, ru_text)
         if russian in ru_links:

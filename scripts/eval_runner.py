@@ -685,6 +685,16 @@ def select(scenarios: list[dict[str, Any]], args: argparse.Namespace) -> list[di
     return selected
 
 
+def normalized(text: str) -> str:
+    """Collapse whitespace runs to one space: the shared prose-pin standard.
+
+    Invariant `contains`/`absent` literals are prose pins, so both the
+    literal and the target text are normalized before comparison; a
+    paragraph reflow can neither break a pin nor dodge an `absent`.
+    """
+    return " ".join(text.split())
+
+
 def assertions_for_invariants(scenario: dict[str, Any], root: Path) -> list[dict[str, Any]]:
     assertions: list[dict[str, Any]] = []
     for invariant in sorted(scenario["invariants"], key=lambda item: str(item["id"])):
@@ -694,9 +704,9 @@ def assertions_for_invariants(scenario: dict[str, Any], root: Path) -> list[dict
         absent = invariant.get("absent")
         text = target.read_text(encoding="utf-8") if passed else ""
         if isinstance(contains, str):
-            passed = passed and contains in text
+            passed = passed and normalized(contains) in normalized(text)
         if isinstance(absent, str):
-            passed = passed and absent not in text
+            passed = passed and normalized(absent) not in normalized(text)
         assertions.append({"id": invariant["id"], "status": "passed" if passed else "failed"})
     return assertions
 
@@ -1718,6 +1728,47 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return args
 
 
+def describe_invariant(
+    scenarios: dict[str, dict[str, Any]], result: dict[str, Any], assertion_id: str
+) -> str:
+    """Render the invariant behind a failed assertion, when it is one."""
+    scenario = scenarios.get(result["scenario_id"], {})
+    for invariant in scenario.get("invariants", []):
+        if str(invariant.get("id")) != assertion_id:
+            continue
+        if isinstance(invariant.get("contains"), str):
+            return f"{invariant['path']} must contain {invariant['contains']!r}"
+        if isinstance(invariant.get("absent"), str):
+            return f"{invariant['path']} must not contain {invariant['absent']!r}"
+        return str(invariant.get("path", ""))
+    return ""
+
+
+def print_failure_report(results: list[dict[str, Any]], selected: list[dict[str, Any]]) -> None:
+    """Print failed scenarios and assertions to stderr; stdout stays machine JSON."""
+    broken = [item for item in results if item["status"] != "passed"]
+    if not broken:
+        return
+    scenarios = {str(scenario["id"]): scenario for scenario in selected}
+    print(
+        f"evaluation is not passed: {len(broken)} of {len(results)} scenarios failed"
+        " (full machine-readable detail on stdout or in --output)",
+        file=sys.stderr,
+    )
+    for item in broken:
+        print(f"  [{item['status']}] {item['scenario_id']}", file=sys.stderr)
+        for assertion in item["assertions"]:
+            if assertion["status"] != "failed":
+                continue
+            detail = describe_invariant(scenarios, item, str(assertion["id"]))
+            suffix = f": {detail}" if detail else ""
+            print(f"    assertion {assertion['id']}{suffix}", file=sys.stderr)
+        error = item.get("error") or {}
+        classification = error.get("classification")
+        if classification:
+            print(f"    error {classification}: {error.get('message', '')}", file=sys.stderr)
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(sys.argv[1:] if argv is None else argv)
@@ -1771,6 +1822,7 @@ def main(argv: list[str] | None = None) -> int:
             assert args.output is not None
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_bytes(canonical(redact(summary)) + b"\n")
+        print_failure_report(results, selected)
         emit(summary, exit_code)
     except EvalError as error:
         emit(

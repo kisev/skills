@@ -102,7 +102,11 @@ publication draft shall provide a safe lowercase `plan_key`; unless an output
 directory is explicit,
 the renderer shall use a canonical-workspace-scoped XDG slot, retain
 content-addressed support and Markdown history, and atomically replace only the
-stable Markdown after its support files are present. It shall use a slot-scoped
+stable Markdown after its support files are present. When the caller exports a
+safe `AGENT_SESSION_ID`, the slot shall move under a per-session namespace so
+parallel sessions never interleave plans under one key; the previous shared
+slot shall stay readable and fold into the new slot's history. It shall use a
+slot-scoped
 lock, reject symlinks and altered immutable content, and never remove the stable
 plan as an update step. Generated mutations shall leave advisory post-success XDG
 markers without treating them as publication proof.

@@ -225,6 +225,7 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
                 ):
                     raise DistributionError(
                         f"distribution artifact drift: {source.relative_to(staged)}"
+                        " (refresh with task generate)"
                     )
             for target in output.rglob("*"):
                 if target.is_file() and not (staged / target.relative_to(output)).is_file():

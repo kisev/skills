@@ -185,9 +185,12 @@ without following links outside the checkout.
 
 The ordinary quality gate does not invoke a model, provider, or credential; the
 dependency audit and the docs-site contracts are part of it and of the CI
-matrix:
+matrix. The chain starts with a seconds-scale source-only canon preselect
+(`task lint:skills`), so a Cyrillic edit in an English canonical text fails
+before builds and heavy tests:
 
 ```shell
+task lint:skills
 task eval:check
 task check
 ```

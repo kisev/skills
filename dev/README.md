@@ -105,3 +105,16 @@ readiness waits for the startup post-reconfigure hook before checking Puma and
 its dependencies, so delayed Workhorse restarts cannot race fixture checks.
 An ownership failure requires resolving the resource conflict, not taking over
 another checkout's containers or volumes.
+
+## Toolchain pitfalls (mise)
+
+`mise` 2026.10.8 re-checks trust on every shim execution. The test suites
+isolate `XDG_STATE_HOME`, which drops mise's trust cache, so shims (`jq`,
+`node`, `python`) refuse to run mid-suite. Both pytest `conftest.py` files
+re-trust the repository and the global mise config for the session through
+`MISE_TRUSTED_CONFIG_PATHS`; an explicitly exported value always wins. Fake
+CLI fixtures placed on `PATH` pin an absolute interpreter shebang
+(`#!/usr/bin/python3`): a PATH-resolved `python3` is itself a mise shim and
+re-reads the isolated trust state before running. When a shim must run
+outside this repository, point `MISE_CONFIG_FILE` at this `mise.toml`
+explicitly so the pinned tool versions still resolve.

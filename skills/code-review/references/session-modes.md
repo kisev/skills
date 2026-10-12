@@ -35,7 +35,7 @@ and a confirmed answer may be saved explicitly by a separate
 follow the findings: confirm each finding, ask fix-or-remark, and collect
 extra details; a rejected finding is never authored further. Whatever the
 agent can decide from evidence is never asked. The user may escape with
-«дальше без вопросов» / "continue without questions" at any moment: the
+"continue without questions" at any moment: the
 remaining arguments take the profile defaults (or the documented defaults
 without a profile) and the final report notes which arguments were resolved
 that way.

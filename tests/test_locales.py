@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from scripts import check_locales
+from tests.pins import assert_pin
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -158,10 +159,11 @@ def test_integration_documentation_covers_the_same_scenario_cli_flow() -> None:
         assert "--confirm" not in document
         assert "plan_digest" not in document
         assert "confirmation_digest" not in document
-    assert "Manage\nportable skills separately" in english
-    assert "Переносимыми навыками\nуправляйте отдельно" in russian
-    assert "lock files do not affect the\ncleanup plan" in english
-    assert "lock-файлы не влияют на план" in russian
+    # Prose pins: wrapping-independent through the shared pin standard.
+    assert_pin(english, "Manage portable skills separately", "english")
+    assert_pin(russian, "Переносимыми навыками управляйте отдельно", "russian")
+    assert_pin(english, "lock files do not affect the cleanup plan", "english")
+    assert_pin(russian, "lock-файлы не влияют на план", "russian")
 
     package_english = (ROOT / "packages/agentomatic/README.md").read_text(encoding="utf-8")
     package_russian = (ROOT / "packages/agentomatic/README.ru.md").read_text(encoding="utf-8")
@@ -348,3 +350,67 @@ def test_locale_checker_rejects_orphan_russian_suffix_and_abbreviated_sections(
     )
     with pytest.raises(check_locales.LocaleError, match="orphan Russian"):
         check_locales.validate(tmp_path)
+
+
+def _write_pair_tree(
+    tmp_path: Path, english_body: str, russian_body: str, pair_extra: dict[str, object] | None
+) -> None:
+    (tmp_path / "shared").mkdir(exist_ok=True)
+    pair: dict[str, object] = {"en": "en.md", "ru": "ru.md"}
+    if pair_extra:
+        pair.update(pair_extra)
+    (tmp_path / "shared/locale-manifest.json").write_text(
+        json.dumps({"version": 1, "pairs": [pair], "patterns": [], "neutral": []}),
+        encoding="utf-8",
+    )
+    (tmp_path / "en.md").write_text(
+        "# Title\n\n[Русский](ru.md)\n\n" + english_body, encoding="utf-8"
+    )
+    (tmp_path / "ru.md").write_text(
+        "# Заголовок\n\n[English](en.md)\n\n" + russian_body, encoding="utf-8"
+    )
+
+
+def test_locale_checker_rejects_glued_quote_markers(tmp_path: Path) -> None:
+    _write_pair_tree(
+        tmp_path,
+        "> Wrapped quote line glued > by a formatter accident.\n",
+        "> Строка цитаты со склейкой > от форматтера.\n",
+        None,
+    )
+    with pytest.raises(check_locales.LocaleError, match="glued '>' markers"):
+        check_locales.validate(tmp_path)
+
+
+def test_locale_checker_enforces_shared_example_quotes(tmp_path: Path) -> None:
+    _write_pair_tree(
+        tmp_path,
+        "> Shared example sentence.\n",
+        "> Другой текст примера.\n",
+        {"shared_quotes": True},
+    )
+    with pytest.raises(check_locales.LocaleError, match="shared example quotes differ"):
+        check_locales.validate(tmp_path)
+    (tmp_path / "ru.md").write_text(
+        "# Заголовок\n\n[English](en.md)\n\n> Shared example sentence.\n", encoding="utf-8"
+    )
+    assert check_locales.validate(tmp_path) == 1
+
+
+def test_locale_checker_rejects_back_to_back_repeated_sentences(tmp_path: Path) -> None:
+    _write_pair_tree(
+        tmp_path,
+        "> One sentence pasted twice. One sentence pasted twice.\n",
+        "> Одно предложение вставлено дважды. Одно предложение вставлено дважды.\n",
+        None,
+    )
+    with pytest.raises(check_locales.LocaleError, match="repeats a sentence back to back"):
+        check_locales.validate(tmp_path)
+    # Non-adjacent repeats (dramatic closers) stay legitimate.
+    _write_pair_tree(
+        tmp_path,
+        "> Statement one. Вот ценность. Statement two. Вот ценность.\n",
+        "> Утверждение раз. Вот ценность. Утверждение два. Вот ценность.\n",
+        None,
+    )
+    assert check_locales.validate(tmp_path) == 1

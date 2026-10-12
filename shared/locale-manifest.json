@@ -53,7 +53,8 @@
     },
     {
       "en": "docs/reference/humanize-patterns.md",
-      "ru": "docs/ru/reference/humanize-patterns.md"
+      "ru": "docs/ru/reference/humanize-patterns.md",
+      "shared_quotes": true
     },
     {
       "en": "docs/architecture.md",

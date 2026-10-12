@@ -727,3 +727,60 @@ def test_built_script_is_standalone_and_neutral_mode_stays_chat_first(tmp_path: 
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["status"] == "ok"
     assert len(list((tmp_path / "state/agent-skills/task-prepare").iterdir())) == 1
+
+
+def test_parallel_sessions_get_private_slots_with_shared_backward_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    path = tmp_path / "draft.json"
+
+    # Session one publishes through the shared layout (no namespace exported)
+    # and keeps the byte-compatible slot of earlier runs.
+    path.write_text(json.dumps(draft()))
+    assert run(["--input", str(path)]) == 0
+    shared_output = Path(json.loads(capsys.readouterr().out)["output"])
+    assert shared_output.parent.parent == publication.workspace_root()
+    assert "sessions" not in shared_output.parts
+    shared_plan = shared_output.read_text(encoding="utf-8")
+
+    # Session two exports its identity: the same plan_key gets a private slot,
+    # the shared plan folds into the new history as a readable prior version,
+    # and the shared slot itself stays untouched.
+    monkeypatch.setenv(publication.SESSION_ENV, "ses_wave_b")
+    changed = draft()
+    changed["items"][0]["description"] = "Session two body"
+    path.write_text(json.dumps(changed))
+    assert run(["--input", str(path)]) == 0
+    namespaced = Path(json.loads(capsys.readouterr().out)["output"])
+    assert namespaced != shared_output
+    assert namespaced.parent.parent.name == "ses_wave_b"
+    assert namespaced.parent.parent.parent.parent == publication.workspace_root()
+    assert "Session two body" in namespaced.read_text(encoding="utf-8")
+    assert "## History" in namespaced.read_text(encoding="utf-8")
+    assert shared_output.read_text(encoding="utf-8") == shared_plan
+
+    # Session three with another identity never sees session two's plan.
+    monkeypatch.setenv(publication.SESSION_ENV, "ses_wave_c")
+    third = draft()
+    third["items"][0]["description"] = "Session three body"
+    path.write_text(json.dumps(third))
+    assert run(["--input", str(path)]) == 0
+    third_output = Path(json.loads(capsys.readouterr().out)["output"])
+    assert third_output.parent.parent.name == "ses_wave_c"
+    assert "Session two body" not in third_output.read_text(encoding="utf-8")
+
+
+def test_unsafe_session_namespace_fails_loudly(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv(publication.SESSION_ENV, "../escape")
+    path = tmp_path / "draft.json"
+    path.write_text(json.dumps(draft()))
+    assert run(["--input", str(path)]) == 2
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "error"
+    assert "safe session identifier" in report["error"]
