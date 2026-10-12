@@ -134,12 +134,11 @@ command; it re-pins the dependency to the current stable release.
 ## Select Assets
 
 In a TTY, `install` selects command adapters, optional plugins, and core
-connection, then offers presets for the chosen agent harness. The six fixed
-agents (`manager`, `architect`, `mapper`, `worker`, `review`, `critic`) deploy
-only as one complete package: `install` has no agent flag, no agent prompt, and
-never asks about models or critics — every agent decision belongs to the
-confirmed `configure agent` command afterwards. Model setup is therefore not
-part of install at all. A repeat install starts
+connection, then offers presets for the chosen agent harness. `install` never
+deploys, removes, or configures agents: the six fixed roles (`manager`,
+`architect`, `mapper`, `worker`, `review`, `critic`) deploy only through the
+confirmed `configure agent` command afterwards, and Model setup is not part of
+install at all. A repeat install starts
 from the saved component selection; deselection shows owned-file removals.
 On first install, all skill commands start selected; `rtk` is the default
 wrapper. Skill command adapters are OpenCode
@@ -333,17 +332,17 @@ npx agentomatic install --dry-run
 ```
 
 The OpenCode flow is a single install run: the wizard asks for command adapters,
-wrappers, core connection, and optional harness presets. Install always deploys
-the six fixed agents as one package and never offers agent models, composition,
-or critics. One confirmation applies owned components and profiles, wires the `core-plugin`
+wrappers, core connection, and optional harness presets. Install never deploys
+agents and never offers agent models, composition, or critics. One confirmation
+applies owned components, wires the `core-plugin`
 fragment into the user config, and provisions the persistent npm dependency in
 `~/.config/opencode` that keeps the global plugin resolvable. The dependency
 step removes a pinned legacy `@kisev/skills-opencode` in the same pass.
 Non-interactive runs pass `--core` (or `--no-core`) with the explicit selection
-flags. Install summaries list every deployed fixed role with its model (or
-`default (host)` when none is saved) and close with the critic panel; both
-epilogues point at `agent list`, the canonical overview, and `configure agent`,
-the single mutation point. `configure integration` remains the full fragment manager for every target;
+flags. Install summaries carry an agent pointer instead of the fixed-role table
+when nothing is deployed yet, close with the critic panel, and point at
+`agent list`, the canonical overview, and `configure agent`,
+the single deploy, remove, and mutation point. `configure integration` remains the full fragment manager for every target;
 applying its `core-plugin` fragment provisions the same dependency when the
 installer skipped it. Before showing its first screen, `configure integration`
 compares the default selection with the current files: a fully satisfied state
@@ -357,7 +356,7 @@ deduplicated; `doctor --json` reports the latest snapshot under
 `config.backups`.
 Scope-aware commands target the current directory by default. Add `--global`
 once to target global state from any directory. The removed `--scope` option
-is not accepted. Components/profiles, npm provisioning, and application configuration
+is not accepted. Components, npm provisioning, and application configuration
 are separate stages, not one atomic transaction. A later failure leaves completed
 stages in place and reports continuation; inspect `status` before retrying.
 
@@ -440,43 +439,57 @@ are required and offers no apply. Portable
 skills, their lock files, worktrees, and runtime state are preserved. The archive
 is inspectable through `doctor`; no archive restore or purge command is provided.
 
-`maintenance repair` restores missing selected components and regenerates owned
-files from saved model choices. It does not add unselected roles or overwrite
-changed managed bytes. Resolve ownership/byte conflicts before retrying; mode-only
+`maintenance repair` restores missing selected components only. It does not
+deploy, remove, or restore agents — resolve the agent domain through
+`configure agent` — and it never
+overwrites changed managed bytes. Resolve ownership/byte conflicts before retrying; mode-only
 damage to exact-owned bytes can be repaired. Without a saved installation, use
 `install`. `maintenance recover` restores an interrupted journal only after its
 paths and digest are confirmed, then requires a fresh preview.
 
 ## Manage Agents
 
-The direct CLI manages fixed-agent models and additional critics without an LLM
+`configure agent` is the single source of agent deployment, removal, and
+configuration. The direct CLI manages fixed-role deployment and fixed-agent
+models and additional critics without an LLM
 call:
 
 ```shell
 npx --yes @kisev/agentomatic@latest agent list --global
-npx agentomatic configure agent manager --global --dry-run
+npx agentomatic configure agent --global
+npx agentomatic configure agent manager --global --deploy --dry-run
+npx agentomatic configure agent worker --global --remove --dry-run
 npx agentomatic configure agent worker --global --model openai/gpt-5 --variant high --dry-run
 npx agentomatic configure agent critic-security --global --model anthropic/claude-sonnet-4-6 --dry-run
 npx agentomatic configure critics --global
 ```
 
-`configure agent` is the single mutation point for agent models and critics:
-nameless (or through the `configure critics` alias) it opens one staged editor
-over every agent; with a name it sets the model of an existing profile, and a
+`configure agent` is the single mutation point for agent deployment, models, and
+critics: nameless (or through the `configure critics` alias) it opens one staged
+editor
+over every agent; with a name it sets the model of an existing profile — deploy
+or remove that fixed role with `--deploy` or `--remove` — and a
 fresh `critic-<safe-suffix>` name adds that critic. `agent` and `agent list`
 are read-only over profiles, models, ownership, collisions, and drift.
-Install deploys the fixed roles only as the whole package; the package-owned
-fixed critic `critic` always ships with it and is kept separate from the
-additional `critic-*` pool in every summary and epilogue.
+Install never touches agents. When no fixed role is deployed, the first
+nameless `configure agent` screen offers to deploy all six roles behind the
+usual preview and confirmation, in global and project scope alike. The staged
+editor adds `Deploy fixed role` and `Remove fixed role` actions, so existing
+fixed roles — including the fixed critic `critic` — are removed the same way
+they were deployed. Saved models of undeployed roles apply again on the next
+deploy. The fixed critic is kept separate from the
+additional `critic-*` pool in every summary and epilogue; deploying it enables
+the batch critic option in review polls.
 Fixed roles keep their names, prompts, and permissions; only model and variant
 change; generated delegation allowlists reflect the selected roles and critic pool.
-Saving a model for an uninstalled fixed role does not install it. Removing an
+Saving a model for an undeployed fixed role does not install it. Removing an
 additional critic happens in the staged editor. Every mutation uses the
 same preview and confirmation contract.
 
 Nameless `configure agent` (and its alias `configure critics`) opens one staged
-editor over every agent: it first prints the critic panel (every package-owned critic row and every
-additional `critic-<suffix>` pool entry, or `No critics`), then offers model changes,
+editor over every agent: it first prints the critic panel (every deployed critic row and every
+additional `critic-<suffix>` pool entry, or `No critics`), then offers fixed-role
+deployment and removal, model changes,
 adding critics, and removal until `Done`, and applies the staged batch behind the
 usual preview and confirmation. Unsafe critic input such as `sonnet-5.5`
 converts to `critic-sonnet-5-5` after an explicit confirmation, rejected input
@@ -525,9 +538,10 @@ aborting; non-interactive runs pass `--model` and `--variant` explicitly.
 
 Keep the package resolvable until its assets are removed:
 
-The preview separates owned components, plugin disconnection, npm removal, and
-saved models. Disconnection is proposed by default; `--no-disconnect` retains it.
-Models are retained. npm removal is opt-in with `--remove-dependency` or the
+The preview separates owned components, plugin disconnection, npm removal, saved
+models, and deployed agents. Disconnection is proposed by default; `--no-disconnect` retains it.
+Models and deployed agents are untouched — remove agents with `configure agent`.
+npm removal is opt-in with `--remove-dependency` or the
 interactive question. Other configuration presets remain unchanged.
 
 ```shell

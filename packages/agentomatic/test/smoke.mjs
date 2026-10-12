@@ -85,9 +85,18 @@ try {
   const dryRun = cli(["install", "--global", ...selection, "--no-core", "--dry-run"]);
   assert.equal(dryRun.applied, false);
   assert.equal(dryRun.plan.requires_restart, true);
+  // Install deploys no agents: the plan contains no agent operations at all.
   assert.equal(
-    cli(["install", "--global", ...selection, "--no-core", "--yes"]).requires_restart,
-    true,
+    dryRun.plan.operations.some((item) => item.path.startsWith("agents/")),
+    false,
+  );
+  assert.equal(dryRun.plan.selection.agents, undefined);
+  const installApply = cli(["install", "--global", ...selection, "--no-core", "--yes"]);
+  assert.equal(installApply.requires_restart, true);
+  // The apply result never carries agent changes either.
+  assert.equal(
+    installApply.plan.operations.some((item) => item.path.startsWith("agents/")),
+    false,
   );
   const doctor = spawnSync(executable, ["doctor", "--global", "--json"], {
     cwd: project,
@@ -102,6 +111,7 @@ try {
     "agent",
     "manager",
     "--global",
+    "--deploy",
     "--model",
     "opencode/gpt-5-nano",
     "--variant",
@@ -114,6 +124,7 @@ try {
       "agent",
       "manager",
       "--global",
+      "--deploy",
       "--model",
       "opencode/gpt-5-nano",
       "--variant",
@@ -142,6 +153,7 @@ try {
   ]);
   const inventory = cli(["agent", "list", "--global"]).inventory;
   assert.equal(inventory.profiles.find((item) => item.name === "manager").variant, "high");
+  assert.equal(inventory.profiles.find((item) => item.name === "worker").state, "not-installed");
   assert.equal(
     inventory.profiles.find((item) => item.name === "critic-smoke").ownership,
     "managed",
@@ -165,6 +177,7 @@ try {
     Object.keys(manifest.files).some((path) => path.startsWith("agents/")),
     false,
   );
+  assert.equal("agents" in manifest, false);
   assert.equal(Object.keys(manifest.files).filter((path) => path.startsWith("plugins/")).length, 0);
   assert.equal("commands/rtk-stats.md" in manifest.files, true);
   const semantic = JSON.parse(
@@ -173,7 +186,7 @@ try {
       "utf8",
     ),
   );
-  assert.deepEqual(semantic.critic_pool, ["critic", "critic-smoke"]);
+  assert.deepEqual(semantic.critic_pool, ["critic-smoke"]);
   process.stdout.write("Packed OpenCode installer smoke test passed\n");
 } finally {
   rmSync(temporary, { recursive: true, force: true });

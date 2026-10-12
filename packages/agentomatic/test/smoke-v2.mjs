@@ -62,6 +62,15 @@ try {
     ],
     { cwd: project, env, encoding: "utf8" },
   );
+  // Agents deploy only through configure agent; each fixed role deploys with
+  // its explicit form so agents.md holds the six roles.
+  for (const role of ["manager", "architect", "mapper", "worker", "review", "critic"]) {
+    execFileSync(
+      join(project, "node_modules/.bin/agentomatic"),
+      ["configure", "agent", role, "--deploy", "--model", "opencode/gpt-5-nano", "--yes"],
+      { cwd: project, env, encoding: "utf8" },
+    );
+  }
   assert.match(
     await readFile(join(project, ".opencode/plugins/rtk.js"), "utf8"),
     /export default plugin/,

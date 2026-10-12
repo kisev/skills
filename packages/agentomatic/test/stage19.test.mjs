@@ -26,12 +26,11 @@ test("installer preserves exact selection and keeps core separate from plugins",
   const home = join(base, "home");
   await Promise.all([mkdir(project), mkdir(home)]);
   try {
-    const selection = { commands: ["agents-md"], agents: [], plugins: [] };
+    const selection = { commands: ["agents-md"], plugins: [], core_activation: false };
     const plan = await preview("install", "project", project, home, selection);
     assert.equal(plan.schema_version, 2);
     assert.deepEqual(plan.selection, {
       commands: ["agents-md"],
-      agents: [],
       plugins: [],
       core_activation: false,
     });
@@ -44,7 +43,8 @@ test("installer preserves exact selection and keeps core separate from plugins",
       await readFile(join(project, ".opencode", ".agentomatic-manifest.json"), "utf8"),
     );
     assert.deepEqual(manifest.commands, ["agents-md"]);
-    assert.deepEqual(manifest.agents, []);
+    // The generic manifest no longer records agents at all.
+    assert.equal("agents" in manifest, false);
     assert.deepEqual(manifest.plugins, []);
     assert.equal(manifest.core_activation, false);
     await assert.rejects(lstat(join(project, ".opencode", "agents")), { code: "ENOENT" });
@@ -295,7 +295,7 @@ test("CLI help is structured and explains commands options workflow and scope", 
     help.stdout,
     /Usage:[\s\S]*install[\s\S]*configure[\s\S]*status[\s\S]*doctor[\s\S]*uninstall[\s\S]*Common:[\s\S]*Mutations:/,
   );
-  assert.match(help.stdout, /^  install\s{2,}Deploy the fixed agent package/m);
+  assert.match(help.stdout, /^  install\s{2,}Deploy chosen command adapters/m);
   assert.match(help.stdout, /^  doctor\s{2,}Diagnose versions, ownership, drift/m);
   assert.doesNotMatch(help.stdout, /agent model-set|agent reconcile|critic remove/);
   for (const option of [

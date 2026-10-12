@@ -111,10 +111,10 @@ npx agentomatic configure integration --global --dry-run
 ```
 
 Restart OpenCode after activation or asset changes. A confirmed `install`
-deploys the six fixed agents only as one complete package; agent models and
-critics live in the confirmed `configure agent` command.
+never deploys agents; the six fixed roles deploy, change, and remove through the
+confirmed `configure agent` command.
 `configure` provides one settings menu; `status` shows the installed set and models.
-`uninstall` proposes plugin disconnection, retains models, and removes the npm
+`uninstall` proposes plugin disconnection, retains models and deployed agents, and removes the npm
 dependency only with an explicit selection (`--remove-dependency`). Other
 fragments use `configure integration`, and command adapter selections do not install portable
 skills. OpenCode config output uses native V2 `plugins` and `permissions`;

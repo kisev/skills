@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, readdir, writeFile, unlink, chmod, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  stat,
+  writeFile,
+  unlink,
+  chmod,
+  rm,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -35,107 +45,85 @@ async function sandbox(t) {
 }
 const subset = ["--commands", "askme", "--plugins", "none", "--no-core", "--no-dependency"];
 
-test("partial install, model edits, repeat install, repair, and uninstall retain exactly the selected set", async (t) => {
+test("install deploys no agents; configure agent and repair manage roles and components", async (t) => {
   const context = await sandbox(t);
   const { ok, root, run } = context;
   const draft = ok(["install", ...subset, "--dry-run"]);
   assert.equal(draft.applied, false);
-  await assert.rejects(readdir(root), { code: "ENOENT" });
+  assert.equal(await readdir(root).catch(() => null), null);
   ok(["install", ...subset, "--yes"]);
-  ok(["configure", "agent", "critic", "--model", "openai/example", "--variant", "high", "--yes"]);
-  // Install deploys the complete fixed-role package; models stay configurable.
+  // Install writes no agents and the epilogue points at configure agent.
+  assert.equal((await readdir(join(root, "agents")).catch(() => null)) ?? null, null);
+  for (const role of ["manager", "architect", "mapper", "worker", "review", "critic"])
+    ok(["configure", "agent", role, "--deploy", "--yes"]);
   assert.equal((await readdir(join(root, "agents"))).length, 6);
-  ok(["configure", "agent", "worker", "--model", "openai/worker", "--yes"]);
-  assert.deepEqual(await readdir(join(root, "agents")), [
-    "architect.md",
-    "critic.md",
-    "manager.md",
-    "mapper.md",
-    "review.md",
-    "worker.md",
-  ]);
-  assert.match(await readFile(join(root, "agents/worker.md"), "utf8"), /model: openai\/worker/);
+  ok(["configure", "agent", "critic", "--model", "openai/example", "--variant", "high", "--yes"]);
+  assert.match(await readFile(join(root, "agents/critic.md"), "utf8"), /model: openai\/example/);
   ok(["install", "--no-dependency", "--yes"]);
+  // Repair restores components but never resurrects agents.
   await unlink(join(root, "agents/critic.md"));
   await unlink(join(root, "commands/askme.md"));
   ok(["maintenance", "repair", "--no-dependency", "--yes"]);
-  assert.equal((await readdir(join(root, "agents"))).length, 6);
+  assert.equal((await readdir(join(root, "agents"))).length, 5);
+  assert.match(await readFile(join(root, "commands/askme.md"), "utf8"), /askme/);
+  // The missing restored role deploys through configure agent with its model.
+  ok(["configure", "agent", "critic", "--deploy", "--yes"]);
   assert.match(
     await readFile(join(root, "agents/critic.md"), "utf8"),
     /model: openai\/example#high/,
   );
   await writeFile(join(root, "agents/critic.md"), "user changed\n");
-  const blocked = run(["maintenance", "repair", "--no-dependency", "--yes"]);
+  const blocked = run(["configure", "agent", "critic", "--deploy", "--yes"]);
   assert.equal(blocked.status, 2);
   assert.equal(JSON.parse(blocked.stdout).error.code, "conflict");
   assert.equal(await readFile(join(root, "agents/critic.md"), "utf8"), "user changed\n");
+  // Uninstall never touches agents either.
+  const before = await readFile(join(root, "agents/manager.md"));
+  ok(["uninstall", "--yes"]);
+  assert.deepEqual(await readFile(join(root, "agents/manager.md")), before);
 });
 
-test("installation drafts atomically include models and multiple critics", async (t) => {
+test("configure agent drafts atomically include models and multiple critics", async (t) => {
   const context = await sandbox(t);
-  const selection = { commands: [], agents: ["critic"], plugins: [], core_activation: false };
+  const { project, home, root } = context;
+  await context.ok(["install", ...subset, "--yes"]);
   const changes = [
-    { action: "model-set", name: "critic", model: "openai/base", variant: "high" },
     { action: "critic-add", name: "critic-security", model: "anthropic/security" },
     { action: "critic-add", name: "critic-performance", model: "openai/performance" },
   ];
-  const plan = await preview(
-    "install",
-    "project",
-    context.project,
-    context.home,
-    selection,
-    false,
-    changes,
-  );
-  await assert.rejects(readdir(context.root), { code: "ENOENT" });
+  const request = { action: "critic-add", changes };
+  const plan = await previewAgentProfileChange(request, "project", project, home);
   await assert.rejects(
-    apply(
-      "install",
-      "project",
-      context.project,
-      context.home,
-      {
-        expectedDigest: plan.digest,
-        beforePublish: () => {
-          throw new Error("injected draft failure");
-        },
+    applyAgentProfileChange(request, "project", project, home, {
+      expectedDigest: plan.digest,
+      beforePublish: () => {
+        throw new Error("injected draft failure");
       },
-      selection,
-      false,
-      changes,
-    ),
+    }),
   );
-  const fresh = await preview(
-    "install",
-    "project",
-    context.project,
-    context.home,
-    selection,
-    false,
-    changes,
-  );
-  await apply(
-    "install",
-    "project",
-    context.project,
-    context.home,
-    { expectedDigest: fresh.digest },
-    selection,
-    false,
-    changes,
-  );
-  const inventory = await listAgentProfiles("project", context.project, context.home);
-  assert.deepEqual(inventory.critic_pool, ["critic", "critic-performance", "critic-security"]);
-  assert.deepEqual(
-    (await readdir(join(context.root, "agents"))).sort(),
-    inventory.critic_pool.map((name) => `${name}.md`).sort(),
-  );
+  await assert.rejects(readFile(join(root, ".agentomatic", "agent-profiles.json")), {
+    code: "ENOENT",
+  });
+  await assert.rejects(readFile(join(root, ".agentomatic", "agent-profiles.manifest.json")), {
+    code: "ENOENT",
+  });
+  await assert.rejects(readdir(join(root, "agents/critic-security.md")), { code: "ENOENT" });
+  const fresh = await previewAgentProfileChange(request, "project", project, home);
+  await applyAgentProfileChange(request, "project", project, home, {
+    expectedDigest: fresh.digest,
+  });
+  const inventory = await listAgentProfiles("project", project, home);
+  assert.deepEqual(inventory.critic_pool, ["critic-performance", "critic-security"]);
+  assert.deepEqual((await readdir(join(root, "agents"))).sort(), [
+    "critic-performance.md",
+    "critic-security.md",
+  ]);
 });
 
 test("confirmed profile and component plans reject changed sources instead of silently replanning", async (t) => {
   const context = await sandbox(t);
   context.ok(["install", ...subset, "--yes"]);
+  context.ok(["configure", "agent", "critic", "--model", "openai/base", "--yes"]);
   const request = { action: "model-set", name: "critic", model: "openai/new" };
   const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
   const path = join(context.root, ".agentomatic/agent-profiles.json");
@@ -149,7 +137,6 @@ test("confirmed profile and component plans reject changed sources instead of si
   );
   const selection = {
     commands: ["askme"],
-    agents: ["critic"],
     plugins: [],
     core_activation: false,
   };
@@ -161,7 +148,9 @@ test("confirmed profile and component plans reject changed sources instead of si
     selection,
     false,
   );
-  await writeFile(path, original + "\n\n");
+  const owned = join(context.root, ".agentomatic-manifest.json");
+  const ownership = await readFile(owned, "utf8");
+  await writeFile(owned, ownership + "\n");
   await assert.rejects(
     apply(
       "install",
@@ -176,7 +165,7 @@ test("confirmed profile and component plans reject changed sources instead of si
   );
 });
 
-test("configure integration saves disconnection for repair and uninstall preserves comments and model choices", async (t) => {
+test("configure integration saves disconnection for repair and uninstall keeps agents, comments and model choices", async (t) => {
   const { ok, project, root } = await sandbox(t);
   ok(["install", ...subset, "--yes"]);
   ok(["configure", "agent", "critic", "--model", "openai/base", "--yes"]);
@@ -192,6 +181,7 @@ test("configure integration saves disconnection for repair and uninstall preserv
   ok(["configure", "agent", "critic-security", "--model", "openai/security", "--yes"]);
   const preview = ok(["uninstall", "--dry-run"]);
   assert.equal(preview.models, "retained");
+  assert.equal(preview.agents, "untouched");
   ok(["uninstall", "--yes"]);
   const config = await readFile(configPath, "utf8");
   assert.match(config, /keep me/);
@@ -205,11 +195,11 @@ test("configure integration saves disconnection for repair and uninstall preserv
   );
   assert.equal(
     inventory.profiles.find((profile) => profile.name === "critic-security").state,
-    "not-installed",
+    "current",
   );
-  assert.deepEqual(inventory.critic_pool, []);
+  assert.deepEqual(inventory.critic_pool, ["critic-security"]);
   assert.equal(ok(["status"]).installed, false);
-  assert.deepEqual(await readdir(join(root, "agents")), []);
+  assert.deepEqual(await readdir(join(root, "agents")), ["critic-security.md"]);
 });
 
 test("dependency removal is explicit, bounded, and rejects stale npm files", async (t) => {
@@ -294,7 +284,7 @@ test("npm install failure reports committed components without claiming configur
   assert.equal(result.status, 2, result.stdout + result.stderr);
   const output = JSON.parse(result.stdout);
   assert.equal(output.status, "partial");
-  assert.deepEqual(output.completed_stages, ["owned-components-and-profiles"]);
+  assert.deepEqual(output.completed_stages, ["owned-components"]);
   assert.equal(output.error.code, "npm_dependency_failed");
   assert.equal(output.requires_restart, true);
   assert.match(output.next_step, /status/);
@@ -305,6 +295,7 @@ test("npm install failure reports committed components without claiming configur
 test("observations and all previews leave existing files unchanged; recovery supports cleanup roots", async (t) => {
   const context = await sandbox(t);
   context.ok(["install", ...subset, "--yes"]);
+  context.ok(["configure", "agent", "critic", "--model", "openai/base", "--yes"]);
   const config = join(context.project, "opencode.jsonc");
   await writeFile(config, '{"plugins":["foreign"]}\n');
   const before = await readFile(config);
@@ -419,11 +410,17 @@ exit 1
   ]);
   assert.equal(install.status, 0, install.output);
   assert.doesNotMatch(install.output, /Configure agent models or additional critics now\?/);
-  assert.match(install.output, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
-  assert.match(install.output, /Pool: additional critics are optional specialist profiles/);
+  assert.doesNotMatch(install.output, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
+  assert.match(install.output, /Agents: none deployed/);
+  assert.match(
+    install.output,
+    /Fixed agent roles deploy and undeploy through: agentomatic configure agent/,
+  );
+  assert.match(install.output, /Critics:\n\s+No critics/);
   const staged = await wizard(
     context,
     [
+      ["No fixed agent roles are deployed", "n\r"],
       ["changes are staged", "\x1b[A"],
       ["● Remove additional critic", "\x1b[A"],
       ["● Add critic", "\r"],
@@ -458,6 +455,7 @@ test("configure agent falls back to an explicit model entry when the catalog is 
   const result = await wizard(
     context,
     [
+      ["No fixed agent roles are deployed", "n\r"],
       ["changes are staged", "\x1b[A"],
       ["● Remove additional critic", "\x1b[A"],
       ["● Add critic", "\r"],
@@ -487,14 +485,86 @@ test("TTY install can apply with model setup skipped", async (t) => {
     ["Apply the displayed changes", "y\r"],
   ]);
   assert.equal(result.status, 0, result.output);
-  assert.equal((await readdir(join(context.root, "agents"))).length, 6);
-  assert.doesNotMatch(await readFile(join(context.root, "agents/critic.md"), "utf8"), /^model:/m);
+  assert.equal(await readdir(join(context.root, "agents")).catch(() => null), null);
+  assert.match(result.output, /Agents: none deployed/);
+});
+
+test("the first nameless configure agent screen deploys all six fixed roles", async (t) => {
+  const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
+  const result = await wizard(
+    context,
+    [
+      ["No fixed agent roles are deployed", "y\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "agent"],
+  );
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Agents: ▸ create 6/m);
+  assert.deepEqual((await readdir(join(context.root, "agents"))).sort(), [
+    "architect.md",
+    "critic.md",
+    "manager.md",
+    "mapper.md",
+    "review.md",
+    "worker.md",
+  ]);
+  const listed = context.ok(["agent", "list"]);
+  assert.ok(
+    listed.inventory.profiles
+      .filter((profile) => profile.ownership === "package-owned")
+      .every((profile) => profile.state === "current"),
+  );
+});
+
+test("the staged editor removes a deployed fixed role and keeps its saved model", async (t) => {
+  const context = await sandbox(t);
+  context.ok(["install", ...subset, "--yes"]);
+  for (const role of ["manager", "architect", "mapper", "worker", "review", "critic"])
+    context.ok(["configure", "agent", role, "--deploy", "--yes"]);
+  context.ok([
+    "configure",
+    "agent",
+    "critic",
+    "--model",
+    "openai/example",
+    "--variant",
+    "high",
+    "--yes",
+  ]);
+  const result = await wizard(
+    context,
+    [
+      ["changes are staged", "\x1b[A\x1b[A\x1b[A"],
+      ["● Remove fixed role", "\r"],
+      ["Fixed role to remove", "\r"],
+      ["● Done", "\r"],
+      ["Apply the displayed changes", "y\r"],
+    ],
+    ["configure", "agent"],
+  );
+  assert.equal(result.status, 0, result.output);
+  assert.match(result.output, /Agents: ● update 1, ■ remove 1, ◻ unchanged 4/);
+  await assert.rejects(stat(join(context.root, "agents/architect.md")), { code: "ENOENT" });
+  assert.equal((await readdir(join(context.root, "agents"))).length, 5);
+  const config = JSON.parse(
+    await readFile(join(context.root, ".agentomatic/agent-profiles.json"), "utf8"),
+  );
+  assert.deepEqual(config.selected_fixed, ["manager", "mapper", "worker", "review", "critic"]);
 });
 
 test("cancelling the configure agent wizard before catalog selection writes nothing", async (t) => {
   const context = await sandbox(t);
   context.ok(["install", ...subset, "--yes"]);
-  const result = await wizard(context, [["changes are staged", "\x03"]], ["configure", "agent"]);
+  const result = await wizard(
+    context,
+    [
+      ["No fixed agent roles are deployed", "n\r"],
+      ["changes are staged", "\x03"],
+    ],
+    ["configure", "agent"],
+  );
   assert.equal(result.status, 2, result.output);
   await assert.rejects(readdir(join(context.root, "agents", "critic-security.md")), {
     code: "ENOENT",
@@ -526,15 +596,11 @@ test("repeat TTY installation defaults to saved components, models, and disconne
   );
   assert.equal(result.status, 0, result.output);
   const status = context.ok(["status"]);
-  assert.deepEqual(status.selection.agents, [
-    "architect",
-    "critic",
-    "manager",
-    "mapper",
-    "review",
-    "worker",
-  ]);
-  assert.equal(status.selection.core_activation, false);
+  assert.deepEqual(status.selection, {
+    commands: ["askme"],
+    plugins: [],
+    core_activation: false,
+  });
   assert.equal(
     status.inventory.profiles.find((profile) => profile.name === "critic").variant,
     "high",
@@ -583,6 +649,7 @@ exit 1
   const result = await wizard(
     context,
     [
+      ["No fixed agent roles are deployed", "n\r"],
       ["changes are staged", "\x1b[A\x1b[A"],
       ["● Add critic", "\r"],
       ["Critic name", "sonnet-5.5\r"],
@@ -618,6 +685,7 @@ test("invalid critic names re-prompt and an absent catalog points at the host in
   const result = await wizard(
     context,
     [
+      ["No fixed agent roles are deployed", "n\r"],
       ["changes are staged", "\x1b[A\x1b[A"],
       ["● Add critic", "\r"],
       ["Critic name", "###\r"],
@@ -661,6 +729,7 @@ test("configure agent stages every agent and marks the saved variant as default"
     "high",
     "--yes",
   ]);
+  context.ok(["configure", "agent", "critic", "--deploy", "--yes"]);
   const bin = join(context.base, "bin");
   await mkdir(bin);
   await writeFile(
@@ -676,7 +745,7 @@ exit 1
   const result = await wizard(
     context,
     [
-      ["changes are staged", "\x1b[A\x1b[A\x1b[A"],
+      ["changes are staged", "\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A"],
       ["● Configure model", "\r"],
       ["● architect", "\x1b[B"],
       ["● critic", "\r"],
@@ -706,11 +775,15 @@ test("install, staged applies, and configure integration all end with the critic
   const text = (args) =>
     spawnSync(process.execPath, [cli, ...args], { cwd: project, env, encoding: "utf8" });
 
-  // Install never prompts for critics and ends with the panel + pointers.
+  // Install never prompts for critics and closes with the configure agent pointer.
   const install = text(["install", ...subset, "--yes"]);
   assert.equal(install.status, 0, install.stdout + install.stderr);
-  assert.match(install.stdout, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
-  assert.match(install.stdout, /\bcritic\s+default \(host\)/);
+  assert.doesNotMatch(install.stdout, /NAME\s+MODEL\s+VARIANT\s+PROVIDER/);
+  assert.match(install.stdout, /Critics:\n\s+No critics/);
+  assert.match(
+    install.stdout,
+    /Fixed agent roles deploy and undeploy through: agentomatic configure agent/,
+  );
   assert.match(
     install.stdout,
     /Inspect any time: agentomatic agent list \| Manage critics: agentomatic configure agent/,
@@ -883,7 +956,8 @@ test("configure agent Back returns from a sub-screen to the action menu", async 
   const result = await wizard(
     context,
     [
-      ["changes are staged", "\x1b[A\x1b[A\x1b[A"],
+      ["No fixed agent roles are deployed", "n\r"],
+      ["changes are staged", "\x1b[A\x1b[A\x1b[A\x1b[A\x1b[A"],
       ["● Configure model", "\r"],
       ["● architect", "\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\x1b[B\r"],
       ["changes are staged", "\r"],
@@ -892,7 +966,7 @@ test("configure agent Back returns from a sub-screen to the action menu", async 
   );
   assert.equal(result.status, 0, result.output);
   assert.match(result.output, /No profile changes selected\./);
-  assert.ok((result.output.match(/Agent models and critics/g) ?? []).length >= 2);
+  assert.ok((result.output.match(/Agents, models, and critics/g) ?? []).length >= 2);
 });
 
 test("configure integration prints a single plan render and an explicit final line", async (t) => {

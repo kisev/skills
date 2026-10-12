@@ -570,11 +570,15 @@ export async function collectDoctorFacts(
   for (const [group, entries, expected] of assetGroups) {
     const missing = expected.filter((name) => !entries.files.includes(name));
     const extra = entries.files.filter((name) => !expected.includes(name));
+    // Agent roles deploy on demand through configure agent, so their absence
+    // from the deployment is expected and only classified, never failed.
     const status: DoctorCheckStatus = entries.incomplete
       ? "incomplete"
-      : missing.length || (group !== "agents" && extra.length)
-        ? "fail"
-        : "pass";
+      : group === "agents"
+        ? "pass"
+        : missing.length || extra.length
+          ? "fail"
+          : "pass";
     checks.push(
       check(
         `assets.${group}`,
@@ -617,7 +621,7 @@ export async function collectDoctorFacts(
         user_owned: inventory?.user_owned.length ?? 0,
       },
       [
-        "Resolve ownership conflicts and restore modified bytes; preview maintenance repair for missing selected files.",
+        "Resolve ownership conflicts and restore modified bytes; deploy missing fixed roles with agentomatic configure agent.",
       ],
     ),
   );
@@ -767,23 +771,21 @@ export async function collectDoctorFacts(
     join(deployment, ".agentomatic", "agent-profiles.manifest.json"),
   );
   const profileManifestIsValid = agentManifestValid(profileManifest.raw);
+  // A missing semantic manifest is the healthy no-agents-deployed state; only
+  // a present but unreadable manifest warns.
   checks.push(
     check(
       "agents.manifest",
-      profileManifest.status === "present"
-        ? profileManifestIsValid
-          ? "pass"
-          : "warn"
-        : profileManifest.status === "missing"
-          ? "incomplete"
-          : "warn",
+      profileManifest.status === "present" && !profileManifestIsValid ? "warn" : "pass",
       "Agent profile manifest is classified",
       {
         present: profileManifest.status === "present",
         valid: profileManifestIsValid,
         path: ".agentomatic/agent-profiles.manifest.json",
       },
-      ["Run the installer preview for this scope."],
+      profileManifest.status === "present" && !profileManifestIsValid
+        ? ["Restore the recorded manifest bytes or redeploy with agentomatic configure agent."]
+        : undefined,
     ),
   );
 

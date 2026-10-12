@@ -83,6 +83,8 @@ function groupFor(path: string): (typeof GROUPS)[number] {
 function actionName(action: DisplayPlan["action"]): string {
   return (
     {
+      "agent-add": "Deploy fixed agent",
+      "agent-remove": "Remove fixed agent",
       install: "Install",
       uninstall: "Uninstall",
       "model-set": "Configure agent model",
@@ -176,7 +178,7 @@ export function renderPlan(
     "",
     `Conflicts: ${conflicts ? paint(color, "31", `${MARKS.bad} ${conflicts}`) : paint(color, "32", `${MARKS.ok} none`)}`,
   );
-  const restartNote = "restart the host session so the deployed roles and settings load";
+  const restartNote = "restart the host session so the managed files and settings load";
   lines.push(
     plan.requires_restart
       ? `${options.applied ? "Restart required" : "Restart after apply"}: ${paint(color, "33", `${MARKS.ok} yes`)} — ${restartNote}`
@@ -303,6 +305,7 @@ export function renderCriticsTable(inventory: AgentInventory, color = colorEnabl
   const critics = inventory.profiles.filter(
     (profile) =>
       profile.ownership !== "user-owned" &&
+      profile.state !== "not-installed" &&
       (profile.name === "critic" || profile.name.startsWith("critic-")),
   );
   if (!critics.length) return "Critics:\n  No critics\n";
@@ -321,7 +324,7 @@ export function renderCriticsTable(inventory: AgentInventory, color = colorEnabl
     `${head}\n${table(rows, color).join("\n")}\n` +
     `Pool: additional critics are optional specialist profiles (` +
     `${pool.length ? pool.map((profile) => terminalSafe(profile.name)).join(", ") : "none"}); ` +
-    "the fixed critic always deploys with the package.\n"
+    "the fixed critic is one of the six fixed roles; deploy it with configure agent.\n"
   );
 }
 
@@ -331,6 +334,14 @@ export function renderFixedRoles(inventory: AgentInventory, color = colorEnabled
       profile.ownership !== "user-owned" &&
       FIXED_AGENT_ROLES.includes(profile.name as (typeof FIXED_AGENT_ROLES)[number]),
   );
+  // Install never deploys agents: when no fixed role is deployed the overview
+  // is a pointer to configure agent, the single deploy/remove/configure path.
+  if (roles.every((profile) => profile.state === "not-installed"))
+    return (
+      paint(color, "1", "Agents: none deployed") +
+      "\nFixed agent roles deploy and undeploy through: agentomatic configure agent" +
+      " (the fixed critic enables the batch critic option in review polls)\n\n"
+    );
   const rows = [
     ["NAME", "MODEL", "VARIANT"],
     ...roles.map((profile) => [
@@ -340,11 +351,7 @@ export function renderFixedRoles(inventory: AgentInventory, color = colorEnabled
     ]),
   ];
   return [
-    paint(
-      color,
-      "1",
-      "Fixed roles (all six belong to the package; models and critic composition: agentomatic configure agent):",
-    ),
+    paint(color, "1", "Fixed roles (deploy, remove, and models: agentomatic configure agent):"),
     ...table(rows, color),
     "",
   ].join("\n");

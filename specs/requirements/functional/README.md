@@ -97,19 +97,24 @@ independence, no-op previews, and consent-gated apply.
 
 Profile mutations shall use preview and confirmed apply phases, exact ownership,
 atomic rollback, and restart semantics defined by the package contract.
-The selected fixed roles and selected additional critics shall be stored separately
-from saved model/variant choices. Partial installation, model changes, repeat
-installation, and repair shall preserve that selected set; an unselected role is
-`not-installed`, not damage. Saving a fixed-role model shall not install the role.
-Install may stage model and critic changes in the same owned-file transaction.
-Uninstall shall retain model choices while clearing the deployed selection.
-Repair shall restore missing selected files and safe mode-only damage, but shall
-not overwrite modified managed bytes or adopt user-owned collisions.
+`configure agent` shall be the single mutation surface for agent deployment,
+removal, models, and critics; the installer shall never create, update, remove,
+or record agents. The selected fixed roles and selected additional critics shall
+be stored separately from saved model/variant choices. Model changes shall
+preserve that selected set; an undeployed role is
+`not-installed`, not damage. Saving a fixed-role model shall not install the role,
+and deployment shall reuse a saved model. Configure agent shall deploy missing
+fixed roles and remove deployed ones through preview plus confirmed apply.
+Uninstall shall leave the agent domain untouched.
+Repair shall restore missing selected components and safe mode-only damage, but
+shall never resurrect agents and
+shall not overwrite modified managed bytes or adopt user-owned collisions.
 
 #### Verification
 
-Agent-profile tests exercise confirmed changes, retained model selections,
-collisions, replay, and rollback after injected write failures.
+Agent-profile tests exercise confirmed changes (including fixed-role deploy and
+remove), retained model selections reused on deployment, install plans without
+agents, collisions, replay, and rollback after injected write failures.
 
 ### REQ-F-007 - Provide observational health and inventory
 

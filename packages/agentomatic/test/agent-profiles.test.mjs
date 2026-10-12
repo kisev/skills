@@ -75,9 +75,21 @@ async function roots() {
   return { directory, project, home, root: join(project, ".opencode") };
 }
 
+async function deployRoles(project, home, roles = FIXED) {
+  const result = await confirmedProfile(
+    { action: "agent-add", changes: roles.map((name) => ({ action: "agent-add", name })) },
+    project,
+    home,
+  );
+  return result.result;
+}
+
+// Install never deploys agents; the shared helper deploys the fixed roles
+// through configure agent so tests exercise the full owned set.
 async function confirmedInstall(project, home) {
   const plan = await preview("install", "project", project, home);
   await apply("install", "project", project, home);
+  await deployRoles(project, home);
   return plan;
 }
 
@@ -484,15 +496,17 @@ test("model and variant configuration survives package install", async () => {
   }
 });
 
-test("agent deselection removes managed profiles and preserves profile configuration", async () => {
+test("configure agent removal undeploys fixed roles and preserves profile configuration", async () => {
   const context = await roots();
   try {
-    const installed = await confirmedInstall(context.project, context.home);
+    await confirmedInstall(context.project, context.home);
     const configPath = join(context.root, ".agentomatic", "agent-profiles.json");
     const config = await readFile(configPath);
-    const selection = { ...installed.selection, agents: [] };
-    const plan = await preview("install", "project", context.project, context.home, selection);
-
+    const request = {
+      action: "agent-remove",
+      changes: FIXED.map((name) => ({ action: "agent-remove", name })),
+    };
+    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
     assert.equal(
       plan.operations.filter(
         (item) => item.path.startsWith("agents/") && item.operation === "remove",
@@ -503,7 +517,7 @@ test("agent deselection removes managed profiles and preserves profile configura
       plan.operations.some((item) => item.path === ".agentomatic/agent-profiles.json"),
       true,
     );
-    await apply("install", "project", context.project, context.home, {}, selection);
+    await applyAgentProfileChange(request, "project", context.project, context.home, {});
 
     const retained = JSON.parse(await readFile(configPath, "utf8"));
     assert.deepEqual(retained.fixed, JSON.parse(config).fixed);
@@ -976,7 +990,7 @@ test("mode-only mutation is fully rolled back", async () => {
   }
 });
 
-test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async () => {
+test("v1.0.0 ownership migrates only exact SHA-256 matches through configure agent", async () => {
   const context = await roots();
   try {
     await mkdir(join(context.root, "agents"), { recursive: true });
@@ -994,11 +1008,11 @@ test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async 
       join(context.root, ".agentomatic-manifest.json"),
       `${JSON.stringify({ schema_version: 1, package: "@kisev/agentomatic", version: "1.0.0", files }, null, 2)}\n`,
     );
+    // Install releases the agent ownership without touching the files.
     const migration = await preview("install", "project", context.project, context.home);
-    assert.ok(
-      migration.operations.some(
-        (item) => item.path === "agents/manager.md" && item.reason === "v1.0.0 ownership transfer",
-      ),
+    assert.equal(
+      migration.operations.some((item) => item.path.startsWith("agents/")),
+      false,
     );
     await apply("install", "project", context.project, context.home);
     const generic = JSON.parse(
@@ -1008,6 +1022,25 @@ test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async 
       Object.keys(generic.files).some((path) => path.startsWith("agents/")),
       false,
     );
+    assert.equal(
+      await readFile(join(context.root, "agents", "manager.md"), "utf8"),
+      execFileSync("git", ["show", "v1.0.0:packages/opencode/assets/agents/manager.md"], {
+        cwd: REPOSITORY,
+      }).toString(),
+    );
+
+    // Configure agent adopts exact v1.0.0 bytes and hands ownership over.
+    const request = {
+      action: "agent-add",
+      changes: FIXED.map((name) => ({ action: "agent-add", name })),
+    };
+    const plan = await previewAgentProfileChange(request, "project", context.project, context.home);
+    assert.ok(
+      plan.operations.some(
+        (item) => item.path === "agents/manager.md" && item.reason === "v1.0.0 ownership transfer",
+      ),
+    );
+    await applyAgentProfileChange(request, "project", context.project, context.home, {});
     const semantic = JSON.parse(
       await readFile(join(context.root, ".agentomatic", "agent-profiles.manifest.json"), "utf8"),
     );
@@ -1017,21 +1050,24 @@ test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async 
     try {
       await mkdir(join(mismatch.root, "agents"), { recursive: true });
       await writeFile(join(mismatch.root, "agents", "manager.md"), "user drift\n");
-      const badFiles = Object.fromEntries(
-        FIXED.map((name) => [`agents/${name}.md`, { sha256: "0".repeat(64) }]),
+      const deploy = {
+        action: "agent-add",
+        changes: FIXED.map((name) => ({ action: "agent-add", name })),
+      };
+      const blocked = await previewAgentProfileChange(
+        deploy,
+        "project",
+        mismatch.project,
+        mismatch.home,
       );
-      await writeFile(
-        join(mismatch.root, ".agentomatic-manifest.json"),
-        JSON.stringify({
-          schema_version: 1,
-          package: "@kisev/agentomatic",
-          version: "1.0.0",
-          files: badFiles,
-        }),
+      assert.equal(
+        blocked.operations.find((item) => item.path === "agents/manager.md").operation,
+        "conflict",
       );
-      const blocked = await preview("install", "project", mismatch.project, mismatch.home);
-      assert.ok(blocked.operations.some((item) => item.operation === "conflict"));
-      await assert.rejects(apply("install", "project", mismatch.project, mismatch.home));
+      await assert.rejects(
+        applyAgentProfileChange(deploy, "project", mismatch.project, mismatch.home),
+        { code: "collision" },
+      );
       assert.equal(
         await readFile(join(mismatch.root, "agents", "manager.md"), "utf8"),
         "user drift\n",
@@ -1044,7 +1080,7 @@ test("v1.0.0 ownership migrates only exact manifest and SHA-256 matches", async 
   }
 });
 
-test("profile paths reject symlink parents and uninstall preserves configuration", async () => {
+test("profile paths reject symlink parents and uninstall leaves agents and configuration", async () => {
   const context = await roots();
   try {
     await confirmedInstall(context.project, context.home);
@@ -1059,7 +1095,18 @@ test("profile paths reject symlink parents and uninstall preserves configuration
         .fixed.worker.model,
       "openai/gpt-5",
     );
-    await assert.rejects(readFile(join(context.root, "agents", "worker.md")), { code: "ENOENT" });
+    // Uninstall never touches agents: the file and its semantic ownership stay.
+    assert.match(
+      await readFile(join(context.root, "agents", "worker.md"), "utf8"),
+      /model: openai\/gpt-5/,
+    );
+    const manifest = JSON.parse(
+      await readFile(join(context.root, ".agentomatic", "agent-profiles.manifest.json"), "utf8"),
+    );
+    assert.ok(manifest.profiles.worker);
+    await assert.rejects(readFile(join(context.root, ".agentomatic-manifest.json")), {
+      code: "ENOENT",
+    });
 
     const unsafe = await roots();
     try {
@@ -1079,7 +1126,7 @@ test("profile paths reject symlink parents and uninstall preserves configuration
   }
 });
 
-test("uninstall preserves managed agent drift with semantic ownership", async () => {
+test("uninstall leaves managed agent drift with semantic ownership intact", async () => {
   const context = await roots();
   try {
     await confirmedInstall(context.project, context.home);
@@ -1090,7 +1137,7 @@ test("uninstall preserves managed agent drift with semantic ownership", async ()
     const manifest = JSON.parse(
       await readFile(join(context.root, ".agentomatic", "agent-profiles.manifest.json"), "utf8"),
     );
-    assert.deepEqual(Object.keys(manifest.profiles), ["manager"]);
+    assert.deepEqual(Object.keys(manifest.profiles).sort(), FIXED);
   } finally {
     rmSync(context.directory, { recursive: true, force: true });
   }
@@ -1123,8 +1170,9 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.ok(
       previewResult.stdout.startsWith(`Install @kisev/agentomatic ${PACKAGE_VERSION} (project)\n`),
     );
-    assert.match(previewResult.stdout, /^  Agents: ▸ create 6$/m);
-    assert.match(previewResult.stdout, /^  State: ▸ create 3$/m);
+    // Install plans contain no agents: roles deploy through configure agent.
+    assert.doesNotMatch(previewResult.stdout, /^  Agents:/m);
+    assert.match(previewResult.stdout, /^  State: ▸ create 1$/m);
     assert.match(previewResult.stdout, /^Conflicts: ✓ none$/m);
     assert.match(
       previewResult.stdout,
@@ -1143,17 +1191,29 @@ test("CLI defaults to a concise human plan and table", async () => {
     assert.match(applied.stdout, /^Applied changes:$/m);
     assert.match(applied.stdout, /^Restart required: ✓ yes — restart the host session/m);
     assert.doesNotMatch(applied.stdout, /"operations"/);
+    assert.match(
+      applied.stdout,
+      /Fixed agent roles deploy and undeploy through: agentomatic configure agent/,
+    );
+
+    // The explicit deploy form plans and applies one fixed role with a pointer.
+    const deploy = invoke(["configure", "agent", "manager", "--deploy", "--dry-run"]);
+    assert.equal(deploy.status, 0, deploy.stderr);
+    assert.match(deploy.stdout, /^  Agents: ▸ create 1$/m);
+    assert.match(deploy.stdout, /^Details:$/m);
+    assert.match(deploy.stdout, /^  ▸ Agents\/create: manager$/m);
 
     const hostileCodes = [
       0x1b, 0x85, 0x061c, 0x200e, 0x200f, 0x2028, 0x2029, 0x202e, 0x2060, 0xfeff, 0xe0001,
     ];
     const hostileName = `evil\n\t${hostileCodes.map((code) => String.fromCodePoint(code)).join("")}[31m.md`;
+    await mkdir(join(context.root, "agents"), { recursive: true });
     await writeFile(join(context.root, "agents", hostileName), "user-owned\n");
     const listed = invoke(["agent", "list"]);
     assert.equal(listed.status, 0, listed.stderr);
     assert.match(listed.stdout, /^NAME\s+MODEL\s+VARIANT\s+OWNER\s+STATE$/m);
-    assert.match(listed.stdout, /^manager\s+default\s+-\s+package-owned\s+current$/m);
-    assert.match(listed.stdout, /^Critic pool: critic$/m);
+    assert.match(listed.stdout, /^manager\s+default\s+-\s+package-owned\s+not-installed$/m);
+    assert.match(listed.stdout, /^Critic pool: $/m);
     for (const escaped of [
       "\\x1b",
       "\\x85",
@@ -1185,7 +1245,7 @@ test("CLI human plan explains exact-name conflicts", async () => {
     await writeFile(join(context.root, "agents", "manager.md"), "user-owned\n");
     const result = spawnSync(
       process.execPath,
-      [executable, "install", "--commands", "none", "--plugins", "none", "--dry-run"],
+      [executable, "configure", "agent", "manager", "--deploy", "--dry-run"],
       {
         cwd: context.project,
         env: {

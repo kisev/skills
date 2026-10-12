@@ -276,7 +276,6 @@ test("saved legacy selection migrates renamed commands instead of failing instal
     const saved = await installedSelection("global", project, home);
     assert.deepEqual(saved, {
       commands: ["handoff", "skill-doctor"],
-      agents: [],
       plugins: [],
       core_activation: false,
     });

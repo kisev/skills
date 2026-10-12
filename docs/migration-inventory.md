@@ -61,7 +61,9 @@ The current package inventory has 41 commands, one per active skill. The package
 tool `route` remains available without a slash command.
 
 The six fixed agents are `manager`, `architect`, `mapper`, `worker`, `review`, and
-`critic`. The selectable plugin wrappers are `rules-injector`, `rtk`, and
+`critic`; `install` never deploys them — they deploy through the confirmed
+`configure agent` command. The selectable plugin wrappers are `rules-injector`,
+`rtk`, and
 `zed-bell`. The only package tool is `route`; administration uses the direct CLI.
 
 ## Ownership and Archive

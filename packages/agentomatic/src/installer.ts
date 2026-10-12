@@ -5,13 +5,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  buildAgentProfilePlan,
-  listAgentProfiles,
-  validateBuiltAgentProfilePlan,
-  type LegacyInstallerManifest,
-  type AgentProfileRequest,
-} from "./agent-profiles.js";
-import {
   applyTransaction,
   archiveRoot,
   deploymentRoot,
@@ -29,7 +22,6 @@ import {
   withLifecycleLock,
 } from "./lifecycle.js";
 import { CATALOG } from "./catalog.js";
-import { FIXED_AGENT_ROLES, type FixedAgentRole } from "./agent-profiles.js";
 import { readPackageVersion } from "./package-metadata.js";
 import {
   ensureDependency,
@@ -60,7 +52,6 @@ export type PlanItem = { path: string; operation: Operation; reason?: string; sh
 export type SelectablePlugin = (typeof CATALOG.plugins)[number];
 export type InstallerSelection = {
   commands: string[];
-  agents: FixedAgentRole[];
   plugins: SelectablePlugin[];
   core_activation: boolean;
 };
@@ -80,7 +71,7 @@ type Asset = { relativePath: string; content: Buffer; sha256: string; mode: numb
 type ManifestFile = {
   sha256: string;
   mode: number;
-  kind: "command" | "agent" | "plugin" | "state";
+  kind: "command" | "plugin" | "state";
 };
 type Manifest = {
   schema_version: 2;
@@ -89,7 +80,6 @@ type Manifest = {
   version: string;
   scope: Scope;
   commands: string[];
-  agents: FixedAgentRole[];
   plugins: SelectablePlugin[];
   core_activation: boolean;
   files: Record<string, ManifestFile>;
@@ -98,7 +88,6 @@ type BuiltInstallerPlan = {
   plan: Plan;
   mutations: FileMutation[];
   expectedManifest?: Buffer;
-  profiles: Awaited<ReturnType<typeof buildAgentProfilePlan>>;
 };
 export type ArchiveCandidate = {
   path: string;
@@ -140,7 +129,6 @@ export const PLUGIN_DESCRIPTIONS: Record<SelectablePlugin, string> = {
 export function defaultSelection(): InstallerSelection {
   return {
     commands: [...SKILL_COMMANDS].sort(),
-    agents: [...FIXED_AGENT_ROLES],
     plugins: ["rtk"],
     core_activation: true,
   };
@@ -159,16 +147,13 @@ function migrateSavedCommand(renamed: Record<string, string>, name: string): str
 }
 
 export function savedSelection(
-  manifest: Pick<Manifest, "commands" | "agents" | "plugins">,
+  manifest: Pick<Manifest, "commands" | "plugins">,
 ): Partial<InstallerSelection> {
   const renamed = migrationInventory().renamed ?? {};
   const requested = (manifest.commands ?? defaultSelection().commands).map((name) =>
     migrateSavedCommand(renamed, name),
   );
   const commands = requested.filter((name) => SKILL_COMMANDS.includes(name));
-  const agents = (manifest.agents ?? FIXED_AGENT_ROLES).filter((role) =>
-    FIXED_AGENT_ROLES.includes(role),
-  );
   const plugins = (manifest.plugins ?? ["rtk"]).filter((plugin) =>
     SELECTABLE_PLUGINS.includes(plugin),
   );
@@ -176,7 +161,7 @@ export function savedSelection(
     process.stderr.write(
       `Saved selection migrated to the current catalog: ${requested.join(", ")} -> ${commands.join(", ") || "none"}\n`,
     );
-  return { commands, agents, plugins };
+  return { commands, plugins };
 }
 
 export async function installedSelection(
@@ -213,19 +198,15 @@ export async function coreSelectionMutation(
 export function normalizeSelection(value: Partial<InstallerSelection> = {}): InstallerSelection {
   const allCommands = new Set(SKILL_COMMANDS);
   const commands = [...new Set(value.commands ?? defaultSelection().commands)].sort();
-  const agents = [...new Set(value.agents ?? FIXED_AGENT_ROLES)] as FixedAgentRole[];
   const plugins = [...new Set(value.plugins ?? ["rtk"])] as SelectablePlugin[];
   if (commands.some((name) => !allCommands.has(name)))
     throw new InstallerError("invalid_selection", "Unknown command selection");
-  if (agents.some((name) => !FIXED_AGENT_ROLES.includes(name)))
-    throw new InstallerError("invalid_selection", "Unknown agent selection");
   if (plugins.some((name) => !SELECTABLE_PLUGINS.includes(name)))
     throw new InstallerError("invalid_selection", "Unknown plugin selection");
   return {
     commands,
-    agents: agents.sort(),
     plugins: plugins.sort(),
-    core_activation: Boolean(value.core_activation ?? agents.length),
+    core_activation: Boolean(value.core_activation ?? true),
   };
 }
 
@@ -297,9 +278,7 @@ function parseManifest(raw: Buffer, path: string): Manifest {
             ? "command"
             : relativePath.startsWith("plugins/")
               ? "plugin"
-              : relativePath.startsWith("agents/")
-                ? "agent"
-                : "state",
+              : "state",
         },
       ]),
     ) as Manifest["files"];
@@ -313,7 +292,6 @@ function parseManifest(raw: Buffer, path: string): Manifest {
         .filter((path) => path.startsWith("commands/"))
         .map((path) => path.slice(9, -3))
         .sort(),
-      agents: [...FIXED_AGENT_ROLES].filter((role) => `agents/${role}.md` in files),
       plugins: Object.keys(files)
         .filter((path) => path.startsWith("plugins/"))
         .map((path) => path.slice(8, -3))
@@ -330,7 +308,6 @@ function parseManifest(raw: Buffer, path: string): Manifest {
     typeof manifest.package_version !== "string" ||
     (manifest.scope !== "global" && manifest.scope !== "project") ||
     !Array.isArray(manifest.commands) ||
-    !Array.isArray(manifest.agents) ||
     !Array.isArray(manifest.plugins) ||
     typeof manifest.core_activation !== "boolean" ||
     !manifest.files ||
@@ -362,15 +339,13 @@ function parseManifest(raw: Buffer, path: string): Manifest {
         {
           sha256: existing.sha256,
           mode: Number.isInteger(existing.mode) ? existing.mode : 0o644,
-          kind: ["command", "agent", "plugin", "state"].includes(String(existing.kind))
+          kind: ["command", "plugin", "state"].includes(String(existing.kind))
             ? existing.kind
             : relativePath.startsWith("commands/")
               ? "command"
               : relativePath.startsWith("plugins/")
                 ? "plugin"
-                : relativePath.startsWith("agents/")
-                  ? "agent"
-                  : "state",
+                : "state",
         },
       ];
     }),
@@ -585,12 +560,6 @@ async function validateGenericDeployment(
   }
 }
 
-function asLegacy(manifest: Manifest | undefined): LegacyInstallerManifest | undefined {
-  return manifest?.version === "1.0.0"
-    ? (manifest as unknown as LegacyInstallerManifest)
-    : undefined;
-}
-
 async function build(
   action: Action,
   scope: Scope,
@@ -598,7 +567,6 @@ async function build(
   home = homedir(),
   requestedSelection?: Partial<InstallerSelection>,
   provisionDependency = true,
-  profileChanges: AgentProfileRequest[] = [],
 ): Promise<BuiltInstallerPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const owned = await currentManifest(root);
@@ -613,32 +581,12 @@ async function build(
   );
   const bundled = await assets(selection);
   const retiredPaths = retiredAssetPaths();
-  const legacyRecord =
-    owned.manifest && owned.raw && asLegacy(owned.manifest)
-      ? {
-          manifest: asLegacy(owned.manifest)!,
-          manifestPath: destination(root, MANIFEST_NAME),
-          manifestSha256: sha256(owned.raw),
-        }
-      : undefined;
-  const profiles = await buildAgentProfilePlan(
-    { action, changes: profileChanges },
-    scope,
-    cwd,
-    home,
-    legacyRecord,
-    selection.agents,
-  );
   const dependency =
     action === "install" && provisionDependency && selection.core_activation
       ? planDependency(scope, cwd, home)
       : undefined;
-  const operations: PlanItem[] = profiles.plan.operations.map((item) => ({
-    path: item.path,
-    operation: item.operation,
-    reason: item.reason,
-  }));
-  const mutations: FileMutation[] = [...profiles.mutations];
+  const operations: PlanItem[] = [];
+  const mutations: FileMutation[] = [];
   const archiveCandidates: ArchiveCandidate[] = [];
   const desiredFiles: Record<string, ManifestFile> = {};
 
@@ -694,7 +642,9 @@ async function build(
     for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(
       ([left], [right]) => left.localeCompare(right),
     )) {
-      if (active.has(relativePath) || profiles.legacyTransferred.includes(relativePath)) continue;
+      // Agent ownership belongs to configure agent: the release is silent and
+      // the files stay until configure agent deploys or removes them.
+      if (active.has(relativePath) || relativePath.startsWith("agents/")) continue;
       const current = await readRegular(destination(root, relativePath));
       if (retiredPaths.has(relativePath)) {
         if (!current) {
@@ -726,14 +676,6 @@ async function build(
             expected: { sha256: record.sha256 },
           });
         }
-        continue;
-      }
-      if (relativePath.startsWith("agents/")) {
-        operations.push({
-          path: relativePath,
-          operation: "conflict",
-          reason: "v1.0.0_agent_ownership_mismatch",
-        });
         continue;
       }
       if (!current) operations.push({ path: relativePath, operation: "missing" });
@@ -768,6 +710,9 @@ async function build(
     for (const [relativePath, record] of Object.entries(owned.manifest?.files ?? {}).sort(
       ([left], [right]) => left.localeCompare(right),
     )) {
+      // Uninstall never touches agents: their semantic manifest stays the
+      // single ownership source and configure agent manages their lifecycle.
+      if (relativePath.startsWith("agents/")) continue;
       const current = await readRegular(destination(root, relativePath));
       if (retiredPaths.has(relativePath)) {
         if (!current) {
@@ -850,7 +795,6 @@ async function build(
           version: packageVersion(),
           scope,
           commands: selection.commands,
-          agents: selection.agents,
           plugins: selection.plugins,
           core_activation: selection.core_activation,
           files: desiredFiles,
@@ -913,24 +857,17 @@ async function build(
     ...(dependency ? { dependency } : {}),
     requires_restart:
       (action === "install" && owned.manifest?.package_version !== packageVersion()) ||
-      profiles.plan.requires_restart ||
       mutations.some(
-        (item) =>
-          item.path.startsWith("agents/") ||
-          item.path.startsWith("commands/") ||
-          item.path.startsWith("plugins/"),
+        (item) => item.path.startsWith("commands/") || item.path.startsWith("plugins/"),
       ),
   };
   return {
     plan: {
       ...base,
-      digest: sha256(
-        stable({ base, mutations, manifest: owned.raw, profiles: profiles.plan.digest }),
-      ),
+      digest: sha256(stable({ base, mutations, manifest: owned.raw })),
     },
     mutations,
     expectedManifest: manifestContent,
-    profiles,
   };
 }
 
@@ -941,7 +878,6 @@ export async function preview(
   home = homedir(),
   selection?: Partial<InstallerSelection>,
   provisionDependency = true,
-  profileChanges: AgentProfileRequest[] = [],
 ): Promise<Plan> {
   // Preview never migrates namespaces, creates locks, or recovers transactions.
   const stateRoot = lifecycleRoot(scope, cwd, home);
@@ -951,8 +887,7 @@ export async function preview(
         "recovery_required",
         "Run maintenance recover before a fresh preview",
       );
-    return (await build(action, scope, cwd, home, selection, provisionDependency, profileChanges))
-      .plan;
+    return (await build(action, scope, cwd, home, selection, provisionDependency)).plan;
   } catch (error) {
     if (error instanceof InstallerError) throw error;
     if (error instanceof LifecycleError) throw new InstallerError(error.code, error.message);
@@ -971,7 +906,6 @@ export async function apply(
   } = {},
   selection?: Partial<InstallerSelection>,
   provisionDependency = true,
-  profileChanges: AgentProfileRequest[] = [],
 ): Promise<Plan> {
   const { dependencyRunner, ...transactionOptions } = options;
   const stateRoot = lifecycleRoot(scope, cwd, home);
@@ -985,24 +919,14 @@ export async function apply(
           "recovery_required",
           "Run maintenance recover before a fresh preview",
         );
-      const built = await build(
-        action,
-        scope,
-        cwd,
-        home,
-        selection,
-        provisionDependency,
-        profileChanges,
-      );
+      const built = await build(action, scope, cwd, home, selection, provisionDependency);
       if (options.expectedDigest && built.plan.digest !== options.expectedDigest)
         throw new InstallerError("stale_plan", "Installation changed; request a fresh preview");
       if (
         built.plan.operations.some(
           (item) =>
             item.operation === "conflict" &&
-            (item.reason === "unmanaged_file" ||
-              item.reason === "v1.0.0_agent_ownership_mismatch" ||
-              item.reason?.includes("collision")),
+            (item.reason === "unmanaged_file" || item.reason?.includes("collision")),
         )
       ) {
         throw new InstallerError(
@@ -1019,7 +943,6 @@ export async function apply(
         ...transactionOptions,
         validateFinal: async () => {
           await options.validateFinal?.();
-          await validateBuiltAgentProfilePlan(built.profiles);
           await validateGenericDeployment(
             root,
             action,
@@ -1028,21 +951,6 @@ export async function apply(
             built.expectedManifest,
             retiredAssetPaths(),
           );
-          if (action !== "install") return;
-          const inventory = await listAgentProfiles(scope, cwd, home);
-          if (
-            built.plan.selection.agents.length > 0 &&
-            (inventory.collisions.length ||
-              inventory.drift.length ||
-              inventory.profiles
-                .filter((item) => item.ownership !== "user-owned")
-                .some((item) => item.state !== "current" && item.state !== "not-installed"))
-          ) {
-            throw new InstallerError(
-              "final_validation_failed",
-              "Final installed agent inventory is invalid",
-            );
-          }
         },
       });
       const dependencyOutcome =

@@ -10,6 +10,7 @@ import {
   validateVariant,
   suggestCriticName,
   FIXED_AGENT_ROLES,
+  type AgentInventory,
   type AgentProfileRequest,
   type AgentProfileRecord,
 } from "./agent-profiles.js";
@@ -78,7 +79,6 @@ type Options = {
   json: boolean;
   name?: string;
   commands?: string[];
-  agents?: string[];
   plugins?: string[];
   core?: boolean;
   targets?: ConfigTargetName[];
@@ -87,6 +87,8 @@ type Options = {
   model?: string;
   provider?: string;
   variant?: string | null;
+  deploy?: boolean;
+  remove?: boolean;
   disconnect?: boolean;
   removeDependency: boolean;
 };
@@ -97,25 +99,26 @@ let diagnosticJSON = false;
 const commands: Record<string, { description: string; options: string[]; name?: boolean }> = {
   install: {
     description:
-      "Deploy the fixed agent package with chosen command adapters, plugins, and harness integration; agent models stay with configure agent.",
+      "Deploy chosen command adapters, plugins, and harness integration; agent roles deploy only through configure agent.",
     options: ["commands", "plugins", "core", "dependency", "targets", "fragments"],
   },
   configure: {
-    description: "Choose components, agent models, critics, or application integration.",
+    description:
+      "Choose components, agent deployment, models, critics, or application integration.",
     options: [],
   },
   "configure components": {
-    description: "Change the installed component set without resetting models.",
+    description: "Change the installed component set without touching agent roles or models.",
     options: ["commands", "plugins", "core", "dependency", "targets", "fragments"],
   },
   "configure agent": {
     description:
-      "Open a staged editor for every agent, or set one model with a name and --model provider/model.",
-    options: ["provider", "model", "variant", "clearVariant"],
+      "Open a staged editor to deploy or remove fixed roles, set models, and manage critics; with a name set one model, or deploy or remove that fixed role with --deploy or --remove.",
+    options: ["provider", "model", "variant", "clearVariant", "deploy", "remove"],
     name: true,
   },
   "configure critics": {
-    description: "Alias of configure agent: staged agent models and critic management.",
+    description: "Alias of configure agent: staged deployment, models, and critic management.",
     options: [],
   },
   "configure integration": {
@@ -157,7 +160,7 @@ const commands: Record<string, { description: string; options: string[]; name?: 
   },
   "maintenance repair": {
     description:
-      "Restore only the saved selected components; never overwrite modified managed files.",
+      "Restore only the saved selected components; agent roles are restored by configure agent.",
     options: ["dependency"],
   },
   "maintenance recover": {
@@ -255,12 +258,12 @@ function help(topic = ""): string {
         ]),
     ...(topic && commands[topic].options.length
       ? [
-          `Options: ${commands[topic].options.map((option) => ({ clearVariant: "--clear-variant", removeDependency: "--remove-dependency", dependency: "--no-dependency", core: "--core / --no-core", disconnect: "--disconnect / --no-disconnect" })[option] ?? `--${option} <value>`).join(", ")}`,
+          `Options: ${commands[topic].options.map((option) => ({ clearVariant: "--clear-variant", removeDependency: "--remove-dependency", dependency: "--no-dependency", core: "--core / --no-core", disconnect: "--disconnect / --no-disconnect", deploy: "--deploy", remove: "--remove" })[option] ?? `--${option} <value>`).join(", ")}`,
         ]
       : []),
     ...(!topic || ["install", "configure components"].includes(topic)
       ? [
-          "Fixed agents deploy only as the complete six-role package; no install flag or prompt changes agent composition.",
+          "Install never deploys agents; deploy, remove, and configure the six fixed roles with configure agent.",
           "Non-TTY component selection: --commands <list|none> --plugins <list|none>",
           "Saved selection is reused on repeat runs. --no-core disconnects the plugin; npm removal is an explicit uninstall choice.",
         ]
@@ -300,7 +303,6 @@ function parse(topic: string, args: string[]): Options {
     "--no-core",
     "--no-dependency",
     "--commands <value>",
-    "--agents <value>",
     "--plugins <value>",
     "--targets <value>",
     "--fragments <value>",
@@ -308,6 +310,8 @@ function parse(topic: string, args: string[]): Options {
     "--provider <value>",
     "--variant <value>",
     "--clear-variant",
+    "--deploy",
+    "--remove",
     "--disconnect",
     "--no-disconnect",
     "--remove-dependency",
@@ -331,6 +335,7 @@ function parse(topic: string, args: string[]): Options {
       ["--core", "--no-core"],
       ["--disconnect", "--no-disconnect"],
       ["--variant", "--clear-variant"],
+      ["--deploy", "--remove"],
     ])
       if (args.includes(left) && args.includes(right))
         throw new Error(`Choose either ${left} or ${right}`);
@@ -376,7 +381,6 @@ function parse(topic: string, args: string[]): Options {
       json: parsed.json === true,
       name: parser.args[0],
       commands: list(parsed.commands),
-      agents: list(parsed.agents),
       plugins: list(parsed.plugins),
       targets: list(parsed.targets) as ConfigTargetName[] | undefined,
       fragments: list(parsed.fragments) as FragmentName[] | undefined,
@@ -385,6 +389,8 @@ function parse(topic: string, args: string[]): Options {
       model: parsed.model,
       provider: parsed.provider,
       variant: parsed.clearVariant ? null : parsed.variant,
+      deploy: parsed.deploy === true,
+      remove: parsed.remove === true,
       disconnect: specified("disconnect") ? parsed.disconnect : undefined,
       removeDependency: parsed.removeDependency === true,
     };
@@ -731,29 +737,92 @@ async function modelSelection(
   return { action: "model-set", name, model: chosen, variant };
 }
 
-async function profileDraft(options: Options, names: string[]): Promise<AgentProfileRequest[]> {
-  const inventory = await listAgentProfiles(options.scope);
+// The staged editor is the single configure agent screen: fixed roles deploy
+// and undeploy here, critics join and leave, models change, and every staged
+// change waits for one preview plus confirmation.
+async function profileDraft(
+  options: Options,
+  inventory: AgentInventory,
+): Promise<AgentProfileRequest[]> {
   const records = new Map(
     inventory.profiles
       .filter((profile) => profile.ownership !== "user-owned")
       .map((profile) => [profile.name, { ...profile }]),
   );
+  const deployed = new Set(
+    inventory.profiles
+      .filter((profile) => profile.ownership !== "user-owned" && profile.state !== "not-installed")
+      .map((profile) => profile.name),
+  );
+  let names = [...records.keys()];
   const changes: AgentProfileRequest[] = [];
   while (true) {
-    const actions = ["Configure model", "Add critic", "Remove additional critic", "Done"];
+    const actions = [
+      "Configure model",
+      "Deploy fixed role",
+      "Remove fixed role",
+      "Add critic",
+      "Remove additional critic",
+      "Done",
+    ];
     const actionIndex = value(
       await selectOption(
-        "Agent models and critics (changes are staged until confirmation)",
+        "Agents, models, and critics (changes are staged until confirmation)",
         actions,
         process.stdin,
         process.stderr,
-        3,
+        actions.length - 1,
       ),
     );
     if (isBack(actionIndex)) fail("cancelled", "Wizard cancelled; no changes applied");
     const action = actions[actionIndex];
     if (action === "Done") return changes;
-    if (action === "Add critic") {
+    if (action === "Deploy fixed role" || action === "Remove fixed role") {
+      const candidates = (
+        action === "Deploy fixed role"
+          ? // Drift with missing files still needs deployment; only a healthy
+            // current file counts as deployed.
+            FIXED_AGENT_ROLES.filter((role) => records.get(role)?.state !== "current")
+          : [...deployed].filter((role) => (FIXED_AGENT_ROLES as readonly string[]).includes(role))
+      ).sort();
+      if (!candidates.length) {
+        process.stderr.write(
+          action === "Deploy fixed role"
+            ? "All six fixed roles are deployed.\n"
+            : "No fixed roles are deployed; deploy one first.\n",
+        );
+        continue;
+      }
+      const selected = await selectOption(
+        `Fixed role to ${action === "Deploy fixed role" ? "deploy" : "remove"}`,
+        candidates,
+        process.stdin,
+        process.stderr,
+        0,
+        undefined,
+        true,
+      );
+      if (isBack(selected)) continue;
+      const name = candidates[value(selected)];
+      changes.push({ action: action === "Deploy fixed role" ? "agent-add" : "agent-remove", name });
+      if (action === "Deploy fixed role") {
+        deployed.add(name);
+        records.set(name, {
+          ...records.get(name)!,
+          name,
+          ownership: "package-owned",
+          state: "current",
+        });
+      } else {
+        deployed.delete(name);
+        records.set(name, {
+          ...records.get(name)!,
+          name,
+          ownership: "package-owned",
+          state: "not-installed",
+        });
+      }
+    } else if (action === "Add critic") {
       const name = await promptCriticName();
       if (records.has(name)) fail("profile_exists", `Profile already exists: ${name}`);
       const request = await modelSelection(options, name, undefined, true);
@@ -819,17 +888,15 @@ function commandHints(): (string | undefined)[] {
 }
 
 async function componentSelection(options: Options): Promise<InstallerSelection> {
-  const agents: InstallerSelection["agents"] = [...FIXED_AGENT_ROLES];
   const supplied = [options.commands, options.plugins].some((selection) => selection !== undefined);
   if (supplied && (!options.commands || !options.plugins))
     fail("invalid_input", "Supply --commands and --plugins together (none selects an empty set)");
   const overrides: Partial<InstallerSelection> = supplied
     ? {
         commands: options.commands,
-        agents,
         plugins: options.plugins as InstallerSelection["plugins"],
       }
-    : { agents };
+    : {};
   const saved = await installedSelection(options.scope, undefined, undefined, overrides);
   const defaults = saved ?? defaultSelection();
   if (supplied) {
@@ -844,10 +911,10 @@ async function componentSelection(options: Options): Promise<InstallerSelection>
         "terminal_required",
         "First install outside a terminal requires --commands and --plugins",
       );
-    return { ...saved, agents, core_activation: options.core ?? saved.core_activation };
+    return { ...saved, core_activation: options.core ?? saved.core_activation };
   }
   process.stderr.write(
-    `Portable skills are installed separately through the skills CLI (npx --yes ${skillsInstallerSpec()} add https://kisev.github.io/skills --agent opencode --copy). Selecting an adapter does not install its skill.\nAll six fixed agent roles deploy as one package; set their models or add critics with \`agentomatic configure agent\` afterwards.\n`,
+    `Portable skills are installed separately through the skills CLI (npx --yes ${skillsInstallerSpec()} add https://kisev.github.io/skills --agent opencode --copy). Selecting an adapter does not install its skill.\nInstall never deploys agents; deploy the fixed roles or manage them with \`agentomatic configure agent\` afterwards.\n`,
   );
   type ComponentState = {
     commands: string[];
@@ -910,7 +977,6 @@ async function componentSelection(options: Options): Promise<InstallerSelection>
   );
   return normalizeSelection({
     commands: state.commands ?? [],
-    agents,
     plugins: state.plugins,
     core_activation: state.core_activation,
   });
@@ -960,9 +1026,8 @@ async function deploy(options: Options, repair = false): Promise<void> {
       ],
     };
   }
-  // Install never mutates the critic panel: the summary ends with the panel
-  // table and the pointer to configure agent, the single mutation point.
-  const changes: AgentProfileRequest[] = [];
+  // Install never mutates agents: the summary ends with the agent pointer and
+  // the critic panel, both leading to configure agent.
   const plan = await preview(
     "install",
     options.scope,
@@ -970,7 +1035,6 @@ async function deploy(options: Options, repair = false): Promise<void> {
     undefined,
     selection,
     !options.noDependency,
-    changes,
   );
   const config = await previewConfigSetup(
     integration,
@@ -986,8 +1050,8 @@ async function deploy(options: Options, repair = false): Promise<void> {
     applied: false,
     plan,
     integration: config,
-    profile_changes: changes,
-    stages: ["owned-components-and-profiles", "npm-dependency", "application-config"],
+    agents: "untouched",
+    stages: ["owned-components", "npm-dependency", "application-config"],
     atomic_across_stages: false,
   };
   if (!options.json) {
@@ -1023,11 +1087,9 @@ async function deploy(options: Options, repair = false): Promise<void> {
     process.stdout.write(
       renderPlan(plan, {
         applied: false,
-        applyHint: changes.length ? undefined : applyHint(args),
+        applyHint: applyHint(args),
       }) + renderConfigSetup(config, { applied: false }),
     );
-    if (changes.length)
-      process.stdout.write(`Staged profiles: ${terminalSafe(JSON.stringify(changes))}\n`);
     process.stdout.write(
       "Components, npm, and application configuration are separate stages; a later failure does not roll back completed stages.\n",
     );
@@ -1055,9 +1117,8 @@ async function deploy(options: Options, repair = false): Promise<void> {
       { expectedDigest: plan.digest },
       selection,
       !options.noDependency,
-      changes,
     );
-    completed.push("owned-components-and-profiles");
+    completed.push("owned-components");
     if (applied.dependency?.status !== "manual" && applied.dependency)
       completed.push("npm-dependency");
     const connected = await applyConfigSetup(integration, options.scope, undefined, undefined, {
@@ -1095,13 +1156,13 @@ async function deploy(options: Options, repair = false): Promise<void> {
       error.code === "npm_dependency_failed" &&
       !completed.length
     )
-      completed.push("owned-components-and-profiles");
+      completed.push("owned-components");
     partial(
       options,
       error,
       completed,
       `Run status, then ${repair ? "maintenance repair" : "install"} with the same selected components; use configure integration for configuration-only continuation.`,
-      completed.includes("owned-components-and-profiles") && plan.requires_restart,
+      completed.includes("owned-components") && plan.requires_restart,
     );
   }
 }
@@ -1289,18 +1350,22 @@ async function profileChange(options: Options, request: AgentProfileRequest): Pr
   if (!options.json) {
     const args = request.changes
       ? ["configure", "critics"]
-      : [
-          "configure",
-          "agent",
-          request.name!,
-          "--model",
-          request.model!,
-          ...(request.variant
-            ? ["--variant", request.variant]
-            : request.action === "model-set"
-              ? ["--clear-variant"]
-              : []),
-        ];
+      : request.action === "agent-remove"
+        ? ["configure", "agent", request.name!, "--remove"]
+        : request.action === "agent-add" && !request.model
+          ? ["configure", "agent", request.name!, "--deploy"]
+          : [
+              "configure",
+              "agent",
+              request.name!,
+              "--model",
+              request.model!,
+              ...(request.variant
+                ? ["--variant", request.variant]
+                : request.action === "model-set"
+                  ? ["--clear-variant"]
+                  : []),
+            ];
     process.stdout.write(
       renderPlan(plan, {
         applied: false,
@@ -1356,6 +1421,7 @@ async function uninstall(options: Options): Promise<void> {
     integration: config,
     dependency_removal: dependency,
     models: "retained",
+    agents: "untouched",
     portable_skills: "untouched",
     atomic_across_stages: false,
   };
@@ -1373,7 +1439,7 @@ async function uninstall(options: Options): Promise<void> {
         (config ? renderConfigSetup(config, { applied: false }) : "Plugin connection: retained\n"),
     );
     process.stdout.write(
-      `npm dependency: ${remove ? `remove ${dependency?.names.join(", ") || "none present"}` : "retained"}\nSaved models: retained\nPortable skills and other presets: untouched\nSeparate stages; completed changes are retained on a later failure.\n`,
+      `npm dependency: ${remove ? `remove ${dependency?.names.join(", ") || "none present"}` : "retained"}\nSaved models: retained\nDeployed agents: untouched (remove them with agentomatic configure agent)\nPortable skills and other presets: untouched\nSeparate stages; completed changes are retained on a later failure.\n`,
     );
   }
   if (options.dryRun) {
@@ -1417,7 +1483,7 @@ async function uninstall(options: Options): Promise<void> {
       });
     else
       process.stdout.write(
-        "Uninstall complete. Saved models retained; restart OpenCode if files changed.\n",
+        "Uninstall complete. Saved models and deployed agents are untouched; restart OpenCode if files changed.\n",
       );
   } catch (error) {
     partial(
@@ -1536,26 +1602,69 @@ async function run(args: string[]): Promise<void> {
   if (topic === "configure critics" || topic === "configure agent") {
     const inventory = await listAgentProfiles(options.scope);
     // configure critics is an alias; a nameless configure agent opens the staged
-    // editor - the single mutation point for models, additions, and removals.
+    // editor - the single mutation point for deployment, models, and critics.
     if (!options.name) {
       requireApply(options);
       if (!options.json) process.stdout.write(renderCriticsTable(inventory));
-      const changes = await profileDraft(
-        options,
-        inventory.profiles
-          .filter((profile) => profile.ownership !== "user-owned")
-          .map((profile) => profile.name),
+      // With no healthy fixed-role file — freshly undeployed or drifted away
+      // — the first screen offers the complete six-role deployment; declining
+      // falls through to the staged editor.
+      const healthyDeployed = FIXED_AGENT_ROLES.filter(
+        (role) => inventory.profiles.find((profile) => profile.name === role)?.state === "current",
       );
+      let changes: AgentProfileRequest[] = [];
+      if (!healthyDeployed.length && !options.json) {
+        const deployAll = await confirmQuestion(
+          "No fixed agent roles are deployed. Deploy all six now (manager, architect, mapper, worker, review, critic)?",
+          process.stdin,
+          process.stderr,
+          false,
+        );
+        if (value(deployAll))
+          changes = FIXED_AGENT_ROLES.map((name) => ({ action: "agent-add" as const, name }));
+      }
+      if (!changes.length) changes = await profileDraft(options, inventory);
       if (!changes.length) {
         if (options.json) json({ status: "ok", applied: false });
         else process.stdout.write("No profile changes selected.\n");
         return;
       }
-      await profileChange(options, { action: "model-set", changes });
+      const structural = changes.find((change) =>
+        ["agent-add", "agent-remove", "critic-add", "critic-remove"].includes(change.action),
+      );
+      await profileChange(options, { action: structural?.action ?? "model-set", changes });
       return;
     }
     const name = options.name;
     const existing = inventory.profiles.find((profile) => profile.name === name);
+    if (options.deploy || options.remove) {
+      // The explicit fixed-role form works outside a terminal: deploy reuses
+      // the saved model, remove keeps it for the next deploy.
+      if (!FIXED_AGENT_ROLES.includes(name as (typeof FIXED_AGENT_ROLES)[number]))
+        fail(
+          "invalid_input",
+          "Deploy and remove expect a fixed role (manager, architect, mapper, worker, review, critic); critics change through the staged editor",
+        );
+      const changes: AgentProfileRequest[] = [];
+      if (options.model || options.variant !== undefined) {
+        if (!options.model)
+          fail("invalid_input", "Setting a variant requires --model provider/model");
+        validateModel(options.model);
+        const variant = validateVariant(options.variant);
+        changes.push({
+          action: "model-set",
+          name,
+          model: options.model,
+          ...(variant ? { variant } : {}),
+        });
+      }
+      changes.push({ action: options.remove ? "agent-remove" : "agent-add", name });
+      await profileChange(options, {
+        action: options.remove ? "agent-remove" : "agent-add",
+        changes,
+      });
+      return;
+    }
     if (!existing && !name.startsWith("critic-")) {
       fail("invalid_input", `Unknown agent profile: ${name}`);
     }

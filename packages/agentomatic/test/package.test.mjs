@@ -102,7 +102,7 @@ test("installer wizard uses shared multi-select groups and keeps defaults", () =
   const wizard = readFileSync(join(PACKAGE, "src", "terminal-wizard.ts"), "utf8");
   assert.match(source, /Portable skills are installed separately through the skills CLI/);
   assert.match(source, /Selecting an adapter does not install its skill/);
-  assert.match(source, /All six fixed agent roles deploy as one package/);
+  assert.match(source, /Install never deploys agents/);
   assert.match(source, /Skill command adapters/);
   assert.match(
     source,
@@ -450,7 +450,6 @@ test("non-TTY install accepts an explicit skill command subset", () => {
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout).plan.selection, {
       commands: ["agents-md"],
-      agents: ["architect", "critic", "manager", "mapper", "review", "worker"],
       plugins: [],
       core_activation: true,
     });
@@ -529,10 +528,11 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     const first = await preview("install", "global", project, home);
     const second = await preview("install", "global", project, home);
     assert.deepEqual(second.operations, first.operations);
-    assert.equal(first.operations.filter((item) => item.operation === "create").length, 52);
+    assert.equal(first.operations.filter((item) => item.operation === "create").length, 44);
     await assert.rejects(lstat(join(home, ".config")), { code: "ENOENT" });
     await install("global", project, home);
-    assert.equal(readdirSync(join(home, ".config", "opencode", "agents")).length, 6);
+    // Install deploys no agents: the roles directory does not exist.
+    await assert.rejects(lstat(join(home, ".config", "opencode", "agents")), { code: "ENOENT" });
     assert.equal(readdirSync(join(home, ".config", "opencode", "commands")).length, 42);
     assert.deepEqual(readdirSync(join(home, ".config", "opencode", "plugins")), ["rtk.js"]);
     await assert.rejects(lstat(join(home, ".config", "opencode", "opencode.json")), {
@@ -540,7 +540,7 @@ test("installer dry-run is deterministic and keeps global and project roots isol
     });
     await assert.rejects(lstat(join(project, ".opencode")), { code: "ENOENT" });
     await install("project", project, home);
-    assert.equal(readdirSync(join(project, ".opencode", "agents")).length, 6);
+    await assert.rejects(lstat(join(project, ".opencode", "agents")), { code: "ENOENT" });
     await assert.rejects(lstat(join(project, "opencode.json")), { code: "ENOENT" });
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -554,33 +554,32 @@ test("installer rejects unmanaged collisions, traversal, and symlinks", async ()
     const home = join(directory, "home");
     await Promise.all([mkdir(project), mkdir(home)]);
     await preview("install", "project", project, home);
-    await mkdir(join(project, ".opencode", "agents"), { recursive: true });
-    await writeFile(join(project, ".opencode", "agents", "manager.md"), "user\n");
+    await mkdir(join(project, ".opencode", "commands"), { recursive: true });
+    await writeFile(join(project, ".opencode", "commands", "askme.md"), "user\n");
     await assert.rejects(
       apply("install", "project", project, home),
       (error) => error instanceof InstallerError && error.code === "conflict",
     );
     const collision = await preview("install", "project", project, home);
-    assert.deepEqual(
-      collision.operations.find((item) => item.path === "agents/manager.md"),
-      {
-        path: "agents/manager.md",
-        operation: "conflict",
-        reason: "exact-name user-owned collision",
-      },
-    );
+    const recorded = collision.operations.find((item) => item.path === "commands/askme.md");
+    assert.deepEqual(recorded, {
+      path: "commands/askme.md",
+      operation: "conflict",
+      reason: "unmanaged_file",
+      sha256: recorded.sha256,
+    });
     await assert.rejects(
       apply("install", "project", project, home),
       (error) => error instanceof InstallerError && error.code === "conflict",
     );
     assert.equal(
-      await readFile(join(project, ".opencode", "agents", "manager.md"), "utf8"),
+      await readFile(join(project, ".opencode", "commands", "askme.md"), "utf8"),
       "user\n",
     );
 
     const separate = join(directory, "separate");
     await mkdir(join(separate, ".opencode"), { recursive: true });
-    symlinkSync(join(directory, "outside"), join(separate, ".opencode", "agents"));
+    symlinkSync(join(directory, "outside"), join(separate, ".opencode", "commands"));
     await assert.rejects(
       preview("install", "project", separate, home),
       (error) => error instanceof InstallerError && error.code === "unsafe_path",
@@ -600,7 +599,7 @@ test("installer rejects unmanaged collisions, traversal, and symlinks", async ()
     );
 
     const nonregular = join(directory, "nonregular");
-    await mkdir(join(nonregular, ".opencode", "agents", "manager.md"), { recursive: true });
+    await mkdir(join(nonregular, ".opencode", "commands", "askme.md"), { recursive: true });
     await assert.rejects(
       preview("install", "project", nonregular, home),
       (error) => error instanceof InstallerError && error.code === "unsafe_path",
@@ -625,7 +624,7 @@ test("install is atomic per asset and idempotent", async () => {
     assert.ok(repeat.operations.every((item) => item.operation === "unchanged"));
     await apply("install", "project", project, home);
     assert.deepEqual(await readFile(manifest), before);
-    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 52);
+    assert.equal(applied.operations.filter((item) => item.operation === "create").length, 44);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
@@ -686,13 +685,26 @@ test("package-only upgrade requires restart while same-version reinstall does no
     const genericPath = join(root, ".agentomatic-manifest.json");
     const semanticPath = join(root, ".agentomatic", "agent-profiles.manifest.json");
     const generic = JSON.parse(await readFile(genericPath, "utf8"));
-    const semantic = JSON.parse(await readFile(semanticPath, "utf8"));
     const expectedVersion = JSON.parse(readFileSync(join(PACKAGE, "package.json"), "utf8")).version;
+    // Seed a semantic manifest from an earlier configure agent run: install
+    // upgrades the generic ownership only and leaves the agent domain alone.
+    const semantic = `${JSON.stringify(
+      {
+        schema_version: 1,
+        package: "@kisev/agentomatic",
+        package_version: "previous-version",
+        scope: "project",
+        critic_pool: [],
+        profiles: {},
+      },
+      null,
+      2,
+    )}\n`;
+    await mkdir(join(root, ".agentomatic"), { recursive: true });
+    await writeFile(semanticPath, semantic, { mode: 0o600 });
     generic.version = "previous-version";
     generic.package_version = "previous-version";
-    semantic.package_version = "previous-version";
     await writeFile(genericPath, `${JSON.stringify(generic)}\n`);
-    await writeFile(semanticPath, `${JSON.stringify(semantic)}\n`);
 
     const upgrade = await preview("install", "project", project, home);
     assert.equal(upgrade.requires_restart, true);
@@ -703,7 +715,7 @@ test("package-only upgrade requires restart while same-version reinstall does no
     );
     await apply("install", "project", project, home);
     assert.equal(JSON.parse(await readFile(genericPath, "utf8")).version, expectedVersion);
-    assert.equal(JSON.parse(await readFile(semanticPath, "utf8")).package_version, expectedVersion);
+    assert.equal(await readFile(semanticPath, "utf8"), semantic);
 
     const repeat = await preview("install", "project", project, home);
     assert.equal(repeat.requires_restart, false);

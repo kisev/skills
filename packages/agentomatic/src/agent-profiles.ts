@@ -79,12 +79,12 @@ export type AgentInventory = {
   requires_restart: false;
 };
 export type AgentProfileAction =
-  | "install"
+  | "agent-add"
+  | "agent-remove"
   | "model-set"
   | "critic-add"
   | "critic-remove"
-  | "reconcile"
-  | "uninstall";
+  | "reconcile";
 export type AgentProfileRequest = {
   action: AgentProfileAction;
   name?: string;
@@ -118,17 +118,6 @@ export type AgentProfileResult = {
 
 export class AgentProfileError extends LifecycleError {}
 
-type LegacyManifest = {
-  schema_version: 1;
-  package: string;
-  version: string;
-  files: Record<string, { sha256: string }>;
-};
-export type LegacyAgentOwnership = {
-  manifest: LegacyManifest;
-  manifestPath: string;
-  manifestSha256: string;
-};
 type BuiltPlan = {
   plan: AgentProfilePlan;
   mutations: FileMutation[];
@@ -136,12 +125,10 @@ type BuiltPlan = {
   manifest?: DeploymentManifest;
   expectedConfig?: Buffer;
   expectedManifest?: Buffer;
-  legacyTransferred: string[];
 };
 
 const PACKAGE_NAME = "@kisev/agentomatic" as const;
 const LEGACY_PACKAGE_NAME = "@kisev/skills-opencode" as const;
-const MANIFEST_NAMES = [".agentomatic-manifest.json", ".skills-opencode-manifest.json"] as const;
 
 function ownsPackage(name: unknown): boolean {
   return name === PACKAGE_NAME || name === LEGACY_PACKAGE_NAME;
@@ -204,6 +191,17 @@ export function suggestCriticName(input: string): string | null {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
   return body ? `critic-${body}` : null;
+}
+
+// Fixed-role deploy and undeploy requests accept only the six canonical role
+// names; additional critics use the critic-add and critic-remove actions.
+function fixedRole(name: string): FixedAgentRole {
+  if (!NAME_PATTERN.test(name))
+    throw new AgentProfileError(
+      "invalid_name",
+      `Fixed role deploy and remove expect one of: ${FIXED_AGENT_ROLES.join(", ")}`,
+    );
+  return name as FixedAgentRole;
 }
 
 export function validateModel(model: string): string {
@@ -570,16 +568,27 @@ function changeConfig(
     if (
       request.changes.some(
         (change) =>
-          change.changes || !["model-set", "critic-add", "critic-remove"].includes(change.action),
+          change.changes ||
+          !["agent-add", "agent-remove", "model-set", "critic-add", "critic-remove"].includes(
+            change.action,
+          ),
       )
     )
       throw new AgentProfileError(
         "invalid_input",
-        "Profile drafts accept only model and critic changes",
+        "Profile drafts accept only deployment, model, and critic changes",
       );
     return request.changes.reduce((draft, change) => changeConfig(draft, change), config);
   }
-  if (request.action === "model-set") {
+  if (request.action === "agent-add") {
+    const name = fixedRole(request.name ?? "");
+    if (!config.selected_fixed.includes(name)) config.selected_fixed.push(name);
+  } else if (request.action === "agent-remove") {
+    const name = fixedRole(request.name ?? "");
+    if (!config.selected_fixed.includes(name))
+      throw new AgentProfileError("unknown_profile", `Fixed role is not deployed: ${name}`);
+    config.selected_fixed = config.selected_fixed.filter((item) => item !== name);
+  } else if (request.action === "model-set") {
     const name = validateAgentName(request.name ?? "");
     if (!NAME_PATTERN.test(name) && !(name in config.additional_critics))
       throw new AgentProfileError(
@@ -610,7 +619,7 @@ function changeConfig(
     if (name === "critic" || NAME_PATTERN.test(name))
       throw new AgentProfileError(
         "immutable_profile",
-        "Standard critic and fixed roles cannot be removed or renamed",
+        "Fixed roles deploy and undeploy through the fixed-role actions of configure agent; only critic-<suffix> names are removed here",
       );
     if (!CRITIC_PATTERN.test(name))
       throw new AgentProfileError(
@@ -631,36 +640,11 @@ function changeConfig(
   return config;
 }
 
-function legacyIsExact(
-  legacy: LegacyAgentOwnership | undefined,
-  current: Map<string, Buffer>,
-): boolean {
-  if (
-    !legacy ||
-    legacy.manifest.schema_version !== 1 ||
-    !ownsPackage(legacy.manifest.package) ||
-    legacy.manifest.version !== "1.0.0"
-  )
-    return false;
-  return FIXED_AGENT_ROLES.every((role) => {
-    const path = `agents/${role}.md`;
-    const record = legacy.manifest.files[path];
-    const content = current.get(`${role}.md`);
-    return (
-      record?.sha256 === V1_AGENT_SHA256[role] &&
-      content !== undefined &&
-      sha256(content) === record.sha256
-    );
-  });
-}
-
 export async function buildAgentProfilePlan(
   request: AgentProfileRequest,
   scope: Scope,
   cwd = process.cwd(),
   home = homedir(),
-  legacy?: LegacyAgentOwnership,
-  selectedAgents?: readonly FixedAgentRole[],
 ): Promise<BuiltPlan> {
   const root = deploymentRoot(scope, cwd, home);
   const [state, canonical, agentFiles] = await Promise.all([
@@ -672,29 +656,13 @@ export async function buildAgentProfilePlan(
     agentFiles.filter((item) => item.name.endsWith(".md")).map((item) => [item.name, item.content]),
   );
   const config = changeConfig(state.config, request);
-  if (request.action === "install" && selectedAgents === undefined && !state.configRaw)
-    config.selected_fixed = [...FIXED_AGENT_ROLES];
-  if (selectedAgents !== undefined) config.selected_fixed = [...selectedAgents];
-  if (request.action === "install")
-    config.selected_critics = Object.keys(config.additional_critics).sort();
-  if (request.action === "uninstall") {
-    config.selected_fixed = [];
-    config.selected_critics = [];
-  }
-  const names = request.action === "uninstall" ? [] : desiredNames(config);
+  const names = desiredNames(config);
   const rendered = Object.fromEntries(
     names.map((name) => [name, renderAgentProfile(name, config, canonical)]),
   );
-  const desired =
-    request.action === "uninstall"
-      ? undefined
-      : names.length
-        ? desiredManifest(scope, config, rendered, canonical, names)
-        : undefined;
-  const legacyExact = !state.manifest && legacyIsExact(legacy, byFile);
-  const legacyTransferred = legacyExact
-    ? (selectedAgents ?? FIXED_AGENT_ROLES).map((role) => `agents/${role}.md`)
-    : [];
+  const desired = names.length
+    ? desiredManifest(scope, config, rendered, canonical, names)
+    : undefined;
   const operations: AgentProfileOperation[] = [];
   const mutations: FileMutation[] = [];
   const currentManifest = state.manifest;
@@ -708,7 +676,13 @@ export async function buildAgentProfilePlan(
     const content = byFile.get(`${name}.md`);
     const record = currentManifest?.profiles[name];
     const next = rendered[name];
-    const adopted = legacyExact && NAME_PATTERN.test(name);
+    // Exact v1.0.0 package bytes adopt as owned so the v1 to v2 handover
+    // happens through configure agent without touching user-modified files.
+    const adopted =
+      !record &&
+      Boolean(content) &&
+      NAME_PATTERN.test(name) &&
+      sha256(content!) === V1_AGENT_SHA256[name as FixedAgentRole];
     if (!next) {
       if (!record) continue;
       if (!content) {
@@ -750,26 +724,19 @@ export async function buildAgentProfilePlan(
       continue;
     }
     const ownedHash = adopted ? V1_AGENT_SHA256[name as FixedAgentRole] : record!.rendered_sha256;
-    const drift =
-      !adopted &&
-      (!content ||
-        sha256(content) !== ownedHash ||
-        agentFiles.find((item) => item.name === `${name}.md`)?.mode !== 0o600);
-    if (
-      drift &&
-      !(
-        ["install", "reconcile"].includes(request.action) &&
-        (!content || sha256(content) === ownedHash)
-      )
-    ) {
+    // A deleted owned file is recreated through deployment; only modified
+    // bytes are preserved as drift that blocks apply.
+    if (!adopted && content && sha256(content) !== ownedHash) {
       operations.push({
         path,
         operation: "conflict",
         reason: "managed profile drift is preserved; restore the recorded bytes before retrying",
-        ...(content ? { sha256: sha256(content) } : {}),
+        sha256: sha256(content),
       });
       continue;
     }
+    const modeDrift =
+      !adopted && agentFiles.find((item) => item.name === `${name}.md`)?.mode !== 0o600;
     if (!content) {
       operations.push({ path, operation: "create", reason: "explicit managed profile reconcile" });
       mutations.push({
@@ -779,17 +746,14 @@ export async function buildAgentProfilePlan(
         mode: 0o600,
         expected: { absent: true },
       });
-    } else if (
-      !content.equals(next) ||
-      agentFiles.find((item) => item.name === `${name}.md`)?.mode !== 0o600
-    ) {
+    } else if (!content.equals(next) || modeDrift) {
       operations.push({
         path,
         operation: "update",
-        reason: drift
-          ? "explicit managed profile reconcile"
-          : adopted
-            ? "v1.0.0 ownership transfer"
+        reason: adopted
+          ? "v1.0.0 ownership transfer"
+          : modeDrift
+            ? "explicit managed profile reconcile"
             : "model, variant, critic pool, or package update",
       });
       mutations.push({
@@ -823,20 +787,7 @@ export async function buildAgentProfilePlan(
     });
   }
 
-  const remainingDrift = operations
-    .filter((item) => item.operation === "conflict" && item.reason.includes("drift"))
-    .map((item) => item.path.replace(/^agents\//, "").replace(/\.md$/, ""));
-  let finalManifest = desired;
-  if (request.action === "uninstall" && currentManifest && remainingDrift.length) {
-    finalManifest = {
-      ...currentManifest,
-      profiles: Object.fromEntries(
-        remainingDrift.map((name) => [name, currentManifest.profiles[name]]),
-      ),
-      critic_pool: remainingDrift.filter((name) => name === "critic" || CRITIC_PATTERN.test(name)),
-    };
-  }
-  const manifestContent = finalManifest ? Buffer.from(`${stable(finalManifest)}\n`) : undefined;
+  const manifestContent = desired ? Buffer.from(`${stable(desired)}\n`) : undefined;
   if (manifestContent && (!state.manifestRaw || !state.manifestRaw.equals(manifestContent))) {
     operations.push({
       path: MANIFEST_PATH,
@@ -850,11 +801,11 @@ export async function buildAgentProfilePlan(
       mode: 0o600,
       expected: state.manifestRaw ? { sha256: sha256(state.manifestRaw) } : { absent: true },
     });
-  } else if (!manifestContent && state.manifestRaw && !remainingDrift.length) {
+  } else if (!manifestContent && state.manifestRaw) {
     operations.push({
       path: MANIFEST_PATH,
       operation: "remove",
-      reason: "profile deployment uninstalled",
+      reason: "no profiles remain deployed",
     });
     mutations.push({
       path: MANIFEST_PATH,
@@ -870,7 +821,7 @@ export async function buildAgentProfilePlan(
     scope,
     root,
     operations: operations.sort((left, right) => left.path.localeCompare(right.path)),
-    critic_pool: desired?.critic_pool ?? finalManifest?.critic_pool ?? [],
+    critic_pool: desired?.critic_pool ?? [],
     requires_restart: mutations.some((item) => item.path.startsWith("agents/")),
   };
   const plan: AgentProfilePlan = {
@@ -883,11 +834,10 @@ export async function buildAgentProfilePlan(
     plan,
     mutations,
     config,
-    manifest: finalManifest,
+    manifest: desired,
     expectedConfig:
       names.length || state.configRaw || request.action === "model-set" ? configContent : undefined,
     expectedManifest: manifestContent,
-    legacyTransferred,
   };
 }
 
@@ -927,17 +877,10 @@ export async function validateBuiltAgentProfilePlan(built: BuiltPlan): Promise<v
   for (const [name, record] of Object.entries(built.manifest?.profiles ?? {})) {
     const target = destination(built.plan.root, `agents/${name}.md`);
     const content = await readRegular(target);
-    const planned = built.plan.operations.find((item) => item.path === `agents/${name}.md`);
-    const preservedDrift =
-      built.plan.action === "uninstall" &&
-      content &&
-      planned?.operation === "conflict" &&
-      planned.reason === "managed profile drift is preserved" &&
-      planned.sha256 === sha256(content);
     if (
       !content ||
-      (!preservedDrift &&
-        (sha256(content) !== record.rendered_sha256 || (await inspectFileMode(target)) !== 0o600))
+      sha256(content) !== record.rendered_sha256 ||
+      (await inspectFileMode(target)) !== 0o600
     )
       throw new AgentProfileError(
         "final_validation_failed",
@@ -1075,10 +1018,7 @@ export async function applyAgentProfileChange(
       )
     )
       throw new AgentProfileError("collision", "Exact-name user-owned collision blocks apply");
-    if (
-      request.action !== "uninstall" &&
-      built.plan.operations.some((item) => item.operation === "conflict")
-    )
+    if (built.plan.operations.some((item) => item.operation === "conflict"))
       throw new AgentProfileError(
         "drift",
         "Managed profile drift is preserved; restore the recorded bytes before retrying",
@@ -1090,12 +1030,11 @@ export async function applyAgentProfileChange(
         await validateBuiltAgentProfilePlan(built);
         const final = await listAgentProfiles(scope, cwd, home);
         if (
-          request.action !== "uninstall" &&
-          (final.collisions.length ||
-            final.drift.length ||
-            final.profiles
-              .filter((item) => item.ownership !== "user-owned")
-              .some((item) => item.state !== "current" && item.state !== "not-installed"))
+          final.collisions.length ||
+          final.drift.length ||
+          final.profiles
+            .filter((item) => item.ownership !== "user-owned")
+            .some((item) => item.state !== "current" && item.state !== "not-installed")
         ) {
           throw new AgentProfileError(
             "final_validation_failed",
@@ -1232,37 +1171,6 @@ export async function inspectFileMode(path: string): Promise<number | undefined>
   }
 }
 
-export async function readLegacyManifest(root: string): Promise<LegacyAgentOwnership | undefined> {
-  let manifestPath: string | undefined;
-  let raw: Buffer | undefined;
-  for (const name of MANIFEST_NAMES) {
-    const candidate = destination(root, name);
-    const content = await readRegular(candidate);
-    if (content) {
-      manifestPath = candidate;
-      raw = content;
-      break;
-    }
-  }
-  if (!manifestPath || !raw) return undefined;
-  let value: unknown;
-  try {
-    value = JSON.parse(raw.toString("utf8"));
-  } catch {
-    return undefined;
-  }
-  const manifest = value as LegacyManifest;
-  if (
-    manifest?.schema_version !== 1 ||
-    !ownsPackage(manifest.package) ||
-    typeof manifest.version !== "string" ||
-    !manifest.files ||
-    typeof manifest.files !== "object"
-  )
-    return undefined;
-  return { manifest, manifestPath, manifestSha256: sha256(raw) };
-}
-
 export async function applyBuiltAgentPlan(
   built: BuiltPlan,
   stateRoot: string,
@@ -1271,4 +1179,4 @@ export async function applyBuiltAgentPlan(
   await applyTransaction(built.plan.root, stateRoot, built.mutations, options);
 }
 
-export type { BuiltPlan as InternalAgentProfilePlan, LegacyManifest as LegacyInstallerManifest };
+export type { BuiltPlan as InternalAgentProfilePlan };
