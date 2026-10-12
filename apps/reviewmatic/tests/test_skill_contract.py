@@ -236,6 +236,38 @@ def test_the_poll_is_presented_verbatim_with_a_fixed_glossary() -> None:
         assert term in glossary
 
 
+def test_the_poll_stop_prints_the_ready_to_copy_fenced_block() -> None:
+    """Decision 67: verbatim presentation is a copy of a printed fenced block.
+
+    The micro-test for the pressure pair (decision 67 / decision on the
+    pressure method): the guided text names the runtime surface the stop
+    actually prints (`poll_block`) and the no-restyle recipe, while the
+    no-guidance control shows blockquote styling of the plain text.
+    """
+    run_path = (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8")
+    panel = (SKILL_DIR / "references" / "review-panel.md").read_text(encoding="utf-8")
+    assert "`poll_block`" in run_path
+    assert "Copy the fenced `poll_block` into your response exactly as printed" in run_path
+    assert "blockquoting" in run_path
+    assert "`poll_block`" in panel
+
+
+def test_the_final_answer_carries_the_sanctioned_self_check() -> None:
+    """Decision 67: the final self-check runs over the run's own outputs.
+
+    The micro-test for the pressure pair: the guided text routes the
+    verify-before-reporting instinct into the printed `final_checklist` and
+    names reference re-reads after the final plan as the forbidden
+    out-of-stage path, which is exactly the red class the live acceptance
+    caught on the flash model.
+    """
+    run_path = (SKILL_DIR / "references" / "run-path.md").read_text(encoding="utf-8")
+    assert "`final_checklist`" in run_path
+    assert "sanctioned self-check" in run_path
+    assert "red flag" in run_path
+    assert "out-of-stage read the reading discipline forbids" in run_path
+
+
 def test_the_poll_options_are_grounded_in_installed_profiles() -> None:
     """The agent grounds the critic pool in the harness agent inventory before
     composing poll options; multi-critic options require distinct models or

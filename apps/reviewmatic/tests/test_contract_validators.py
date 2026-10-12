@@ -379,6 +379,27 @@ def test_validate_critic_binds_evidence_and_scope() -> None:
         contract.validate_critic({**receipt, "run_id": ""}, DIGEST)
 
 
+def test_critic_finding_refusal_names_the_severity_vocabulary() -> None:
+    """Decision 67: a value-level refusal names the field, the received value,
+    and the accepted vocabulary. The live acceptance caught the agent hunting
+    the severity enum in the reference schemas after a field-list-only
+    refusal (13 out-of-stage schema reads)."""
+    receipt = {
+        **critic_payload(),
+        "findings": [detailed_finding(id="blocked-1", severity="must-fix")],
+    }
+    with workflow_error(
+        r"every finding is complete and uniquely identified; path: \$\.findings\[0\]; "
+        r"valid form: id plus severity, summary, risk, a non-empty evidence array, "
+        r"consequence, relation_to_change, and minimum_fix; "
+        r"detail: severity is 'must-fix'; expected one of critical, high, medium, low"
+    ):
+        contract.validate_critic(receipt, DIGEST, DIGEST)
+    empty_evidence = {**receipt, "findings": [detailed_finding(id="e-1", evidence=[])]}
+    with workflow_error("evidence must be a non-empty array of non-empty strings"):
+        contract.validate_critic(empty_evidence, DIGEST, DIGEST)
+
+
 def test_validate_decision_accounts_for_findings_and_threads() -> None:
     report = decision_payload()
     receipt = critic_payload()
@@ -427,6 +448,49 @@ def test_validate_decision_accounts_for_findings_and_threads() -> None:
     }
     with workflow_error("findings and threads never share identities"):
         contract.validate_decision(bad_namespace, DIGEST, receipt, "normal", DIGEST, DIGEST)
+
+
+def test_label_refusals_name_the_field_and_status_vocabulary() -> None:
+    """Decision 67: the refusal names the offending field, the received value,
+    and the accepted statuses. The live acceptance caught the agent probing
+    status enums blind (`confirmed`/`rejected`, then `proposed`) through 25
+    refusals of the bare message."""
+    evidence = {
+        "labels": {
+            "items": [{"name": "kind::feature"}, {"name": "type::bug"}],
+            "complete": True,
+            "errors": [],
+            "pages": 0,
+            "truncated": False,
+        },
+        "object": {"labels": ["kind::feature"]},
+    }
+    complete = [
+        {"name": "kind::feature", "status": "applicable", "rationale": "The change adds it."},
+        {"name": "type::bug", "status": "inapplicable", "rationale": "No defect is fixed."},
+    ]
+    assert validate_label_assessments(evidence, complete, "none")["complete"] is True
+    guessed_status = [
+        {**complete[0], "status": "confirmed"},
+        complete[1],
+    ]
+    with pytest.raises(contract.WorkflowError, match="label assessment is invalid") as raised:
+        validate_label_assessments(evidence, guessed_status, "none")
+    message = str(raised.value)
+    assert "status is 'confirmed'; expected applicable, inapplicable, unresolved" in message
+    extra_keys = [
+        {**complete[0], "weight": "high"},
+        complete[1],
+    ]
+    with pytest.raises(
+        contract.WorkflowError, match="fields are \\['name', 'rationale', 'status', 'weight'\\]"
+    ):
+        validate_label_assessments(evidence, extra_keys, "none")
+    with pytest.raises(
+        contract.WorkflowError,
+        match="must cover the complete project catalog: missing labels \\['type::bug'\\]",
+    ):
+        validate_label_assessments(evidence, [complete[0]], "none")
 
 
 def test_model_label_delta_agreement_with_label_assessment() -> None:

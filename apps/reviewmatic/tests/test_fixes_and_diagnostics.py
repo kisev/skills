@@ -125,6 +125,30 @@ def test_complete_suggestion_bodies_do_not_repeat_a_shared_introduction() -> Non
     assert suggestion_body("General explanation.", bare) == (f"General explanation.\n\n{bare.body}")
 
 
+def test_suggestion_refusals_name_the_offending_part() -> None:
+    """Decision 67: the refusal names the offending part, the received value,
+    and the accepted record form. The live acceptance caught 20 blind
+    iterations on the bare "suggestions requires bounded path/line/body
+    records" (the agent guessed the fix-binding shape)."""
+    from reviewmatic.fixes import suggestion_parts
+
+    bad_status = {"suggestions": [{"path": "review.txt", "line": 2, "body": "x", "weight": 1}]}
+    with pytest.raises(
+        contract.WorkflowError,
+        match=r"suggestions requires bounded path/line/body records: suggestions\[0\] "
+        r"fields are \['body', 'line', 'path', 'weight'\]; expected exactly body, line, path",
+    ):
+        suggestion_parts(bad_status)
+    bad_line = {"suggestions": [{"path": "review.txt", "line": 0, "body": "x"}]}
+    with pytest.raises(
+        contract.WorkflowError,
+        match=r"suggestions\[0\]\.line is 0; expected a positive integer",
+    ):
+        suggestion_parts(bad_line)
+    with pytest.raises(contract.WorkflowError, match="suggestions is empty"):
+        suggestion_parts({"suggestions": []})
+
+
 def _git(root: Path, *arguments: str) -> str:
     result: dict[str, Any] = {}
     completed = subprocess.run(

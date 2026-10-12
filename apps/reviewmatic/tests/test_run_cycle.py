@@ -436,7 +436,7 @@ def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, ca
     assert poll["text"].startswith("One poll for this review.\n")
     assert "- Mode: normal review." in poll["text"]
     rules = waiting["rules"]
-    assert "Present the poll text verbatim" in rules
+    assert "Copy the printed fenced poll block" in rules
     assert "~/.config/opencode/agents/*.md" in rules
     assert ".opencode/agents/*.md" in rules
     assert "`opencode.json`" in rules
@@ -503,6 +503,14 @@ def test_run_waits_prints_manual_commands_and_resumes(fixture: ReviewFixture, ca
     assert final["status"] == "ok"
     assert final["stage"] == "plan_ready"
     assert final["report"]["status"] == "ok"
+    # The final answer carries the sanctioned self-check checklist (decision
+    # 67): verify-before-reporting runs over the run's own printed outputs and
+    # names reference re-reads as the forbidden out-of-stage path.
+    checklist = final["final_checklist"]
+    assert checklist.startswith("Self-check before reporting the completed review")
+    assert "stage plan_ready" in checklist
+    assert "run-authoring.json shows applied: true" in checklist
+    assert "out-of-stage reads" in checklist
     _print_timings("run with manual stops", final)
 
 

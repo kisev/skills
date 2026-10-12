@@ -1412,6 +1412,38 @@ def markdown_cell(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
+def metadata_assessment_issues(assessment: object) -> list[str]:
+    """Field-level diagnosis for a refused MR metadata assessment (decision 67:
+    the refusal is the environment's answer, so it names the exact fields and
+    their contracts instead of leaving the author to guess)."""
+    if not isinstance(assessment, dict):
+        return ["the assessment is not an object"]
+    fields = ("title", "description", "labels", "workflow_state", "overall")
+    issues = [f"missing field {name}" for name in fields if name not in assessment]
+    issues += [f"unexpected field {name}" for name in sorted(set(assessment) - set(fields))]
+    for name in fields:
+        item = assessment.get(name)
+        if not isinstance(item, dict):
+            if name in assessment:
+                issues.append(f"{name} is not an object")
+            continue
+        if set(item) != {"status", "rationale", "recommendation"}:
+            issues.append(
+                f"{name} keys are {sorted(item)}; expected status, rationale, recommendation"
+            )
+            continue
+        if item.get("status") not in {"ok", "needs_change", "unverified"}:
+            issues.append(
+                f"{name}.status is {item.get('status')!r}; expected ok, needs_change, or unverified"
+            )
+        if not portable.nonempty_string(item.get("rationale")):
+            issues.append(f"{name}.rationale must be a non-empty string")
+        recommendation = item.get("recommendation")
+        if recommendation is not None and not portable.nonempty_string(recommendation):
+            issues.append(f"{name}.recommendation must be null or a non-empty string")
+    return issues
+
+
 def metadata_assessment(evidence: dict[str, Any], assessment: object) -> dict[str, Any]:
     object_value = evidence.get("object")
     if not isinstance(object_value, dict):
@@ -1438,7 +1470,9 @@ def metadata_assessment(evidence: dict[str, Any], assessment: object) -> dict[st
         "assessment": assessment,
     }
     if not portable.mr_metadata_assessment_is_valid(result):
-        raise portable.WorkflowError("MR metadata assessment is invalid")
+        issues = metadata_assessment_issues(assessment)
+        detail = "; ".join(issues[:6]) if issues else "the assessment shape is invalid"
+        raise portable.WorkflowError(f"MR metadata assessment is invalid: {detail}")
     return result
 
 
@@ -5596,6 +5630,44 @@ def validate_review_verdict(
         )
 
 
+# The sanctioned final self-check (decision 67): the runtime's final answer
+# carries a checklist over the run's own printed outputs, so the model's
+# verify-before-reporting instinct has a legal path that never re-opens the
+# skill's reference files after the final plan.
+_FINAL_CHECKLIST = {
+    "en": (
+        "Self-check before reporting the completed review - against the run's own "
+        "printed outputs only:\n"
+        "1. This response shows stage plan_ready: the review reached its final plan.\n"
+        "2. The runbook exists at the printed plan path in the artifact root.\n"
+        "3. The panel binds every critic receipt, the decision is recorded, and the "
+        "authored prose is applied (run-authoring.json shows applied: true).\n"
+        "4. Hand over the chat summary from this response as the review result.\n"
+        "This checklist is the complete final self-check. Wanting to re-read the "
+        "skill's stage rules, references, or contracts before reporting is the red "
+        "flag itself: those reads are out-of-stage reads the reading discipline "
+        "forbids, and every answer the self-check needs is already printed here."
+    ),
+    "ru": (
+        "Самопроверка перед отчётом о завершённом ревью - только по напечатанным "
+        "выходам самого прогона:\n"
+        "1. Этот ответ показывает stage plan_ready: ревью дошло до финального плана.\n"
+        "2. Runbook существует по напечатанному пути плана в корне артефактов.\n"
+        "3. Панель связывает каждый чек критика, решение записано, авторская проза "
+        "применена (run-authoring.json показывает applied: true).\n"
+        "4. Передай chat-сводку из этого ответа как результат ревью.\n"
+        "Этот чек-лист - полная финальная самопроверка. Желание перечитать правила "
+        "стадий, референсы или контракты скилла перед отчётом - сам тот красный "
+        "флаг: такие чтения - чтения вне стадии, запрещённые дисциплиной чтения, "
+        "и все ответы, нужные самопроверке, уже напечатаны здесь."
+    ),
+}
+
+
+def final_checklist(locale: str) -> str:
+    return _FINAL_CHECKLIST[locale]
+
+
 def blocked_chat(locale: str, stage: str, reason: str, action: object) -> str:
     command = cast("dict[str, Any]", action).get("command") if isinstance(action, dict) else None
     labels = portable.code_review_chat_labels(locale)
@@ -5763,6 +5835,7 @@ def _report_review(artifact_root: str) -> dict[str, Any]:
         "chat": chat,
         "publication_plan_path": pointer["markdown_path"],
         "plan_digest": pointer["plan_digest"],
+        "final_checklist": final_checklist(locale),
         "next_action": None,
         "external_mutations": False,
     }

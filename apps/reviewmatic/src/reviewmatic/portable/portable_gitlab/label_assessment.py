@@ -27,6 +27,29 @@ def label_catalog(evidence: dict[str, Any]) -> list[dict[str, str | None]]:
     return sorted(catalog, key=lambda item: (cast("str", item["name"]).casefold(), item["name"]))
 
 
+LABEL_ASSESSMENT_STATUSES = ("applicable", "inapplicable", "unresolved")
+
+
+def label_assessment_issues(item: object) -> list[str]:
+    """Field-level diagnosis for one refused label assessment row: the
+    offending field, the received value, and the accepted status vocabulary
+    (decision 67: the refusal is the answer, never a prompt to guess enums)."""
+    if not isinstance(item, dict):
+        return ["the assessment is not an object"]
+    issues: list[str] = []
+    if set(item) != {"name", "status", "rationale"}:
+        issues.append(f"fields are {sorted(item)}; expected exactly name, status, rationale")
+    if not portable.nonempty_string(item.get("name")):
+        issues.append("name must be a non-empty string")
+    if item.get("status") not in LABEL_ASSESSMENT_STATUSES:
+        issues.append(
+            f"status is {item.get('status')!r}; expected " + ", ".join(LABEL_ASSESSMENT_STATUSES)
+        )
+    if not portable.nonempty_string(item.get("rationale")):
+        issues.append("rationale must be a non-empty string")
+    return issues
+
+
 def validate_label_assessments(
     evidence: dict[str, Any], value: object, semver_impact: str
 ) -> dict[str, Any]:
@@ -40,14 +63,34 @@ def validate_label_assessments(
             not isinstance(item, dict)
             or set(item) != {"name", "status", "rationale"}
             or not portable.nonempty_string(item.get("name"))
-            or item.get("status") not in {"applicable", "inapplicable", "unresolved"}
+            or item.get("status") not in LABEL_ASSESSMENT_STATUSES
             or not portable.nonempty_string(item.get("rationale"))
             or item["name"] in assessments
         ):
-            raise portable.WorkflowError("label assessment is invalid")
+            issues = label_assessment_issues(item)
+            if (
+                isinstance(item, dict)
+                and portable.nonempty_string(item.get("name"))
+                and item["name"] in assessments
+            ):
+                issues.append(f"duplicate name {item['name']!r}")
+            detail = "; ".join(issues[:4]) if issues else "the assessment shape is invalid"
+            raise portable.WorkflowError(f"label assessment is invalid: {detail}")
         assessments[cast("str", item["name"])] = cast("dict[str, Any]", item)
     if set(assessments) != set(catalog_by_name):
-        raise portable.WorkflowError("label assessments must cover the complete project catalog")
+        missing = sorted(set(catalog_by_name) - set(assessments))
+        extra = sorted(set(assessments) - set(catalog_by_name))
+        detail = "; ".join(
+            part
+            for part in (
+                f"missing labels {missing}" if missing else "",
+                f"unexpected labels {extra}" if extra else "",
+            )
+            if part
+        )
+        raise portable.WorkflowError(
+            f"label assessments must cover the complete project catalog: {detail}"
+        )
     compatibility: dict[str, list[str]] = {"major": [], "minor": [], "patch": []}
     for item in cast("list[dict[str, Any]]", evidence["labels"]["items"]):
         semantics = portable.label_semantics(item)
@@ -60,20 +103,25 @@ def validate_label_assessments(
             selected = candidates[0]
             if assessments[selected]["status"] != "applicable":
                 raise portable.WorkflowError(
-                    "SemVer impact requires the matching compatibility label"
+                    "SemVer impact requires the matching compatibility label: "
+                    f"{semver_impact} impact requires {selected!r} to be applicable"
                 )
         elif len(candidates) > 1 and any(
             assessments[name]["status"] != "unresolved" for name in candidates
         ):
             raise portable.WorkflowError(
-                "ambiguous SemVer compatibility labels must remain unresolved"
+                "ambiguous SemVer compatibility labels must remain unresolved: "
+                f"candidates are {candidates}"
             )
         for impact, names in compatibility.items():
-            if impact != semver_impact and any(
-                assessments[name]["status"] == "applicable" for name in names
-            ):
+            conflicting = sorted(
+                (name for name in names if assessments[name]["status"] == "applicable"),
+                key=str.casefold,
+            )
+            if impact != semver_impact and conflicting:
                 raise portable.WorkflowError(
-                    "an incompatible SemVer label cannot be assessed as applicable"
+                    "an incompatible SemVer label cannot be assessed as applicable: "
+                    f"applicable under {impact} impact are {conflicting}"
                 )
     object_value = evidence.get("object")
     current_value = object_value.get("labels") if isinstance(object_value, dict) else None

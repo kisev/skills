@@ -8,7 +8,11 @@ on the current session's agent, provider, and model; a role may also be the
 mechanical `ocr` engine. Ask for the panel selection in one poll at the start
 of every panel review — the critic composition, the engine of every critic,
 and the arbitrator — in the same single question round as missing task
-context. Attach your recommendation; the choice is the user's. Before
+context. Attach your recommendation; the choice is the user's. Present the
+poll exactly as printed — every line word for word, as one unchanged block,
+never restyled into a blockquote, a summary, or new wording; on the run path
+the fenced `poll_block` the stop prints is that block, copied fences and all.
+Before
 composing the options, ground the pool in the host's agent inventory
 (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`): options are proposed only
 when they exist, multi-critic options only when candidate agents carry

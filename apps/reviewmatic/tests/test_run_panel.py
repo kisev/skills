@@ -320,6 +320,10 @@ def test_run_without_participants_stops_at_the_poll(fixture: ReviewFixture, caps
         "--repo-root",
         str(fixture.repo),
     ]
+    # The stop carries the ready-to-copy fenced poll block (decision 67): the
+    # poll text verbatim inside fences, behind the as-is presentation note.
+    assert waiting["poll_block"].startswith("Present this poll to the user as is")
+    assert f"```text\n{waiting['poll']['text']}\n```" in waiting["poll_block"]
     root = Path(str(waiting["artifact_root"]))
 
     # An invalid poll answer is a loud refusal that records nothing.
@@ -849,8 +853,26 @@ def test_poll_presents_the_verbatim_locale_keyed_text() -> None:
     assert "OCR critics are not offered" not in poll["text"]
     russian = run_panel.poll("ru", "normal", 500)
     assert "Глубина: выбирай её составом критиков" in russian["text"]
-    assert run_panel.poll_rules("ru").startswith("Предъяви текст опроса дословно")
-    assert run_panel.poll_rules("en").startswith("Present the poll text verbatim")
+    assert run_panel.poll_rules("ru").startswith("Скопируй напечатанный fenced-блок опроса")
+    assert run_panel.poll_rules("en").startswith("Copy the printed fenced poll block")
+
+
+def test_poll_block_is_the_ready_to_copy_fenced_presentation() -> None:
+    """Decision 67: the stop prints the poll as a fenced block with an as-is
+    note, so verbatim presentation is a copy instead of a formatting decision
+    (the live acceptance caught blockquote styling of the plain text)."""
+    for locale in ("en", "ru"):
+        text = str(run_panel.poll(locale, "normal", 500)["text"])
+        block = run_panel.poll_block(locale, text)
+        assert block.startswith(
+            "Present this poll to the user as is"
+            if locale == "en"
+            else "Предъяви этот опрос пользователю как есть"
+        )
+        assert "```text\n" in block
+        assert f"```text\n{text}\n```" in block
+        no_markers = "blockquote markers" if locale == "en" else "маркеров цитирования"
+        assert no_markers in block
 
 
 LOW_FINDING: dict[str, Any] = {

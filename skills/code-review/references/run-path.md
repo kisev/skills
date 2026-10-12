@@ -20,9 +20,12 @@ MR reads; use `--incremental off` only for an explicit request such as
 review" — "full review" alone is not an opt-out.
 
 The run stops once for the panel poll. The stop carries the complete poll
-presentation under `poll`: `poll.text` is the verbatim question and the stop's
-`rules` instruct how to present it — present the text word for word, without
-paraphrasing or summarizing. The poll names the critics, the engine of every
+presentation: `poll.text` is the verbatim question and `poll_block` is the
+ready-to-copy presentation — the as-is note plus the poll inside a fenced
+block. Copy the fenced `poll_block` into your response exactly as printed:
+every line word for word, the fences included, without paraphrasing,
+blockquoting, rewrapping, or summarizing — the block is the poll, not a draft
+to restyle. The poll names the critics, the engine of every
 critic, the one-line arbitrator role, and the resolved mode with an engines
 note when the OCR engine is excluded (only when even the compacted background
 exceeds the CLI limit; the note reports the compacted size and the cut
@@ -78,7 +81,16 @@ context path. History is advisory and may warn without blocking current review.
 The runbook stands on current findings and proposals, without historical ledger
 coverage, inherited IDs/revisions, or manual synchronization.
 Resume the same run to finalize; `scaffold-review` is the structural repair
-path, never the tail. Apply the stage doctrine of
-`references/remote-review-stages.md` at those judgments, print the returned
-report through `references/output-format.md`, and execute no publication
-commands.
+path, never the tail. Judge the tail rows by this file's tail rules above —
+they are the complete doctrine for the run path's prose and finalize
+judgments, and the repair-path stage files stay closed on the one-process run;
+print the returned report through `references/output-format.md`, and execute
+no publication commands. When the run reaches its final plan (`stage: plan_ready`), the
+final response carries `final_checklist`: the sanctioned self-check before
+reporting — progress at `plan_ready`, the runbook at the printed plan path,
+every critic receipt bound, the decision recorded, the prose applied, then
+hand over the response's chat summary. That checklist over the run's own
+printed outputs is the complete final verification. Wanting to re-read the
+stage rules, references, or contracts before reporting is the red flag the
+checklist already answers: reading references after the final plan is an
+out-of-stage read the reading discipline forbids.

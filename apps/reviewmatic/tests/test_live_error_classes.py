@@ -300,3 +300,34 @@ def test_json_envelope_of_a_record_is_stable() -> None:
     error = review_context.validation_record("rule one", "$.a[0].b", "shape one", "detail one")
     assert str(error) == "rule one; path: $.a[0].b; valid form: shape one; detail: detail one"
     assert json.loads(json.dumps({"error": str(error)}))["error"].startswith("rule one")
+
+
+def test_mr_metadata_refusal_names_the_offending_fields() -> None:
+    """Decision 67: the refusal is the environment's answer.
+
+    The live acceptance caught an eight-round flail on the bare
+    "MR metadata assessment is invalid" (the agent guessed enums and even
+    blamed semicolons); the refusal now names each offending field and its
+    accepted form so one round answers it.
+    """
+    evidence: dict[str, Any] = {
+        "object": {
+            "title": "Bound the retry writes",
+            "description": None,
+            "labels": [],
+            "state": "opened",
+        }
+    }
+    assessment = {
+        "title": {"status": "fine", "rationale": "Seen.", "recommendation": None},
+        "workflow_state": {"status": "ok", "rationale": "Open.", "recommendation": None},
+        "overall": {"status": "ok", "rationale": "", "recommendation": None},
+    }
+    with pytest.raises(contract.WorkflowError) as raised:
+        review_context.metadata_assessment(evidence, assessment)
+    message = str(raised.value)
+    assert message.startswith("MR metadata assessment is invalid: ")
+    assert "missing field description" in message
+    assert "missing field labels" in message
+    assert "title.status is 'fine'; expected ok, needs_change, or unverified" in message
+    assert "overall.rationale must be a non-empty string" in message

@@ -5185,10 +5185,64 @@ def answers_are_valid(answers: object) -> bool:
     )
 
 
-def _validation_record(rule: str, path: str, valid_form: str) -> str:
+def _validation_record(rule: str, path: str, valid_form: str, detail: str = "") -> str:
     """One validation refusal as a record: the rule, the offending path, and
-    the accepted form. Consumers surface the record verbatim."""
-    return f"{rule}; path: {path}; valid form: {valid_form}"
+    the accepted form, with an optional field-level detail naming the received
+    value and the accepted vocabulary (decision 67: the refusal is the answer,
+    so the author never scans references or schemas to decode it). Consumers
+    surface the record verbatim."""
+    message = f"{rule}; path: {path}; valid form: {valid_form}"
+    return f"{message}; detail: {detail}" if detail else message
+
+
+FINDING_SEVERITIES = ("critical", "high", "medium", "low")
+
+_DETAILED_FINDING_FIELDS = (
+    "id",
+    "severity",
+    "summary",
+    "risk",
+    "evidence",
+    "consequence",
+    "relation_to_change",
+    "minimum_fix",
+)
+
+
+def finding_problems(item: object) -> list[str]:
+    """Field-level diagnosis for one refused receipt finding: the offending
+    field, the received value, and the accepted vocabulary."""
+    if not isinstance(item, dict):
+        return ["the finding is not an object"]
+    keys = set(item)
+    if keys != {"id"} and keys != set(_DETAILED_FINDING_FIELDS):
+        return [
+            (
+                f"fields are {sorted(keys)}; expected id or id plus severity, "
+                "summary, risk, evidence, consequence, relation_to_change, "
+                "minimum_fix"
+            )
+        ]
+    issues: list[str] = []
+    if not nonempty_string(item.get("id")):
+        issues.append("id must be a non-empty string")
+    if keys == set(_DETAILED_FINDING_FIELDS):
+        severity = item.get("severity")
+        if severity not in FINDING_SEVERITIES:
+            issues.append(
+                f"severity is {severity!r}; expected one of " + ", ".join(FINDING_SEVERITIES)
+            )
+        for key in ("summary", "risk", "consequence", "relation_to_change", "minimum_fix"):
+            if not nonempty_string(item.get(key)):
+                issues.append(f"{key} must be a non-empty string")
+        evidence = item.get("evidence")
+        if (
+            not isinstance(evidence, list)
+            or not evidence
+            or not all(nonempty_string(entry) for entry in evidence)
+        ):
+            issues.append("evidence must be a non-empty array of non-empty strings")
+    return issues
 
 
 def validate_critic(
@@ -5278,12 +5332,14 @@ def validate_critic(
         else:
             for index, item in enumerate(values):
                 if not findings_are_valid([item]):
+                    detail = "; ".join(finding_problems(item)[:4]) or "the finding shape is invalid"
                     problems.append(
                         _validation_record(
                             "every finding is complete and uniquely identified",
                             f"$.findings[{index}]",
                             "id plus severity, summary, risk, a non-empty evidence array, "
                             "consequence, relation_to_change, and minimum_fix",
+                            detail,
                         )
                     )
     if "target_finding_ids" in receipt and (

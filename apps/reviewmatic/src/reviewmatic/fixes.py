@@ -37,6 +37,39 @@ def suggestion_body(shared: str, part: SuggestionPart) -> str:
     return part.body if prose else f"{shared}\n\n{part.body}"
 
 
+def _one_suggestion_part_issue(index: int, part: object) -> str:
+    label = f"suggestions[{index}]"
+    if not isinstance(part, dict):
+        return f"{label} is not an object"
+    if set(part) != {"body", "line", "path"}:
+        return f"{label} fields are {sorted(part)}; expected exactly body, line, path"
+    if not contract.nonempty_string(part.get("path")):
+        return f"{label}.path must be a non-empty string"
+    line = part.get("line")
+    if not isinstance(line, int) or isinstance(line, bool) or line <= 0:
+        return f"{label}.line is {line!r}; expected a positive integer"
+    if not contract.nonempty_string(part.get("body")):
+        return f"{label}.body must be a non-empty string"
+    return ""
+
+
+def _suggestion_part_issue(suggestions: object) -> str:
+    """Field-level diagnosis for refused suggestions[] parts (decision 67: the
+    refusal names the offending part and the accepted record form, so the
+    author never re-derives the fix-binding contract from references)."""
+    if not isinstance(suggestions, list):
+        return "suggestions is not an array"
+    if not suggestions:
+        return "suggestions is empty"
+    if len(suggestions) > 50:
+        return f"suggestions has {len(suggestions)} parts; the maximum is 50"
+    for index, part in enumerate(suggestions):
+        issue = _one_suggestion_part_issue(index, part)
+        if issue:
+            return issue
+    return "the suggestions shape is invalid"
+
+
 def suggestion_parts(fix: dict[str, Any]) -> list[SuggestionPart]:
     if "suggestions" in fix:
         suggestions = fix["suggestions"]
@@ -55,7 +88,12 @@ def suggestion_parts(fix: dict[str, Any]) -> list[SuggestionPart]:
                 for part in suggestions
             )
         ):
-            raise contract.WorkflowError("suggestions requires bounded path/line/body records")
+            raise contract.WorkflowError(
+                "suggestions requires bounded path/line/body records: "
+                + _suggestion_part_issue(suggestions)
+                + "; each part is path (non-empty string), line (positive integer), "
+                "body (non-empty string)"
+            )
         if len(suggestions) > 1 and not contract.nonempty_string(fix.get("split_rationale")):
             raise contract.WorkflowError(
                 "Related suggestions require split_rationale explaining safe partial application"

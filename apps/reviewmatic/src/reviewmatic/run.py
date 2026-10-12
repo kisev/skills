@@ -483,6 +483,7 @@ class ReviewRun:
             "template_kind": "participants",
             "template_path": str(template_path),
             "poll": poll,
+            "poll_block": run_panel.poll_block(locale, str(poll["text"])),
             "background_path": str(background),
             "rules": run_panel.poll_rules(locale),
             "manual_command": " ".join(shlex.quote(value) for value in argv),
@@ -631,11 +632,18 @@ class ReviewRun:
     ) -> dict[str, Any]:
         panel = run_panel.load(self.root) if self.root is not None else None
         authored = tail.load(self.root) if self.root is not None else None
+        checklist = None
+        if stage == "plan_ready" and self.root is not None:
+            progress = context.load_progress(self.root) or {}
+            locale = str(progress.get("locale") or self.locale)
+            if locale in {"en", "ru"}:
+                checklist = context.final_checklist(locale)
         return {
             "status": status,
             "stage": stage,
             "artifact_root": str(self.root) if self.root else None,
             "report": report,
+            **({"final_checklist": checklist} if checklist is not None else {}),
             **({"panel": run_panel.summary(panel)} if panel is not None else {}),
             **(
                 {

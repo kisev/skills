@@ -467,6 +467,9 @@ def test_review_state_machine_happy_path_with_fake_glab(fixture: ReviewFixture) 
     assert plan["markdown_path"] in report["chat"]
     assert primary_finding["summary"] not in report["chat"]
     assert report["next_action"] is None
+    # report-review carries the same sanctioned final self-check as the run's
+    # final answer (decision 67): outputs only, never reference re-reads.
+    assert report["final_checklist"].startswith("Self-check before reporting")
 
     # Second collection over unchanged evidence enters unchanged mode and
     # carries the published finding and issue in the incremental ledger.

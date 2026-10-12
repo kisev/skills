@@ -98,10 +98,36 @@ def _section_list(locale: str, cut_sections: Sequence[str]) -> str:
     return ", ".join(labels)
 
 
+# The ready-to-copy presentation (decision 67: fix the instruction and the
+# environment, not the model): the stop prints the poll inside a fenced block,
+# so presenting it verbatim is a copy, not a re-formatting decision the agent
+# may stylize into a blockquote.
+_POLL_PRESENTATION = {
+    "en": (
+        "Present this poll to the user as is: copy the fenced block below into your "
+        "response exactly as printed - every line word for word, no blockquote markers, "
+        "no rewrapping, nothing added or removed between the lines. Copy the whole "
+        "block, fences included, as one unit."
+    ),
+    "ru": (
+        "Предъяви этот опрос пользователю как есть: скопируй fenced-блок ниже в свой "
+        "ответ в точности как напечатано - каждая строка слово в слово, без маркеров "
+        "цитирования, без переформатирования, ничего не добавлено и не убрано между "
+        "строками. Копируй блок целиком, вместе с ограждениями, как одну единицу."
+    ),
+}
+
+
+def poll_block(locale: str, text: str) -> str:
+    """The ready-to-copy poll presentation: the as-is note plus the fenced text."""
+    return f"{_POLL_PRESENTATION[locale]}\n\n```text\n{text}\n```"
+
+
 _POLL_RULES = {
     "en": (
-        "Present the poll text verbatim - word for word, without paraphrasing or "
-        "summarizing it. Record the answer in the selection template exactly as the user "
+        "Copy the printed fenced poll block into your response exactly as printed - "
+        "every line word for word, without paraphrasing, blockquoting, or summarizing "
+        "it. Record the answer in the selection template exactly as the user "
         "gave it, attach your recommendation only when the user asks for it or accepts it, "
         "and run the printed command. Before composing the offered critic variants, "
         "ground the critic pool in this host's agent inventory: read "
@@ -115,7 +141,9 @@ _POLL_RULES = {
         "engines note excludes the OCR engine, do not offer it."
     ),
     "ru": (
-        "Предъяви текст опроса дословно - слово в слово, без пересказа и сокращений. "
+        "Скопируй напечатанный fenced-блок опроса в свой ответ в точности как "
+        "напечатано - каждая строка слово в слово, без пересказа, цитирования "
+        "маркерами и сокращений. "
         "Запиши ответ в шаблон выбора в точности как дал пользователь, прикладывай свою "
         "рекомендацию только если пользователь её принимает, и выполни напечатанную "
         "команду. Перед составлением вариантов критиков заземли пул критиков в "

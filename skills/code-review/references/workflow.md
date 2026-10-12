@@ -13,8 +13,10 @@ needed.
 
 Every rule lives in exactly one stage file; a stage reads only its own file.
 The mandatory start is `run-path.md`; read the stage file at entry,
-`poll-glossary.md` at the poll, and `repair.md` when a stage refuses —
-never the whole set up front.
+`poll-glossary.md` at the poll, and `repair.md` only on the marked repair
+path when a stage refuses there; on the one-process run a refusal is
+answered by the refusal's own rule text and the run's stage file, never by
+opening the repair docs; never the whole set up front.
 
 | Stage | File |
 | - | - |
