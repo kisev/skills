@@ -33,21 +33,29 @@ SLSA_PREDICATE = "https://slsa.dev/provenance/v1"
 PROPAGATION_SECONDS = 600
 PROPAGATION_ATTEMPTS = 60
 PRERELEASE_VERSION = re.compile(r"^\d+\.\d+\.\d+-")
+SEMVER = re.compile(r"\d+\.\d+\.\d+")
 T = TypeVar("T")
 
 
 def verification_peer_version() -> str:
-    """Sample OpenCode peer version pinned by the compatibility authority."""
+    """Pick the newest OpenCode peer version listed by the compatibility authority."""
     compatibility = json.loads(
         (ROOT / "evals/contracts/opencode-compatibility.json").read_text(encoding="utf-8")
     )
     versions = compatibility.get("versions")
-    if not isinstance(versions, list) or len(versions) != 1:
-        raise PublicationError("compatibility authority does not pin one verification version")
-    version = versions[0]
-    if not isinstance(version, str) or not version:
+    if not isinstance(versions, list) or not versions:
+        raise PublicationError("compatibility authority does not pin verification versions")
+    ranks: list[tuple[int, int, int]] = []
+    for version in versions:
+        if not isinstance(version, str) or not SEMVER.fullmatch(version):
+            raise PublicationError("compatibility authority verification version is invalid")
+        major, minor, patch = (int(part) for part in version.split("."))
+        ranks.append((major, minor, patch))
+    best = ranks.index(max(ranks))
+    chosen = versions[best]
+    if not isinstance(chosen, str):
         raise PublicationError("compatibility authority verification version is invalid")
-    return version
+    return chosen
 
 
 class PublicationError(Exception):

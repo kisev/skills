@@ -70,5 +70,5 @@
   "engines": {
     "node": ">=22.13"
   },
-  "skillsInstallerVersion": "1.7.1"
+  "skillsInstallerVersion": "1.7.2"
 }
