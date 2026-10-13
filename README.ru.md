@@ -65,6 +65,7 @@ npm install --global @kisev/memomatic@dev
 npm install --global @kisev/taskmatic@dev
 REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel
 uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic runtime-info # release version plus resolved Git commit
 
 # Local installation and active CLIs
 npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
@@ -78,7 +79,12 @@ npx --yes skills@latest list --global
 Теги могут сдвинуться между просмотром и установкой. `npm list` проверяет
 установленные npm-пакеты, `--version` показывает версию их CLI в PATH. `uvx` запускает
 reviewmatic временно из выбранного Git-ref и не устанавливает глобальный
-инструмент. `skills list` показывает локальные навыки, а не версию
+инструмент. `--version` печатает выровненную версию выпуска: на точном теге она
+совпадает с тегом, а на движущейся ветке `dev` остаётся равной последней
+выпущенной версии между релизами. `reviewmatic runtime-info` дополнительно
+показывает resolved Git-коммит установленного исходника; используйте его, чтобы
+подтвердить, из какой dev-ревизии собран запущенный билд.
+`skills list` показывает локальные навыки, а не версию
 npm-установщика. Прежний npm-пакет `@kisev/reviewmatic` этим изменением не
 депрецируется; для этого потребуется отдельное подтверждение.
 

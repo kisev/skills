@@ -25,6 +25,21 @@ reviewmatic --version`, чтобы обновить кэш исходников 
 временное окружение инструмента; `uv tool install` и публикация в PyPI не
 нужны. Внешние runtime-инструменты: Git и `glab`.
 
+`--version` печатает выровненную версию выпуска, а не ревизию исходника: на
+движущейся ветке `dev` она остаётся равной последней выпущенной `X.Y.Z` между
+релизами. Чтобы проверить, какая ревизия была собрана и запущена, используйте
+self-report; он определяет коммит установки из метаданных `uvx`:
+
+```shell
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic runtime-info
+```
+
+JSON-отчёт содержит версию выпуска `version`, источник `url` и resolved `commit`.
+Сравните коммит с головой выбранного ref, например
+`git ls-remote https://github.com/kisev/skills.git refs/heads/dev`. Запускайте
+пробу с теми же флагами `--refresh-package`, что и dev-сборку, чтобы отчётный
+коммит соответствовал свежесобранному исходнику.
+
 Кэш uv содержит исполняемый пакет, а не артефакты ревью. Очистка кэша не
 удаляет черновики и `runbook.md` из настроенного каталога XDG. Следующий вызов
 После `uv cache clean` снова запустите выбранный ref:

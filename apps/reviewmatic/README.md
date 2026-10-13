@@ -25,6 +25,21 @@ reviewmatic --version` to refresh cached source and build data. `uvx` creates an
 ephemeral tool environment; no `uv tool install` or PyPI publication is
 required. Git and `glab` are external runtime tools.
 
+`--version` prints the aligned release version, not the source revision: on the
+moving `dev` branch it stays at the last released `X.Y.Z` between releases. To
+verify which revision was built and run, use the self report; it resolves the
+installation commit from the `uvx` install metadata:
+
+```shell
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic runtime-info
+```
+
+The JSON report carries the release `version`, the source `url`, and the
+resolved `commit`. Compare the commit with the head of the selected ref, for
+example `git ls-remote https://github.com/kisev/skills.git refs/heads/dev`. Run
+the probe with the same `--refresh-package` flags as the dev build command, so
+the reported commit matches the freshly built source.
+
 The uv cache stores the executable, not review artifacts. Clearing the cache
 does not remove drafts or `runbook.md` under the configured XDG state directory.
 After `uv cache clean`, invoke the selected ref again:

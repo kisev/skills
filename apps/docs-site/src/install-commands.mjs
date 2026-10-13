@@ -13,7 +13,10 @@ export function integrationInstallCommands(channel) {
       : "'<ref>' # use the exact release tag for the stable skills channel";
   const reviewmaticInstallCommand =
     channel === "dev" ? "uvx --refresh-package reviewmatic --from" : "uvx --from";
-  const reviewmaticInstall = `REVIEWMATIC_REF=${reviewmaticRef}\n${reviewmaticInstallCommand} ${reviewmaticSource} reviewmatic --version`;
+  const reviewmaticRuntimeInfo = `\nuvx --refresh-package reviewmatic --from ${reviewmaticSource} reviewmatic runtime-info # release version plus resolved Git commit`;
+  const reviewmaticInstall = `REVIEWMATIC_REF=${reviewmaticRef}\n${reviewmaticInstallCommand} ${reviewmaticSource} reviewmatic --version${
+    channel === "dev" ? reviewmaticRuntimeInfo : ""
+  }`;
   const reviewmaticVerify = `uvx --from ${reviewmaticSource} reviewmatic --version`;
   return [
     "# Registry versions",
