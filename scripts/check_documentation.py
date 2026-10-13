@@ -9,6 +9,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# Surfaces whose canonical capability contract migrated to OpenSpec
+# (openspec/specs/). Their contract lives there; no legacy capability record
+# or index link is required. Shrinks to nothing when the legacy tree retires.
+MIGRATED_SURFACES: dict[str, set[str]] = {
+    "skills": {"commit-msg"},
+    "commands": {"commit-msg"},
+}
+
 
 def validate(root: Path = ROOT) -> None:
     inventory = json.loads((root / "evals/contracts/public-surfaces.json").read_text())
@@ -35,6 +43,8 @@ def validate(root: Path = ROOT) -> None:
         if nameset != set(inventory[kind]):
             raise ValueError(f"{kind}: authored surface differs from inventory")
         for name in nameset:
+            if name in MIGRATED_SURFACES.get(kind, set()):
+                continue
             record = f"{kind}/{name}.md"
             if not (root / "specs/capabilities" / record).is_file() or f"]({record})" not in index:
                 raise ValueError(f"missing canonical capability or index link: {record}")

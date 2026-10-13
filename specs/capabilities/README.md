@@ -9,7 +9,9 @@ architecture. The inventory contract is `evals/contracts/public-surfaces.json`;
 
 Each row names one portable skill and its OpenCode command adapter; skills
 that opt out of command ownership through their frontmatter `command: false`
-label show a dash. Package-only commands have a separate contract below.
+label show a dash. Surfaces migrated to OpenSpec reference their spec under
+`openspec/specs/` and own their contract there. Package-only commands have a
+separate contract below.
 
 | Skill | Command adapter |
 | - | - |
@@ -21,7 +23,7 @@ label show a dash. Package-only commands have a separate contract below.
 | [code-explain](skills/code-explain.md) | [code-explain](commands/code-explain.md) |
 | [code-review](skills/code-review.md) | [code-review](commands/code-review.md) |
 | [code-simplify](skills/code-simplify.md) | [code-simplify](commands/code-simplify.md) |
-| [commit-msg](skills/commit-msg.md) | [commit-msg](commands/commit-msg.md) |
+| commit-msg (migrated: `openspec/specs/commit-msg/spec.md`) | same spec |
 | [debugging](skills/debugging.md) | — |
 | [docs-prepare](skills/docs-prepare.md) | [docs-prepare](commands/docs-prepare.md) |
 | [docs-review](skills/docs-review.md) | [docs-review](commands/docs-review.md) |

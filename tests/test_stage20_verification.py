@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from scripts.check_documentation import MIGRATED_SURFACES
 from scripts.check_documentation import validate as validate_documentation
 from scripts.eval_runner import (
     discover,
@@ -15,6 +16,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_documented_public_surfaces_match_authored_sources() -> None:
     validate_documentation(ROOT)
+
+
+def test_documentation_migrated_surfaces_own_contract_in_openspec() -> None:
+    """Migrated names list no legacy record; unlisted surfaces still do."""
+    inventory = json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())
+    for kind, names in MIGRATED_SURFACES.items():
+        for name in names:
+            assert name in inventory[kind], (kind, name)
+            assert not (ROOT / "specs/capabilities" / kind / f"{name}.md").is_file(), (kind, name)
 
 
 def test_stage20_corpus_has_complete_bilingual_skill_matrix_and_unique_prompts() -> None:
