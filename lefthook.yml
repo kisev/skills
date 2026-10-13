@@ -29,6 +29,9 @@ pre-commit:
 
           - name: markdown
             glob: "**/*.md"
+            # Vendored CLI-managed OpenSpec skills (see .fdignore): same
+            # documented exclusion as the fd-driven gates.
+            exclude: ".agents/skills/openspec-*/**"
             run: |
               NPM_CONFIG_PREFIX="$(mise where npm:remark-cli)" mise exec -- remark {files} --no-stdout --frail --quiet
               mise exec -- markdownlint-cli2 --no-globs {files}
@@ -68,6 +71,7 @@ pre-commit:
             glob:
               - ".markdownlint.yml"
               - ".remarkrc.yml"
+              - ".fdignore"
             run: task lint:markdown
 
           - name: yaml
