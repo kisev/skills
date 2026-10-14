@@ -30,6 +30,7 @@ min_version = "2026.9.11"
   glab = "1.122.0"
   node = "26.11.1"
   "npm:@commitlint/cli" = "21.2.3"
+  "npm:@fission-ai/openspec" = "1.14.1"
   "npm:@opencode/cli" = { version = "2.0.27", npm_args = "--ignore-scripts=false --allow-scripts=@opencode/cli" }
   "npm:agent-browser" = "0.39.0"
   "npm:markdownlint-cli2" = "0.23.3"
