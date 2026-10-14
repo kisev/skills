@@ -497,6 +497,35 @@ tasks:
     cmds:
       - mise exec -- uv run --locked python scripts/generate_gates.py
 
+  gates:bench:
+    desc: Benchmark every gate layer with hyperfine (results to .build/gates-bench.json)
+    cmds:
+      - >-
+        mise exec -- hyperfine --runs 3 --export-json .build/gates-bench.json
+        {{.CLI_ARGS}}
+        -n 'build:skills (precondition)' 'task build:skills'
+        -n 'version:check' 'task version:check'
+        -n 'gates:check' 'task gates:check'
+        -n 'lint:skills' 'task lint:skills'
+        -n 'lint' 'task lint'
+        -n 'typecheck' 'task typecheck'
+        -n 'security' 'task security'
+        -n 'docs:check' 'task docs:check'
+        -n 'site:build' 'task site:build'
+        -n 'site:test' 'task site:test'
+        -n 'dependency:audit' 'task dependency:audit'
+        -n 'distribution:build' 'task distribution:build'
+        -n 'locale:check' 'task locale:check'
+        -n 'skills:validate' 'task skills:validate'
+        -n 'eval:check' 'task eval:check'
+        -n 'test:python' 'task test:python'
+        -n 'package:check' 'task package:check'
+        -n 'package:consumer-smoke' 'task package:consumer-smoke'
+        -n 'reviewmatic:check' 'task reviewmatic:check'
+        -n 'reviewmatic:install-smoke' 'task reviewmatic:install-smoke'
+        -n 'shopmatic:check' 'task shopmatic:check'
+        -n 'check (composite)' 'task check'
+
   gates:check:
     desc: Fail when a rendered gate copy drifts from the gate registry
     cmds:
