@@ -90,7 +90,7 @@ duration of at most 15 minutes.
 
 ```shell
 task reviewmatic:check
-task reviewmatic:install-smoke
+task reviewmatic:smoke
 uv build
 ```
 

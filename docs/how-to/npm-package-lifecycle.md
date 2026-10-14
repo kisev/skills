@@ -23,7 +23,7 @@ before `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/agentomatic`):
 | - | - |
 | `package.json` (root) | Exact `workspaces` list; pinned by contract tests |
 | `package-lock.json` | Regenerate with `npm install` |
-| `taskfile.yml` | `package:build` builds dependencies before consumers; `typecheck:typescript` must keep `deps: [package:build]` |
+| `taskfile.yml` | `package:build` builds dependencies before consumers; `typescript:typecheck` must keep `deps: [package:build]` |
 | `scripts/build_dev_artifacts.py` | `members` tuple in dependency order; dev dependency pinning is derived automatically |
 | `scripts/build_release_artifacts.py` | `PACKAGE_MEMBERS` in the same order |
 | `scripts/publish_npm_release.py` | `NPM_PUBLISH_ORDER` and the `registry_smoke` expectations |

@@ -126,17 +126,17 @@ tasks:
   test:integration:gitlab:
     desc: Run implemented GitLab workflows against the ready dev environment
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand test --compose '{{.COMPOSE}}'
   test:integration:gitlab:smoke:
     desc: Run the dependency-closed GitLab smoke subset without the coverage gate
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand smoke --compose '{{.COMPOSE}}'
   test:integration:mattermost:
     desc: Run Mattermost workflows against the ready dev environment
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- python -m tests.integration.mattermost.scripts.stand test --compose '{{.COMPOSE}}'
   test:integration:gitlab:preflight:
     desc: Record GitLab test prerequisites without starting services
@@ -145,36 +145,36 @@ tasks:
   test:integration:gitlab:browser:
     desc: Run deferred GitLab browser scenarios explicitly (not blocking API/backend acceptance)
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand browser --compose '{{.COMPOSE}}'
   test:integration:gitlab:live:
     desc: Run explicitly configured optional GitLab agent evaluation
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand live --compose '{{.COMPOSE}}'
   test:integration:skills:acceptance:
     desc: Run the explicitly configured live code-review acceptance on the fake-glab fixture
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.skill_acceptance
   acceptance:
     desc: Run the explicitly configured live acceptance umbrella over every skill (user-run; report goes to the master session)
     vars:
       SKILL: "{{.SKILL}}"
     cmds:
-      - task: build:skills
+      - task: skills:build
       - >-
         mise exec -- uv run --locked python -m tests.integration.acceptance
         {{if .SKILL}}--skill '{{.SKILL}}'{{end}} {{.CLI_ARGS}}
   acceptance:plan:
     desc: Print the acceptance umbrella coverage plan without running anything
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- uv run --locked python -m tests.integration.acceptance --plan-only
   test:integration:mattermost:live:
     desc: Run explicitly configured optional Mattermost agent evaluation
     cmds:
-      - task: build:skills
+      - task: skills:build
       - mise exec -- python -m tests.integration.mattermost.scripts.stand live --compose '{{.COMPOSE}}'
   test:integration:lifecycle:
     desc: Explicitly verify dev down/up and recreate retention without cleanup
@@ -202,72 +202,72 @@ tasks:
   lint:
     desc: "[group] Lint"
     deps:
-      - lint:yaml
-      - lint:toml
-      - lint:markdown
-      - lint:shell
-      - lint:editorconfig
-      - lint:github
-      - lint:lefthook
-      - lint:json
-      - lint:jsts
-      - lint:python
+      - yaml:lint
+      - toml:lint
+      - markdown:lint
+      - shell:lint
+      - editorconfig:lint
+      - github:lint
+      - lefthook:lint
+      - json:lint
+      - jsts:lint
+      - python:lint
 
-  lint:skills:
+  skills:lint:
     desc: Fast source-only canon lint for skill texts (no build needed)
     cmds:
       - mise exec -- uv run --locked python scripts/check_skill_canon.py
 
-  lint:yaml:
+  yaml:lint:
     desc: Lint yaml
     cmds:
       - mise exec -- fd -H -g '*.{yml,yaml}' -X yamllint
 
-  lint:toml:
+  toml:lint:
     desc: Lint toml
     cmds:
       - mise exec -- fd -H -g '*.toml' -X tombi lint
       - mise exec -- fd -H -g '*.toml' -X tombi format --check
 
-  lint:markdown:
+  markdown:lint:
     desc: Lint markdown
     cmds:
       - NPM_CONFIG_PREFIX="$(mise where npm:remark-cli)" mise exec -- fd -H -g '*.md' -X remark --no-stdout --frail
       - mise exec -- fd -H -g '*.md' -X markdownlint-cli2 --no-globs
 
-  lint:shell:
+  shell:lint:
     desc: Lint shell
     cmds:
       - mise exec -- fd -H -g '*.sh' -X shfmt -d
       - mise exec -- fd -H -g '*.sh' -X shellcheck
 
-  lint:editorconfig:
+  editorconfig:lint:
     desc: Lint mixed files via EditorConfig
     cmds:
       - mise exec -- editorconfig-checker
 
-  lint:github:
+  github:lint:
     desc: Lint Github workflows
     cmds:
       - mise exec -- actionlint
 
-  lint:lefthook:
+  lefthook:lint:
     desc: Validate Lefthook configuration
     cmds:
       - mise exec -- lefthook validate
 
-  lint:json:
+  json:lint:
     desc: Lint json
     cmds:
       - mise exec -- fd -H -t f -g '*.{json,jsonc,json5}' -X oxfmt --check
 
-  lint:jsts:
+  jsts:lint:
     desc: Lint js/ts
     cmds:
       - mise exec -- fd -H -g '*.{js,mjs,cjs,ts,mts,cts,jsx,tsx}' -X oxlint
       - mise exec -- fd -H -g '*.{js,jsx,mjs,cjs,ts,tsx,mts,cts,d.ts}' -X oxfmt --check
 
-  lint:python:
+  python:lint:
     desc: Lint python
     cmds:
       - mise exec -- uv run --locked ruff check .
@@ -318,10 +318,10 @@ tasks:
   typecheck:
     desc: "[group] Check types"
     deps:
-      - typecheck:typescript
-      - typecheck:python
+      - typescript:typecheck
+      - python:typecheck
 
-  typecheck:typescript:
+  typescript:typecheck:
     desc: Check types in typescript
     deps: [package:build]
     cmds:
@@ -329,7 +329,7 @@ tasks:
       - mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
       - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
-  typecheck:python:
+  python:typecheck:
     desc: Check types in python
     cmds:
       - mise exec -- uv run --locked mypy
@@ -466,12 +466,12 @@ tasks:
   test:
     desc: Run Python and Node contract tests
     cmds:
-      - task: build:skills
-      - task: test:python
+      - task: skills:build
+      - task: python:test
       - task: package:test
       - task: site:test
 
-  test:python:
+  python:test:
     desc: Run Python tests against materialized skills
     cmds:
       - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest -n auto --dist loadgroup
@@ -487,42 +487,43 @@ tasks:
     cmds:
       - mise exec -- node scripts/materialize_cli_runtime.mjs --check
       - task: reviewmatic:fixtures:check
-      - task: build:skills
+      - task: skills:build
       - task: distribution:check
 
-  gates:write:
+  gates:render:
     desc: Render CI matrix blocks and pre-push globs from the gate registry
     cmds:
       - mise exec -- uv run --locked python scripts/generate_gates.py
 
   gates:bench:
-    desc: Benchmark every gate layer with hyperfine (results to .build/gates-bench.json)
+    desc: Benchmark every gate layer with hyperfine and append the timings to docs/gate-benchmarks.md (raw JSON to .build/gates-bench.json)
     cmds:
       - >-
         mise exec -- hyperfine --runs 3 --export-json .build/gates-bench.json
         {{.CLI_ARGS}}
-        -n 'build:skills (precondition)' 'task build:skills'
+        -n 'skills:build (precondition)' 'task skills:build'
         -n 'version:check' 'task version:check'
         -n 'gates:check' 'task gates:check'
-        -n 'lint:skills' 'task lint:skills'
+        -n 'skills:lint' 'task skills:lint'
         -n 'lint' 'task lint'
         -n 'typecheck' 'task typecheck'
-        -n 'security' 'task security'
+        -n 'secrets:scan' 'task secrets:scan'
         -n 'docs:check' 'task docs:check'
         -n 'site:build' 'task site:build'
         -n 'site:test' 'task site:test'
         -n 'dependency:audit' 'task dependency:audit'
         -n 'distribution:build' 'task distribution:build'
         -n 'locale:check' 'task locale:check'
-        -n 'skills:validate' 'task skills:validate'
+        -n 'skills:check' 'task skills:check'
         -n 'eval:check' 'task eval:check'
-        -n 'test:python' 'task test:python'
+        -n 'python:test' 'task python:test'
         -n 'package:check' 'task package:check'
-        -n 'package:consumer-smoke' 'task package:consumer-smoke'
+        -n 'package:smoke' 'task package:smoke'
         -n 'reviewmatic:check' 'task reviewmatic:check'
-        -n 'reviewmatic:install-smoke' 'task reviewmatic:install-smoke'
+        -n 'reviewmatic:smoke' 'task reviewmatic:smoke'
         -n 'shopmatic:check' 'task shopmatic:check'
         -n 'check (composite)' 'task check'
+      - mise exec -- uv run --locked python scripts/record_gate_benchmarks.py
 
   gates:check:
     desc: Fail when a rendered gate copy drifts from the gate registry
@@ -531,7 +532,7 @@ tasks:
       - mise exec -- openspec validate --specs --strict
       - mise exec -- openspec validate --changes --strict
 
-  build:skills:
+  skills:build:
     desc: Materialize portable skills
     run: once
     cmds:
@@ -539,19 +540,19 @@ tasks:
 
   distribution:build:
     desc: Build the GitHub Pages portable distribution
-    deps: [build:skills]
+    deps: [skills:build]
     run: once
     cmds:
       - mise exec -- uv run --locked python scripts/build_distribution.py
 
   distribution:check:
     desc: Check the reproducible GitHub Pages portable distribution
-    deps: [build:skills]
+    deps: [skills:build]
     cmds:
       - mise exec -- uv run --locked python scripts/build_distribution.py --check
 
 
-  skills:validate:
+  skills:check:
     desc: Validate Agent Skills with complementary validators
     cmds:
       - mise exec -- uv run --locked python scripts/check_agnix.py
@@ -596,7 +597,7 @@ tasks:
         --max-tokens "$EVAL_MAX_TOKENS" --max-cost "$EVAL_MAX_COST"
         --output evals/live/result.json
 
-  security:
+  secrets:scan:
     desc: Scan the repository for committed secrets
     cmds:
       - mise exec -- gitleaks git --config .gitleaks.toml --redact --no-banner
@@ -606,8 +607,8 @@ tasks:
     desc: Run the always-on core shared by every push gate
     cmds:
       - task: gates:check
-      - task: lint:skills
-      - task: build:skills
+      - task: skills:lint
+      - task: skills:build
       - task: version:check
       - task: lint
       - task: typecheck
@@ -616,20 +617,20 @@ tasks:
       - task: site:build
       - task: site:test
       - task: distribution:build
-      - task: skills:validate
+      - task: skills:check
       - task: eval:check
-      - task: security
+      - task: secrets:scan
       - task: dependency:audit
 
   check:
     desc: Run the complete local and CI quality gate
     cmds:
       - task: check:core
-      - task: test:python
+      - task: python:test
       - task: package:check
-      - task: package:consumer-smoke
+      - task: package:smoke
       - task: reviewmatic:check
-      - task: reviewmatic:install-smoke
+      - task: reviewmatic:smoke
       - task: shopmatic:check
 
   pre-push:
@@ -659,7 +660,7 @@ tasks:
       - mise exec -- uv build
       - mise exec -- uv run --locked reviewmatic --version
 
-  reviewmatic:install-smoke:
+  reviewmatic:smoke:
     desc: Verify Git, wheel, sdist, continuation, and marker-run via isolated uvx
     cmds:
       - mise exec -- uv run --locked python scripts/check_reviewmatic_install.py
@@ -707,6 +708,7 @@ tasks:
     internal: true
     dir: .
     deps: [package:install]
+    run: once
     cmds:
       - mise exec -- npm run build --workspace @kisev/safe-fs
       - mise exec -- node scripts/materialize_cli_runtime.mjs
@@ -721,7 +723,7 @@ tasks:
     cmds:
       - mise exec -- npm ci
 
-  package:consumer-smoke:
+  package:smoke:
     desc: Install the packed workspace tarballs into a throwaway consumer and typecheck them
     deps: [package:build]
     cmds:

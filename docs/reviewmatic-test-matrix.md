@@ -9,7 +9,7 @@ checkout, the baseline was
 **201 tests, 201 pass, 0 failed, 0 skipped** (26 files). The backend selection
 was **195 tests, 195 pass**; the three TUI files (`tui-app`, `tui-pty`,
 `tui-support`) contributed the remaining 6. The Python baseline is verified by
-`task reviewmatic:check` and `task test:python`; no TypeScript test runner or
+`task reviewmatic:check` and `task python:test`; no TypeScript test runner or
 generator remains in the repository.
 
 ## Dist module to Python seam map

@@ -1,11 +1,11 @@
 {
   "schema": "kisev-skills/gate-registry/v1",
-  "description": "Single source of truth for quality-gate composition. One entry per layer maps input paths to its gate task. scripts/generate_gates.py renders the CI matrix.include blocks and the Lefthook pre-push glob lists from this registry, and `task gates:check` fails every gate when a rendered copy drifts. Core layers run in `check:core` on every local gate; scoped layers run only when the push delta touches their paths. Layers with requires_build run in the CI group whose handwritten skeleton executes build:skills first; ci_task names the strict clean-checkout variant used by CI when it differs from the local task; ci_job names a handwritten workflow job instead of a matrix entry.",
-  "build_precondition": "build:skills",
+  "description": "Single source of truth for quality-gate composition. One entry per layer maps input paths to its gate task. scripts/generate_gates.py renders the CI matrix.include blocks and the Lefthook pre-push glob lists from this registry, and `task gates:check` fails every gate when a rendered copy drifts. Core layers run in `check:core` on every local gate; scoped layers run only when the push delta touches their paths. Layers with requires_build run in the CI group whose handwritten skeleton executes skills:build first; ci_task names the strict clean-checkout variant used by CI when it differs from the local task; ci_job names a handwritten workflow job instead of a matrix entry.",
+  "build_precondition": "skills:build",
   "meta_triggers": ["gate-registry.json", "lefthook.yml", "mise.toml", "taskfile.yml"],
   "layers": [
     {
-      "name": "version-contracts",
+      "name": "version-check",
       "title": "Version contracts",
       "task": "version:check",
       "core": true
@@ -17,9 +17,9 @@
       "core": true
     },
     {
-      "name": "skills-canon",
+      "name": "skills-lint",
       "title": "Skill canon lint",
-      "task": "lint:skills",
+      "task": "skills:lint",
       "core": true
     },
     {
@@ -29,13 +29,13 @@
       "core": true
     },
     {
-      "name": "security",
+      "name": "secrets-scan",
       "title": "Secret scanning",
-      "task": "security",
+      "task": "secrets:scan",
       "core": true
     },
     {
-      "name": "docs",
+      "name": "docs-check",
       "title": "Documentation",
       "task": "docs:check",
       "core": true
@@ -47,7 +47,7 @@
       "core": true
     },
     {
-      "name": "site-tests",
+      "name": "site-test",
       "title": "Docs site contracts",
       "task": "site:test",
       "core": true
@@ -59,14 +59,14 @@
       "core": true
     },
     {
-      "name": "distribution",
+      "name": "distribution-build",
       "title": "Portable distribution",
       "task": "distribution:build",
       "ci_task": "distribution:check",
       "core": true
     },
     {
-      "name": "npm-packages",
+      "name": "package-check",
       "title": "OpenCode package",
       "task": "package:check",
       "core": false,
@@ -80,9 +80,9 @@
       ]
     },
     {
-      "name": "consumer-smoke",
+      "name": "package-smoke",
       "title": "Consumer smoke",
-      "task": "package:consumer-smoke",
+      "task": "package:smoke",
       "core": false,
       "paths": [
         "packages/**",
@@ -94,30 +94,30 @@
       ]
     },
     {
-      "name": "locales",
+      "name": "locale-check",
       "title": "Locales",
       "task": "locale:check",
       "core": true,
       "requires_build": true
     },
     {
-      "name": "skills-validation",
+      "name": "skills-check",
       "title": "Skill validation",
-      "task": "skills:validate",
+      "task": "skills:check",
       "core": true,
       "requires_build": true
     },
     {
-      "name": "evaluations",
+      "name": "eval-check",
       "title": "Offline evaluations",
       "task": "eval:check",
       "core": true,
       "requires_build": true
     },
     {
-      "name": "python-tests",
+      "name": "python-test",
       "title": "Python tests",
-      "task": "test:python",
+      "task": "python:test",
       "core": false,
       "requires_build": true,
       "paths": [
@@ -132,7 +132,7 @@
       ]
     },
     {
-      "name": "reviewmatic",
+      "name": "reviewmatic-check",
       "title": "Reviewmatic Python application",
       "task": "reviewmatic:check",
       "core": false,
@@ -145,14 +145,14 @@
       ]
     },
     {
-      "name": "reviewmatic-install",
+      "name": "reviewmatic-smoke",
       "title": "Reviewmatic install smoke",
-      "task": "reviewmatic:install-smoke",
+      "task": "reviewmatic:smoke",
       "core": false,
       "paths": ["apps/reviewmatic/**"]
     },
     {
-      "name": "shopmatic",
+      "name": "shopmatic-check",
       "title": "Shopmatic application",
       "task": "shopmatic:check",
       "core": false,

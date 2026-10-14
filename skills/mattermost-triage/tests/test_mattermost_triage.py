@@ -8,7 +8,11 @@ import tempfile
 import unittest
 import urllib.error
 from argparse import Namespace
+from collections.abc import Iterable
+from email.message import Message
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 from unittest import mock
 
 sys.dont_write_bytecode = True
@@ -16,10 +20,10 @@ sys.dont_write_bytecode = True
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
-def load(name, path):
+def load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
@@ -42,7 +46,7 @@ REPLY_ID = "p" * 26
 PUBLISHED_ID = "z" * 26
 
 
-def user(user_id, username):
+def user(user_id: str, username: str) -> dict[str, Any]:
     return {
         "id": user_id,
         "username": username,
@@ -52,7 +56,7 @@ def user(user_id, username):
     }
 
 
-def post(post_id, message, created, root_id=""):
+def post(post_id: str, message: str, created: int, root_id: str = "") -> dict[str, Any]:
     return {
         "id": post_id,
         "channel_id": CHANNEL_ID,
@@ -67,20 +71,26 @@ def post(post_id, message, created, root_id=""):
     }
 
 
-def page(*posts):
+def page(*posts: dict[str, Any]) -> dict[str, Any]:
     return {"order": [item["id"] for item in posts], "posts": {item["id"]: item for item in posts}}
 
 
 class CollectionClient:
-    def __init__(self, *, reaction_error=False, failed_teams=None, unavailable_posts=None):
+    def __init__(
+        self,
+        *,
+        reaction_error: bool = False,
+        failed_teams: Iterable[str] | None = None,
+        unavailable_posts: Iterable[str] | None = None,
+    ) -> None:
         self.reaction_error = reaction_error
         self.failed_teams = set(failed_teams or [])
         self.unavailable_posts = set(unavailable_posts or [])
-        self.calls = []
+        self.calls: list[str] = []
         self.root = post(ROOT_ID, "Need an answer", 1_767_225_600_000)
         self.reply = post(REPLY_ID, "Extra uncited context", 1_767_225_700_000, ROOT_ID)
 
-    def get(self, path):
+    def get(self, path: str) -> Any:
         self.calls.append(path)
         if path == "/users/me":
             return user(USER_ID, "current")
@@ -137,13 +147,19 @@ class CollectionClient:
 
 
 class ApplyClient:
-    def __init__(self, *, ambiguous=False, not_applied=False, recovered=None):
+    def __init__(
+        self,
+        *,
+        ambiguous: bool = False,
+        not_applied: bool = False,
+        recovered: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.ambiguous = ambiguous
         self.not_applied = not_applied
         self.recovered = recovered or []
-        self.posts = []
+        self.posts: list[dict[str, Any]] = []
 
-    def post_text(self, payload):
+    def post_text(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.posts.append(payload)
         if self.ambiguous:
             raise PUBLICATION.AmbiguousPost("unknown")
@@ -151,7 +167,7 @@ class ApplyClient:
             raise PUBLICATION.NotApplied(400)
         return {"id": PUBLISHED_ID, **payload}
 
-    def get(self, path):
+    def get(self, path: str) -> Any:
         if path == f"/posts/{PUBLISHED_ID}":
             return {"id": PUBLISHED_ID, **self.posts[-1]}
         if path.startswith(f"/channels/{CHANNEL_ID}/posts?"):
@@ -160,7 +176,7 @@ class ApplyClient:
 
 
 class MattermostTriageTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -177,14 +193,14 @@ class MattermostTriageTests(unittest.TestCase):
     def collect(
         self,
         *,
-        reaction_error=False,
-        failed_teams=None,
-        unavailable_posts=None,
-        targets=None,
-        limit=20,
-        since="2026-01-01T00:00:00Z",
-        until="2026-01-02T00:00:00Z",
-    ):
+        reaction_error: bool = False,
+        failed_teams: Iterable[str] | None = None,
+        unavailable_posts: Iterable[str] | None = None,
+        targets: list[str] | None = None,
+        limit: int = 20,
+        since: str | None = "2026-01-01T00:00:00Z",
+        until: str = "2026-01-02T00:00:00Z",
+    ) -> tuple[dict[str, Any], int, dict[str, Any], CollectionClient]:
         client = CollectionClient(
             reaction_error=reaction_error,
             failed_teams=failed_teams,
@@ -207,13 +223,13 @@ class MattermostTriageTests(unittest.TestCase):
 
     def analysis(
         self,
-        digest,
+        digest: str,
         *,
-        quote="Need an answer",
-        status="attention",
-        closure=None,
-        draft="I will check.",
-    ):
+        quote: str = "Need an answer",
+        status: str = "attention",
+        closure: str | None = None,
+        draft: str | None = "I will check.",
+    ) -> dict[str, Any]:
         if closure is None:
             closure = {"attention": "open", "disputed": "uncertain", "no_action": "closed"}[status]
         return {
@@ -236,12 +252,17 @@ class MattermostTriageTests(unittest.TestCase):
             ],
         }
 
-    def publish_analysis(self, result, analysis):
+    def publish_analysis(
+        self, result: dict[str, Any], analysis: dict[str, Any]
+    ) -> tuple[dict[str, Any], int]:
         path = self.root / "analysis-input.json"
         path.write_text(json.dumps(analysis))
-        return TRIAGE.publish(Namespace(evidence=result["current_path"], analysis=str(path)))
+        published, code = TRIAGE.publish(
+            Namespace(evidence=result["current_path"], analysis=str(path))
+        )
+        return published, code
 
-    def test_collect_keeps_full_threads_profiles_literal_reactions_and_no_attachments(self):
+    def test_collect_keeps_full_threads_profiles_literal_reactions_and_no_attachments(self) -> None:
         result, code, evidence, client = self.collect()
 
         self.assertEqual(0, code)
@@ -259,7 +280,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertTrue(all(item["thread_complete"] for item in evidence["post_provenance"]))
         self.assertEqual(0o600, Path(result["evidence_path"]).stat().st_mode & 0o777)
 
-    def test_team_listing_errors_are_partial_and_successful_teams_survive(self):
+    def test_team_listing_errors_are_partial_and_successful_teams_survive(self) -> None:
         result, code, evidence, _client = self.collect(failed_teams={TEAM_TWO_ID})
 
         self.assertEqual(1, code)
@@ -272,7 +293,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual([], evidence["posts"])
         self.assertIn("no_team_channel_lists", {item["code"] for item in evidence["errors"]})
 
-    def test_permalink_collects_only_its_full_thread_outside_period(self):
+    def test_permalink_collects_only_its_full_thread_outside_period(self) -> None:
         target = f"{ORIGIN}/team/pl/{REPLY_ID}"
         _result, code, evidence, client = self.collect(
             targets=[target],
@@ -290,7 +311,7 @@ class MattermostTriageTests(unittest.TestCase):
             any(call.startswith(f"/channels/{CHANNEL_ID}/posts?") for call in client.calls)
         )
 
-    def test_partial_reactions_are_surfaced_without_losing_messages(self):
+    def test_partial_reactions_are_surfaced_without_losing_messages(self) -> None:
         result, code, evidence, _client = self.collect(reaction_error=True)
 
         self.assertEqual(1, code)
@@ -299,7 +320,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual([], evidence["posts"][0]["reactions"])
         self.assertIn("reactions_unavailable", {item["code"] for item in evidence["errors"]})
 
-    def test_next_collection_uses_last_complete_until(self):
+    def test_next_collection_uses_last_complete_until(self) -> None:
         _first, _code, _evidence, _client = self.collect()
         _partial, partial_code, _evidence, _client = self.collect(reaction_error=True)
         _second, _code, evidence, _client = self.collect(since=None, until="2026-01-03T00:00:00Z")
@@ -307,7 +328,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual(1, partial_code)
         self.assertEqual("2026-01-02T00:00:00Z", evidence["period"]["since"])
 
-    def test_explicit_since_still_collects_open_candidate_carryover(self):
+    def test_explicit_since_still_collects_open_candidate_carryover(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         self.publish_analysis(collected, self.analysis(collected["evidence_digest"]))
 
@@ -323,7 +344,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual(["reply-needed"], evidence["sources"][0]["carryover_candidate_ids"])
         self.assertIn(f"/posts/{ROOT_ID}", client.calls)
 
-    def test_unavailable_carryover_is_partial(self):
+    def test_unavailable_carryover_is_partial(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         self.publish_analysis(collected, self.analysis(collected["evidence_digest"]))
 
@@ -338,7 +359,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertFalse(evidence["complete"])
         self.assertIn("carryover_unavailable", {item["code"] for item in evidence["errors"]})
 
-    def test_tampered_analysis_pointer_is_not_used_for_carryover(self):
+    def test_tampered_analysis_pointer_is_not_used_for_carryover(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         published, _code = self.publish_analysis(
             collected, self.analysis(collected["evidence_digest"])
@@ -358,7 +379,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual([], evidence["posts"])
         self.assertIn("carryover_state_invalid", {item["code"] for item in evidence["errors"]})
 
-    def test_publish_keeps_only_citations_and_writes_one_manual_command(self):
+    def test_publish_keeps_only_citations_and_writes_one_manual_command(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         result, code = self.publish_analysis(collected, self.analysis(collected["evidence_digest"]))
 
@@ -372,7 +393,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual(1, report.count("mattermost_triage_publication.py publish"))
         self.assertIn("--confirm", result["publication_commands"][0]["command"])
 
-    def test_publish_rejects_nonliteral_quote_and_disputed_draft(self):
+    def test_publish_rejects_nonliteral_quote_and_disputed_draft(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         with self.assertRaises(TRIAGE.TriageError):
             self.publish_analysis(
@@ -384,7 +405,7 @@ class MattermostTriageTests(unittest.TestCase):
                 self.analysis(collected["evidence_digest"], status="disputed"),
             )
 
-    def test_closure_contract_and_incomplete_draft_rejection(self):
+    def test_closure_contract_and_incomplete_draft_rejection(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         with self.assertRaises(TRIAGE.TriageError):
             self.publish_analysis(
@@ -408,7 +429,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual(1, code)
         self.assertEqual("uncertain", durable["candidates"][0]["closure"])
 
-    def test_publication_posts_once_and_is_idempotent(self):
+    def test_publication_posts_once_and_is_idempotent(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         published, _code = self.publish_analysis(
             collected, self.analysis(collected["evidence_digest"])
@@ -429,7 +450,7 @@ class MattermostTriageTests(unittest.TestCase):
             client.posts[0]["props"]["agent_skill_publication_id"],
         )
 
-    def test_publication_action_is_deterministic_and_expires_before_remote_get(self):
+    def test_publication_action_is_deterministic_and_expires_before_remote_get(self) -> None:
         collected, _code, evidence, _client = self.collect()
         analysis = self.analysis(collected["evidence_digest"])
         first, _code = self.publish_analysis(collected, analysis)
@@ -452,7 +473,7 @@ class MattermostTriageTests(unittest.TestCase):
             PUBLICATION.publish(action, root, digest)
         revalidate.assert_not_called()
 
-    def test_ambiguous_publication_blocks_then_recovers_by_hidden_id(self):
+    def test_ambiguous_publication_blocks_then_recovers_by_hidden_id(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         published, _code = self.publish_analysis(
             collected, self.analysis(collected["evidence_digest"])
@@ -473,13 +494,13 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertTrue(second[3]["recovered"])
         self.assertEqual([], recovered.posts)
 
-    def test_definitive_http_400_is_not_applied(self):
+    def test_definitive_http_400_is_not_applied(self) -> None:
         client = PUBLICATION.PublicationClient.__new__(PUBLICATION.PublicationClient)
         client.origin = ORIGIN
         client.token = "secret"
         client.opener = mock.Mock()
         client.opener.open.side_effect = urllib.error.HTTPError(
-            f"{ORIGIN}/api/v4/posts", 400, "bad request", None, None
+            f"{ORIGIN}/api/v4/posts", 400, "bad request", Message(), None
         )
 
         with self.assertRaises(PUBLICATION.NotApplied) as caught:
@@ -487,7 +508,7 @@ class MattermostTriageTests(unittest.TestCase):
 
         self.assertEqual(400, caught.exception.status)
 
-    def test_definitive_rejection_has_not_applied_outcome(self):
+    def test_definitive_rejection_has_not_applied_outcome(self) -> None:
         collected, _code, _evidence, _client = self.collect()
         published, _code = self.publish_analysis(
             collected, self.analysis(collected["evidence_digest"])
@@ -503,7 +524,7 @@ class MattermostTriageTests(unittest.TestCase):
         self.assertEqual(("not_applied", "not_applied", False), result[:3])
         self.assertEqual(400, result[3]["http_status"])
 
-    def test_capabilities_and_aware_timestamp_validation(self):
+    def test_capabilities_and_aware_timestamp_validation(self) -> None:
         self.assertEqual(["collect", "publish"], TRIAGE.capabilities()["commands"])
         with self.assertRaises(TRIAGE.TriageError):
             TRIAGE.aware_instant("2026-01-01T00:00:00", "--since")
@@ -512,14 +533,14 @@ class MattermostTriageTests(unittest.TestCase):
 
 
 class RealServerShapeTests(unittest.TestCase):
-    def test_null_reactions_are_empty(self):
+    def test_null_reactions_are_empty(self) -> None:
         client = mock.Mock()
         client.get.return_value = None
         value = {"id": ROOT_ID}
         TRIAGE.add_reactions(client, value)
         self.assertEqual([], value["reactions"])
 
-    def test_channel_window_uses_before_not_since_pagination(self):
+    def test_channel_window_uses_before_not_since_pagination(self) -> None:
         client = mock.Mock()
         client.get.side_effect = [
             page(post(ROOT_ID, "new", 200), post(REPLY_ID, "middle", 100)),
@@ -531,7 +552,7 @@ class RealServerShapeTests(unittest.TestCase):
         self.assertNotIn("since=", client.get.call_args_list[0].args[0])
         self.assertIn("before=" + REPLY_ID, client.get.call_args_list[1].args[0])
 
-    def test_channel_window_repeated_cursor_stops(self):
+    def test_channel_window_repeated_cursor_stops(self) -> None:
         client = mock.Mock()
         client.get.return_value = page(post(ROOT_ID, "new", 200))
         with mock.patch.object(TRIAGE, "PAGE_SIZE", 1):

@@ -101,7 +101,7 @@ the [test matrix](reviewmatic-test-matrix.md).
 ```shell
 task generate:check
 task reviewmatic:check
-task reviewmatic:install-smoke
+task reviewmatic:smoke
 ```
 
 `generate:check` checks materialized shared sources and retained golden
@@ -166,7 +166,7 @@ The npm cache persists under `.build/`, so a warm run takes seconds; the first
 run pays the registry download cost.
 
 ```shell
-task package:consumer-smoke
+task package:smoke
 ```
 
 A broken tarball fails the gate even while the same version stays healthy in
@@ -186,11 +186,11 @@ without following links outside the checkout.
 The ordinary quality gate does not invoke a model, provider, or credential; the
 dependency audit and the docs-site contracts are part of it and of the CI
 matrix. The chain starts with a seconds-scale source-only canon preselect
-(`task lint:skills`), so a Cyrillic edit in an English canonical text fails
+(`task skills:lint`), so a Cyrillic edit in an English canonical text fails
 before builds and heavy tests:
 
 ```shell
-task lint:skills
+task skills:lint
 task eval:check
 task check
 ```

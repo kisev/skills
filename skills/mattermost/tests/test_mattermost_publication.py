@@ -10,6 +10,8 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import ModuleType
+from typing import Any
 from unittest import mock
 
 sys.dont_write_bytecode = True
@@ -17,10 +19,10 @@ sys.dont_write_bytecode = True
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 
 
-def load(name, path):
+def load(name: str, path: Path) -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
@@ -37,7 +39,7 @@ ORIGIN = "https://chat.example.com"
 TARGET = f"{ORIGIN}/team/channels/dev"
 
 
-def sample_card(kind="issue", locale="en"):
+def sample_card(kind: str = "issue", locale: str = "en") -> dict[str, Any]:
     card = {
         "kind": kind,
         "template": "standard",
@@ -58,7 +60,7 @@ def sample_card(kind="issue", locale="en"):
 
 
 class PrepareClient:
-    def get(self, path):
+    def get(self, path: str) -> Any:
         responses = {
             "/users/me": {"id": USER_ID},
             "/teams/name/team": {"id": TEAM_ID},
@@ -73,27 +75,33 @@ class PrepareClient:
 
 
 class ApplyClient(PrepareClient):
-    def __init__(self, *, upload_error=False, create_error=False, recent=None):
+    def __init__(
+        self,
+        *,
+        upload_error: bool = False,
+        create_error: bool = False,
+        recent: list[dict[str, Any]] | None = None,
+    ) -> None:
         self.upload_error = upload_error
         self.create_error = create_error
         self.recent = recent
-        self.uploads = []
-        self.posts = []
+        self.uploads: list[tuple[str, str, Any]] = []
+        self.posts: list[dict[str, Any]] = []
 
-    def upload(self, channel_id, name, data):
+    def upload(self, channel_id: str, name: str, data: Any) -> dict[str, Any]:
         self.uploads.append((channel_id, name, data))
         if self.upload_error:
             raise PUB.AmbiguousMutation("unknown")
         file_id = chr(ord("f") + len(self.uploads) - 1) * 26
         return {"file_infos": [{"id": file_id, "name": name}]}
 
-    def create_post(self, payload):
+    def create_post(self, payload: dict[str, Any]) -> dict[str, Any]:
         self.posts.append(payload)
         if self.create_error:
             raise PUB.AmbiguousMutation("unknown")
         return {"id": POST_ID, **payload}
 
-    def get(self, path):
+    def get(self, path: str) -> Any:
         if path == f"/posts/{POST_ID}":
             return {"id": POST_ID, **self.posts[-1]}
         if path.startswith(f"/channels/{CHANNEL_ID}/posts?"):
@@ -106,7 +114,7 @@ class ApplyClient(PrepareClient):
 
 
 class PublicationTests(unittest.TestCase):
-    def setUp(self):
+    def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
@@ -114,7 +122,9 @@ class PublicationTests(unittest.TestCase):
         patcher.start()
         self.addCleanup(patcher.stop)
 
-    def prepare(self, messages):
+    def prepare(
+        self, messages: list[dict[str, Any]]
+    ) -> tuple[dict[str, Any], Path, dict[str, Any]]:
         with (
             mock.patch.object(MM, "read_token", return_value="top-secret-token"),
             mock.patch.object(MM, "Client", return_value=PrepareClient()),
@@ -126,11 +136,11 @@ class PublicationTests(unittest.TestCase):
         plan = json.loads(Path(pointer["path"]).read_text())
         return result, root, plan
 
-    def action(self, plan, index=0):
+    def action(self, plan: dict[str, Any], index: int = 0) -> tuple[dict[str, Any], dict[str, Any]]:
         entry = plan["actions"][index]
         return entry, json.loads(Path(entry["path"]).read_text())
 
-    def test_prepare_creates_one_command_per_message_without_token(self):
+    def test_prepare_creates_one_command_per_message_without_token(self) -> None:
         result, root, plan = self.prepare(
             [
                 {"target": TARGET, "message": "first", "files": []},
@@ -150,7 +160,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(0o700, stat.S_IMODE(root.stat().st_mode))
         self.assertEqual(0o600, stat.S_IMODE((root / "current-plan.json").stat().st_mode))
 
-    def test_file_limit_absolute_path_and_digest(self):
+    def test_file_limit_absolute_path_and_digest(self) -> None:
         file = self.root / "file.txt"
         file.write_bytes(b"payload")
         _, _root, plan = self.prepare([{"target": TARGET, "message": "", "files": [str(file)]}])
@@ -161,7 +171,7 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(MM.MattermostError):
             self.prepare([{"target": TARGET, "message": "x", "files": [str(file)] * 6}])
 
-    def run_apply(self, entry, client, mode="apply"):
+    def run_apply(self, entry: dict[str, Any], client: Any, mode: str = "apply") -> Any:
         with (
             mock.patch.object(PUB.mm, "read_token", return_value="secret"),
             mock.patch.object(PUB, "PublicationClient", return_value=client),
@@ -173,7 +183,7 @@ class PublicationTests(unittest.TestCase):
                 else PUB.inspect(action, root, entry["digest"])
             )
 
-    def test_apply_text_only_and_repeated_success(self):
+    def test_apply_text_only_and_repeated_success(self) -> None:
         _, _root, plan = self.prepare([{"target": TARGET, "message": "hello", "files": []}])
         entry, _action = self.action(plan)
         client = ApplyClient()
@@ -185,7 +195,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual("hello", client.posts[0]["message"])
         self.assertEqual("already_applied", second[0])
 
-    def test_uploads_are_recorded_and_used_in_single_post(self):
+    def test_uploads_are_recorded_and_used_in_single_post(self) -> None:
         files = []
         for name in ("one.txt", "two.txt"):
             path = self.root / name
@@ -202,7 +212,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(1, len(client.posts))
         self.assertEqual(["f" * 26, "g" * 26], client.posts[0]["file_ids"])
 
-    def test_confirmed_upload_progress_resumes_at_next_file(self):
+    def test_confirmed_upload_progress_resumes_at_next_file(self) -> None:
         files = []
         for name in ("one.txt", "two.txt"):
             path = self.root / name
@@ -230,7 +240,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(1, len(client.uploads))
         self.assertEqual([first_file_id, "f" * 26], client.posts[0]["file_ids"])
 
-    def test_ambiguous_upload_blocks_retry(self):
+    def test_ambiguous_upload_blocks_retry(self) -> None:
         file = self.root / "file.txt"
         file.write_text("payload")
         _, _root, plan = self.prepare([{"target": TARGET, "message": "file", "files": [str(file)]}])
@@ -251,7 +261,7 @@ class PublicationTests(unittest.TestCase):
         PUB.load_action(entry["path"], entry["digest"])
         self.assertNotEqual(entry["digest"], new_plan["actions"][0]["digest"])
 
-    def test_inspect_finds_ambiguous_post_by_publication_id_and_completes_ledger(self):
+    def test_inspect_finds_ambiguous_post_by_publication_id_and_completes_ledger(self) -> None:
         _, root, plan = self.prepare([{"target": TARGET, "message": "hello", "files": []}])
         entry, action = self.action(plan)
         self.assertEqual("blocked", self.run_apply(entry, ApplyClient(create_error=True))[0])
@@ -272,7 +282,7 @@ class PublicationTests(unittest.TestCase):
         ledger = json.loads((root / "publication-ledger.json").read_text())
         self.assertEqual("complete", ledger["actions"][entry["digest"]]["status"])
 
-    def test_expired_unstarted_action_is_rejected(self):
+    def test_expired_unstarted_action_is_rejected(self) -> None:
         _, _root, plan = self.prepare([{"target": TARGET, "message": "hello", "files": []}])
         entry, action = self.action(plan)
 
@@ -282,12 +292,12 @@ class PublicationTests(unittest.TestCase):
         ):
             self.run_apply(entry, ApplyClient())
 
-    def test_preflight_failure_does_not_extend_action_ttl(self):
+    def test_preflight_failure_does_not_extend_action_ttl(self) -> None:
         _, _root, plan = self.prepare([{"target": TARGET, "message": "hello", "files": []}])
         entry, action = self.action(plan)
 
         class UnavailableIdentityClient(ApplyClient):
-            def get(self, path):
+            def get(self, path: str) -> Any:
                 if path == "/users/me":
                     raise PUB.mm.MattermostError("unavailable")
                 return super().get(path)
@@ -301,7 +311,7 @@ class PublicationTests(unittest.TestCase):
         ):
             self.run_apply(entry, ApplyClient())
 
-    def test_channel_inspection_pages_until_action_creation_boundary(self):
+    def test_channel_inspection_pages_until_action_creation_boundary(self) -> None:
         action = {
             "channel_id": CHANNEL_ID,
             "root_id": "",
@@ -329,10 +339,10 @@ class PublicationTests(unittest.TestCase):
         found = {"id": POST_ID, "create_at": 100_000, **expected}
 
         class PagedClient:
-            def __init__(self):
+            def __init__(self) -> None:
                 self.calls = 0
 
-            def get(self, _path):
+            def get(self, _path: str) -> dict[str, Any]:
                 self.calls += 1
                 page = recent if self.calls == 1 else [found]
                 return {
@@ -344,13 +354,13 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(POST_ID, PUB.inspect_remote(client, action, expected))
         self.assertEqual(2, client.calls)
 
-    def test_inspect_error_preserves_unknown_outcome(self):
+    def test_inspect_error_preserves_unknown_outcome(self) -> None:
         _, _root, plan = self.prepare([{"target": TARGET, "message": "hello", "files": []}])
         entry, _action = self.action(plan)
         self.assertEqual("blocked", self.run_apply(entry, ApplyClient(create_error=True))[0])
 
         class FailingInspectClient(ApplyClient):
-            def get(self, path):
+            def get(self, path: str) -> Any:
                 if path.startswith(f"/channels/{CHANNEL_ID}/posts?"):
                     raise PUB.mm.MattermostError("unavailable")
                 return super().get(path)
@@ -358,7 +368,7 @@ class PublicationTests(unittest.TestCase):
         result = self.run_apply(entry, FailingInspectClient(), mode="inspect")
         self.assertEqual(("blocked", "unknown", False), result[:3])
 
-    def test_plan_escapes_untrusted_file_path(self):
+    def test_plan_escapes_untrusted_file_path(self) -> None:
         file = self.root / "value`\n# Apply: injected.txt"
         file.write_text("payload")
         result, _root, _plan = self.prepare(
@@ -369,7 +379,7 @@ class PublicationTests(unittest.TestCase):
         self.assertIn("\\n# Apply: injected.txt", markdown)
         self.assertNotIn("\n# Apply: injected.txt", markdown)
 
-    def test_tampered_action_is_rejected(self):
+    def test_tampered_action_is_rejected(self) -> None:
         _, _root, plan = self.prepare([{"target": TARGET, "message": "hello", "files": []}])
         entry, action = self.action(plan)
         action["channel_id"] = "x" * 26
@@ -379,7 +389,7 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(PUB.PublicationError):
             PUB.load_action(entry["path"], entry["digest"])
 
-    def test_cards_prepare_apply_and_bind_full_content(self):
+    def test_cards_prepare_apply_and_bind_full_content(self) -> None:
         for kind in ("issue", "mr"):
             for locale in ("en", "ru"):
                 with self.subTest(kind=kind, locale=locale):
@@ -403,7 +413,7 @@ class PublicationTests(unittest.TestCase):
                     with self.assertRaisesRegex(PUB.PublicationError, "tampered"):
                         PUB.load_action(entry["path"], entry["digest"])
 
-    def test_gitlab_link_alone_remains_ordinary_message(self):
+    def test_gitlab_link_alone_remains_ordinary_message(self) -> None:
         message = "Review https://gitlab.example/team/api/-/merge_requests/248"
         _, _, plan = self.prepare([{"target": TARGET, "message": message, "files": []}])
         entry, action = self.action(plan)
@@ -413,7 +423,7 @@ class PublicationTests(unittest.TestCase):
         self.assertEqual(message, client.posts[0]["message"])
         self.assertNotIn("attachments", client.posts[0]["props"])
 
-    def test_card_recovery_requires_matching_attachment(self):
+    def test_card_recovery_requires_matching_attachment(self) -> None:
         _, _, plan = self.prepare(
             [{"target": TARGET, "message": "", "files": [], "card": sample_card()}]
         )
@@ -430,7 +440,7 @@ class PublicationTests(unittest.TestCase):
             "applied", self.run_apply(entry, ApplyClient(recent=[found]), mode="inspect")[0]
         )
 
-    def test_attachment_defaults_allowed_but_extra_content_rejected(self):
+    def test_attachment_defaults_allowed_but_extra_content_rejected(self) -> None:
         expected = {
             "id": POST_ID,
             **PUB.expected_post(
@@ -454,8 +464,13 @@ class PublicationTests(unittest.TestCase):
         actual["props"]["attachments"] = []
         self.assertFalse(PUB.post_matches(actual, expected))
 
-    def test_card_errors_precede_network_and_state(self):
-        for change in ({"summary": "x" * 241}, {"actions": []}, {"locale": "de"}):
+    def test_card_errors_precede_network_and_state(self) -> None:
+        changes: tuple[dict[str, Any], ...] = (
+            {"summary": "x" * 241},
+            {"actions": []},
+            {"locale": "de"},
+        )
+        for change in changes:
             with mock.patch.object(MM, "Client") as client:
                 with self.assertRaises(MM.MattermostError):
                     MM.prepare_publication(
@@ -473,7 +488,7 @@ class PublicationTests(unittest.TestCase):
                 client.assert_not_called()
         self.assertFalse((self.root / "state").exists())
 
-    def test_renderer_change_requires_new_plan(self):
+    def test_renderer_change_requires_new_plan(self) -> None:
         _, _, plan = self.prepare(
             [{"target": TARGET, "message": "", "files": [], "card": sample_card()}]
         )
@@ -483,7 +498,7 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(PUB.PublicationError, "renderer changed"):
                 PUB.load_action(entry["path"], entry["digest"])
 
-    def test_card_rejects_files_body_and_existing_thread(self):
+    def test_card_rejects_files_body_and_existing_thread(self) -> None:
         for message, files in (("extra", []), ("", ["/file"])):
             with self.assertRaises(MM.MattermostError):
                 self.prepare(
@@ -497,7 +512,7 @@ class PublicationTests(unittest.TestCase):
 
 
 class CardTests(unittest.TestCase):
-    def test_guide_examples_are_executable_contracts(self):
+    def test_guide_examples_are_executable_contracts(self) -> None:
         guide = (SCRIPTS.parent / "references" / "cards.md").read_text()
         examples = [json.loads(block) for block in re.findall(r"```json\n(.*?)\n```", guide, re.S)]
         # One example per template (AUDIT.9): standard + custom, together
@@ -513,7 +528,7 @@ class CardTests(unittest.TestCase):
             with self.subTest(kind=card["kind"], locale=card["locale"], template=card["template"]):
                 self.assertEqual(card["url"], MM.publication_card(card)["title_link"])
 
-    def test_unknown_and_absent_are_distinct(self):
+    def test_unknown_and_absent_are_distinct(self) -> None:
         for locale, unknown, absent in (("en", "Unknown", "None"), ("ru", "Неизвестно", "Нет")):
             card = sample_card(locale=locale)
             card.update(author=None, assignee="", labels=None, omitted_labels=0)
@@ -522,7 +537,7 @@ class CardTests(unittest.TestCase):
             self.assertEqual(absent, fields[2]["value"])
             self.assertEqual(unknown, fields[-1]["value"])
 
-    def test_custom_content_is_literal_not_executable_markdown(self):
+    def test_custom_content_is_literal_not_executable_markdown(self) -> None:
         for kind in ("issue", "mr"):
             for locale in ("en", "ru"):
                 card = {
@@ -540,7 +555,7 @@ class CardTests(unittest.TestCase):
                 self.assertNotIn("@all", result["text"])
                 self.assertEqual(r"\*\*literal\*\*", result["fields"][0]["value"])
 
-    def test_limits_and_localized_errors(self):
+    def test_limits_and_localized_errors(self) -> None:
         for locale, phrase in (("en", "shorten"), ("ru", "сократите")):
             card = sample_card(locale=locale)
             card["title"] = "x" * 100
@@ -555,7 +570,7 @@ class CardTests(unittest.TestCase):
             with self.assertRaisesRegex(MM.MattermostError, phrase):
                 MM.publication_card(card)
 
-    def test_height_budget_rejects_individually_valid_fields(self):
+    def test_height_budget_rejects_individually_valid_fields(self) -> None:
         card = {
             key: value
             for key, value in sample_card().items()
@@ -567,7 +582,7 @@ class CardTests(unittest.TestCase):
         with self.assertRaisesRegex(MM.MattermostError, "estimated lines"):
             MM.publication_card(card)
 
-    def test_wide_summary_has_separate_height_limit(self):
+    def test_wide_summary_has_separate_height_limit(self) -> None:
         card = sample_card()
         card["summary"] = "界" * 160
         MM.publication_card(card)
@@ -575,8 +590,8 @@ class CardTests(unittest.TestCase):
         with self.assertRaisesRegex(MM.MattermostError, "card.summary.*8 estimated lines"):
             MM.publication_card(card)
 
-    def test_malformed_cards_fail_cleanly(self):
-        for change in (
+    def test_malformed_cards_fail_cleanly(self) -> None:
+        changes: tuple[dict[str, Any], ...] = (
             {"labels": "bug"},
             {"labels": [None]},
             {"omitted_labels": True},
@@ -592,7 +607,8 @@ class CardTests(unittest.TestCase):
             {"locale": []},
             {"kind": {}},
             {"status": 0},
-        ):
+        )
+        for change in changes:
             with self.subTest(change=change), self.assertRaises(MM.MattermostError):
                 MM.publication_card({**sample_card(), **change})
 

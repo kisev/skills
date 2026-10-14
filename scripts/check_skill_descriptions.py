@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check every skill description carries a trigger and fits the hard cap.
 
-Complementary static check for `skills:validate`: agentskills validates the
+Complementary static check for `skills:check`: agentskills validates the
 frontmatter shape, this check enforces the discovery contract — a description
 must name when to use the skill (a "Use when"-style trigger) and must stay
 within the 1024-character description budget.

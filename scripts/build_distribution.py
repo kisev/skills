@@ -121,7 +121,7 @@ def stored_provenance(
 
 def build(output: Path, check: bool, version_override: str | None = None) -> int:
     if not BUILT_SKILLS.is_dir():
-        raise DistributionError("built skills are missing; run task build:skills first")
+        raise DistributionError("built skills are missing; run task skills:build first")
     manifest = json.loads((PACKAGE / "package.json").read_text(encoding="utf-8"))
     package_version = manifest.get("version")
     if not isinstance(package_version, str) or not SEMVER.fullmatch(package_version):

@@ -278,7 +278,7 @@ def build_workspace(directory: Path, configured: dict[str, Any]) -> Path:
     workspace = private_directory(directory / "workspace")
     built = ROOT / ".build/skills/code-review"
     if not (built / "SKILL.md").is_file():
-        raise ValueError("The built code-review archive is missing; run task build:skills")
+        raise ValueError("The built code-review archive is missing; run task skills:build")
     shutil.copytree(built, workspace / ".agents/skills/code-review")
     agent_catalog(directory, workspace, str(configured["model"]))
     return workspace

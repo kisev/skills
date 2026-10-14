@@ -95,6 +95,9 @@
         "PLC0415",                                                          # Lazy imports avoid loading build-only modules for metadata checks.
         "S607",                                                             # Git is a required PATH-resolved build dependency.
       ]
+      "scripts/record_gate_benchmarks.py" = [
+        "S607",                                                             # Git is a required PATH-resolved benchmark context.
+      ]
       "scripts/build_release_artifacts.py" = ["S603"]                       # Arguments are a fixed internal command vector.
       "scripts/check_reviewmatic_install.py" = [
         "S603",                                                             # Test commands use fixed vectors, the selected Git snapshot, and bounded local paths.

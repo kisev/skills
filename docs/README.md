@@ -51,6 +51,8 @@ make that boundary explicit.
 
 - [Verification](verification.md) - release contracts covered by tests and quality gates.
 
+- [Gate benchmarks](gate-benchmarks.md) - recorded layer timings for the verification harness.
+
 - [Security policy](../SECURITY.md) - supported reporting process.
 
 - [Release history](../CHANGELOG.md) - published changes by version.

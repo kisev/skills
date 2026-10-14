@@ -302,7 +302,7 @@ def check(log: list[dict[str, Any]]) -> None:
     if uvx is None or uv is None:
         raise SmokeError("the Mise uv/uvx executable is unavailable")
     temp_root_arg = tempfile.gettempdir()
-    with tempfile.TemporaryDirectory(prefix="reviewmatic-install-", dir=temp_root_arg) as raw:
+    with tempfile.TemporaryDirectory(prefix="reviewmatic-smoke-", dir=temp_root_arg) as raw:
         temp = Path(raw)
         tool_bin = temp / "bin"
         tool_bin.mkdir()
@@ -363,7 +363,7 @@ def check(log: list[dict[str, Any]]) -> None:
 
 def main() -> int:
     log: list[dict[str, Any]] = []
-    log_path = ROOT / ".build" / "reviewmatic-install-smoke.jsonl"
+    log_path = ROOT / ".build" / "reviewmatic-smoke.jsonl"
     log_path.parent.mkdir(parents=True, exist_ok=True)
     root_head_before = git_head(ROOT, dict(os.environ))
     record(log, event="boundary", phase="before", cwd=str(Path.cwd()), head=root_head_before)

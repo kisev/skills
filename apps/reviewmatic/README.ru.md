@@ -92,7 +92,7 @@ Resume сохраняет заполненную прозу. Дрейф толь
 
 ```shell
 task reviewmatic:check
-task reviewmatic:install-smoke
+task reviewmatic:smoke
 uv build
 ```
 

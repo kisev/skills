@@ -57,7 +57,7 @@ def test_distribution_requires_materialized_skills(
     try:
         build_distribution.build(tmp_path / "distribution", False)
     except build_distribution.DistributionError as error:
-        assert "run task build:skills first" in str(error)
+        assert "run task skills:build first" in str(error)
     else:
         raise AssertionError("expected missing built skills to be rejected")
 

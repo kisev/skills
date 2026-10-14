@@ -6,7 +6,7 @@ pre-commit:
   parallel: true
   files: git diff --cached --name-only --diff-filter=ACMR
   jobs:
-    - name: security
+    - name: secrets-scan
       run: mise exec -- gitleaks git --pre-commit --staged --no-banner --redact
 
     - name: lint
@@ -63,6 +63,78 @@ pre-commit:
             glob: "**/*"
             run: mise exec -- editorconfig-checker {files}
 
+    - name: types
+      group:
+        parallel: true
+        jobs:
+          - name: python
+            glob: "**/*.py"
+            exclude:
+              - ".agents/skills/openspec-*/**"
+              - "apps/**"
+            run: mise exec -- uv run --locked mypy {files}
+
+          - name: safe-fs
+            glob: "packages/safe-fs/**/*.{ts,tsx,mts,cts}"
+            run: mise exec -- tsc --project packages/safe-fs/tsconfig.json
+
+          - name: memomatic
+            glob: "apps/memomatic/**/*.{ts,tsx,mts,cts}"
+            run: mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
+
+          - name: taskmatic
+            glob: "apps/taskmatic/**/*.{ts,tsx,mts,cts}"
+            run: mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
+
+          - name: agentomatic
+            glob: "packages/agentomatic/**/*.{ts,tsx,mts,cts}"
+            run: mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
+
+    - name: tests
+      group:
+        parallel: true
+        jobs:
+          - name: python
+            glob: "**/{test_*.py,*_test.py}"
+            exclude:
+              - ".agents/skills/openspec-*/**"
+              - "apps/**"
+            # Changed test files run directly; a staged module with no
+            # collected tests (exit code 5) is not a failure, the full
+            # suites stay owned by pre-push and CI.
+            run: sh -c 'mise exec -- uv run --locked pytest "$@" || test "$?" -eq 5' _ {files}
+
+          - name: reviewmatic
+            root: apps/reviewmatic/
+            glob: "**/{test_*.py,*_test.py}"
+            run: mise exec -- uv run --locked pytest {files}
+
+          - name: shopmatic
+            root: apps/shopmatic/
+            glob: "**/{test_*.py,*_test.py}"
+            run: mise exec -- uv run --locked pytest {files}
+
+          - name: agentomatic
+            glob: "packages/agentomatic/**"
+            # Emit without clean-dist: parallel pre-commit jobs read the
+            # workspace dist type declarations, so nothing may delete them.
+            run: |
+              mise exec -- tsc --project packages/agentomatic/tsconfig.json
+              mise exec -- node packages/agentomatic/dist/generate-assets.js
+              mise exec -- npm --prefix packages/agentomatic test
+
+          - name: memomatic
+            glob: "apps/memomatic/**"
+            run: |
+              mise exec -- tsc --project apps/memomatic/tsconfig.json
+              mise exec -- npm --prefix apps/memomatic test
+
+          - name: taskmatic
+            glob: "apps/taskmatic/**"
+            run: |
+              mise exec -- tsc --project apps/taskmatic/tsconfig.json
+              mise exec -- npm --prefix apps/taskmatic test
+
     - name: configuration
       group:
         parallel: true
@@ -72,21 +144,21 @@ pre-commit:
               - ".markdownlint.yml"
               - ".remarkrc.yml"
               - ".fdignore"
-            run: task lint:markdown
+            run: task markdown:lint
 
           - name: yaml
             glob: ".yamllint.yml"
-            run: task lint:yaml
+            run: task yaml:lint
 
           - name: toml
             glob: ".tombi.toml"
-            run: task lint:toml
+            run: task toml:lint
 
           - name: editorconfig
             glob:
               - ".editorconfig"
               - ".editorconfig-checker.json"
-            run: task lint:editorconfig
+            run: task editorconfig:lint
 
           - name: lefthook
             glob: "lefthook.yml"
@@ -128,9 +200,9 @@ pre-push:
         task check:core
       fail_text: "The local push gate failed"
 
-    - name: python-tests
+    - name: python-test
       glob:
-        # @gates:begin glob:python-tests
+        # @gates:begin glob:python-test
         - "**/*.py"
         - "**/*.schema.json"
         - "skills/**"
@@ -148,12 +220,12 @@ pre-push:
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
         done
-        task test:python
+        task python:test
       fail_text: "The local push gate failed"
 
-    - name: reviewmatic
+    - name: reviewmatic-check
       glob:
-        # @gates:begin glob:reviewmatic
+        # @gates:begin glob:reviewmatic-check
         - "apps/reviewmatic/**"
         - "shared/references/portable_gitlab/**"
         - "shared/references/state_artifacts.py"
@@ -171,9 +243,9 @@ pre-push:
         task reviewmatic:check
       fail_text: "The local push gate failed"
 
-    - name: reviewmatic-install
+    - name: reviewmatic-smoke
       glob:
-        # @gates:begin glob:reviewmatic-install
+        # @gates:begin glob:reviewmatic-smoke
         - "apps/reviewmatic/**"
         - "gate-registry.json"
         - "lefthook.yml"
@@ -184,12 +256,12 @@ pre-push:
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
         done
-        task reviewmatic:install-smoke
+        task reviewmatic:smoke
       fail_text: "The local push gate failed"
 
-    - name: shopmatic
+    - name: shopmatic-check
       glob:
-        # @gates:begin glob:shopmatic
+        # @gates:begin glob:shopmatic-check
         - "apps/shopmatic/**"
         - "gate-registry.json"
         - "lefthook.yml"
@@ -203,9 +275,9 @@ pre-push:
         task shopmatic:check
       fail_text: "The local push gate failed"
 
-    - name: npm-packages
+    - name: package-check
       glob:
-        # @gates:begin glob:npm-packages
+        # @gates:begin glob:package-check
         - "packages/**"
         - "apps/**"
         - "shared/**"
@@ -224,9 +296,9 @@ pre-push:
         task package:check
       fail_text: "The local push gate failed"
 
-    - name: consumer-smoke
+    - name: package-smoke
       glob:
-        # @gates:begin glob:consumer-smoke
+        # @gates:begin glob:package-smoke
         - "packages/**"
         - "apps/**"
         - "shared/**"
@@ -242,5 +314,5 @@ pre-push:
         for variable in $(git rev-parse --local-env-vars); do
           unset "$variable"
         done
-        task package:consumer-smoke
+        task package:smoke
       fail_text: "The local push gate failed"

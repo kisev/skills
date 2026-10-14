@@ -28,16 +28,20 @@ task install
 task --list
 ```
 
-`taskfile.yml` is the full repository and CI task graph. Lefthook directly runs
-pinned tools only for its staged-file pre-commit fast path; pre-push and GitHub
-Actions invoke public tasks. Run the single quality gate before submitting any
+`taskfile.yml` is the full repository and CI task graph. Lefthook runs the
+staged-file pre-commit fast path (direct pinned lint tools plus targeted type
+and test checks); pre-push and GitHub Actions invoke public tasks. Run the single quality gate before submitting any
 change:
 
 ```shell
 task check
 ```
 
-The main public tasks divide the checks as follows:
+Portability task names follow an `object:action` taxonomy with a fixed action
+vocabulary (`lint`, `format`, `typecheck`, `test`, `build`, `check`, `install`,
+`audit`, `bench`, `scan`, `smoke`, `render`); the umbrella groups (`lint`,
+`format`, `typecheck`, `test`, `check`, `check:core`, `generate`) are the
+documented exception. The main public tasks divide the checks as follows:
 
 | Task | Purpose |
 | - | - |
@@ -46,11 +50,11 @@ The main public tasks divide the checks as follows:
 | `format` | Format maintained source files. |
 | `lint`, `typecheck`, `test` | Run source, formatting, type, and test checks. |
 | `generate`, `generate:check` | Build ignored artifacts or check their reproducibility. |
-| `skills:validate` | Run Agnix and `agentskills` validation. |
+| `skills:check` | Run Agnix and `agentskills` validation. |
 | `package:check` | Verify the complete OpenCode package lifecycle. |
 | `eval:check` | Validate evaluation data and run the hostless offline suite. |
 | `dependency:audit` | Audit the locked Python and npm dependency graphs. |
-| `security` | Scan Git history and the working tree for secrets with gitleaks. |
+| `secrets:scan` | Scan Git history and the working tree for secrets with gitleaks. |
 | `gates:check` | Fail when a rendered gate copy drifts from `gate-registry.json`. |
 | `check:core` | Run the always-on core shared by every push gate. |
 | `check` | Run the complete local and CI quality gate. |
@@ -79,7 +83,7 @@ CI `matrix.include` blocks and the Lefthook pre-push glob lists from the
 registry; branch policy, job skeletons, aggregation, and task calls stay
 hand-written. `task gates:check` runs in `check:core` and in CI and fails when
 a rendered copy, the task graph, or a skeleton drifts from the registry; after
-editing the registry, run `task gates:write`.
+editing the registry, run `task gates:render`.
 
 ## Diagnostics
 
@@ -120,15 +124,19 @@ Install hooks after bootstrap:
 lefthook install
 ```
 
-`pre-commit` runs fast, non-mutating lint and security checks directly against
-staged files with pinned Mise tools. Deleted paths are excluded; builds, tests,
-generation, and release checks do not run.
+`pre-commit` checks only changed files. Fast lint and secrets scans run
+directly against staged files with pinned Mise tools, strict mypy covers
+changed Python sources, project `tsc` covers changed TypeScript, the related
+pytest files run in their own project runner, and every touched workspace
+package rebuilds without cleaning `dist` and runs its npm test suite.
+Deleted paths are excluded; full suites, cleaning builds, generation, and
+release checks stay owned by pre-push and CI.
 
 `pre-push` scopes its jobs to the push delta: the delta resolves against the
 branch upstream and falls back to every tracked file when there is none, so
 first pushes run the complete gate. The always-on job runs `task check:core`,
 which includes the documentation, docs-site, and dependency-audit layers;
-`task test:python` and `task package:check` run only when the delta touches
+`task python:test` and `task package:check` run only when the delta touches
 their stack inputs, and every scoped glob list carries the meta triggers, so
 tooling edits run every layer. CI reruns the complete gate on every push, so
 scoping never reduces verification, and `task pre-push` remains the unscoped

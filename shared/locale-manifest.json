@@ -139,5 +139,5 @@
       "language_link_exception": "Template pairs are embedded source material and do not publish standalone language navigation."
     }
   ],
-  "neutral": ["LICENSE"]
+  "neutral": ["LICENSE", "docs/gate-benchmarks.md"]
 }

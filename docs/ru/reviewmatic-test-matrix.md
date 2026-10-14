@@ -8,7 +8,7 @@
 **201 тест, 201 проходит, 0 падений, 0 пропусков** (26 файлов). Backend-набор
 содержал **195 тестов, 195 проходит**; оставшиеся 6 приходились на три TUI-файла
 (`tui-app`, `tui-pty`, `tui-support`). Python-baseline проверяют
-`task reviewmatic:check` и `task test:python`; TypeScript-раннера и генератора
+`task reviewmatic:check` и `task python:test`; TypeScript-раннера и генератора
 в репозитории больше нет.
 
 ## Карта модулей dist на Python-швы

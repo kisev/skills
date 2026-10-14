@@ -65,11 +65,11 @@ jobs:
           - name: Lint
             task: lint
           - name: Skill canon lint
-            task: lint:skills
+            task: skills:lint
           - name: Type checks
             task: typecheck
           - name: Secret scanning
-            task: security
+            task: secrets:scan
           - name: Documentation
             task: docs:check
           - name: Docs site build
@@ -83,11 +83,11 @@ jobs:
           - name: OpenCode package
             task: package:check
           - name: Consumer smoke
-            task: package:consumer-smoke
+            task: package:smoke
           - name: Reviewmatic Python application
             task: reviewmatic:check
           - name: Reviewmatic install smoke
-            task: reviewmatic:install-smoke
+            task: reviewmatic:smoke
           - name: Shopmatic application
             task: shopmatic:check
           # @gates:end
@@ -113,18 +113,18 @@ jobs:
           - name: Locales
             task: locale:check
           - name: Skill validation
-            task: skills:validate
+            task: skills:check
           - name: Offline evaluations
             task: eval:check
           - name: Python tests
-            task: test:python
+            task: python:test
           # @gates:end
     env:
       CHECK_TASK: ${{ matrix.task }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - run: task build:skills
+      - run: task skills:build
       - run: task "$CHECK_TASK"
 
   gate-registry:

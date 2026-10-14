@@ -25,7 +25,7 @@ def pytest_sessionstart() -> None:
         if rebuilt.returncode != 0 or not (ROOT / ".build/skills").is_dir():
             pytest.exit(
                 "built skills are missing and the automatic rebuild failed;"
-                " run task build:skills and inspect its output:\n"
+                " run task skills:build and inspect its output:\n"
                 f"{rebuilt.stdout}\n{rebuilt.stderr}",
                 returncode=4,
             )

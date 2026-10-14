@@ -129,10 +129,29 @@ def await_success(
     )
 
 
+def dry_run_decision(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    """Classify one lookup without the publication fail-closed semantics."""
+    if any(run.get("status") in ACTIVE_STATES for run in runs):
+        return {"decision": "wait", "runs": len(runs)}
+    try:
+        outcome = decide(runs)
+    except TrustError as error:
+        return {"decision": "stop", "runs": len(runs), "reason": str(error)}
+    if outcome is None:
+        return {"decision": "wait", "runs": len(runs)}
+    result: dict[str, Any] = trusted_result(runs, os.environ.get("CI_REVISION", ""))
+    return {"decision": outcome, "runs": len(runs), "run": result["run"], "url": result["url"]}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--attempts", type=int, default=80)
     parser.add_argument("--interval", type=float, default=30.0)
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="perform one lookup and print the publication decision without waiting",
+    )
     arguments = parser.parse_args(argv)
     token = os.environ.get("GH_TOKEN", "")
     repository = os.environ.get("GITHUB_REPOSITORY", "")
@@ -146,6 +165,14 @@ def main(argv: list[str] | None = None) -> int:
     if arguments.attempts < 1 or arguments.interval <= 0:
         parser.error("attempts and interval must be positive")
     try:
+        if arguments.dry_run:
+            status, payload = workflow_runs(repository, revision, token)
+            runs = run_list(status, payload)
+            if status != 200:
+                print(f"the CI runs lookup returned HTTP {status}", file=sys.stderr)
+                return 1
+            print(json.dumps(dry_run_decision(runs), sort_keys=True, separators=(",", ":")))
+            return 0
         result = await_success(repository, revision, token, arguments.attempts, arguments.interval)
     except TrustError as error:
         print(str(error), file=sys.stderr)

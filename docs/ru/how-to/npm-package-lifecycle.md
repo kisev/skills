@@ -25,7 +25,7 @@ workspace само по себе не депрецирует, не отзыва�
 | - | - |
 | `package.json` (корень) | Точный список `workspaces`; закреплён контрактными тестами |
 | `package-lock.json` | Перегенерировать через `npm install` |
-| `taskfile.yml` | `package:build` собирает зависимости раньше потребителей; `typecheck:typescript` сохраняет `deps: [package:build]` |
+| `taskfile.yml` | `package:build` собирает зависимости раньше потребителей; `typescript:typecheck` сохраняет `deps: [package:build]` |
 | `scripts/build_dev_artifacts.py` | Кортеж `members` в порядке зависимостей; пиннинг dev-зависимостей выводится автоматически |
 | `scripts/build_release_artifacts.py` | `PACKAGE_MEMBERS` в том же порядке |
 | `scripts/publish_npm_release.py` | `NPM_PUBLISH_ORDER` и ожидания `registry_smoke` |

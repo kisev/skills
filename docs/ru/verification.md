@@ -105,7 +105,7 @@ TypeScript-baseline и карта соответствий приведены в
 ```shell
 task generate:check
 task reviewmatic:check
-task reviewmatic:install-smoke
+task reviewmatic:smoke
 ```
 
 `generate:check` проверяет материализованные общие источники и сохранённые
@@ -171,7 +171,7 @@ uv run --locked shopmatic compare "клавиатура" --limit 3
 тёплый прогон занимает секунды; первый прогон оплачивает загрузку из реестра.
 
 ```shell
-task package:consumer-smoke
+task package:smoke
 ```
 
 Битый тарболл валит гейт, даже если та же версия остаётся здоровой в публичном
@@ -190,11 +190,11 @@ task package:consumer-smoke
 Обычная проверка качества не обращается к модели или провайдеру и не требует
 учётных данных; аудит зависимостей и контракты сайта документации входят в нее
 и в матрицу CI. Цепочка начинается с посекундного преселекта канона по
-исходникам (`task lint:skills`): кириллическая правка в английском
+исходникам (`task skills:lint`): кириллическая правка в английском
 каноническом тексте падает до сборок и тяжёлых тестов:
 
 ```shell
-task lint:skills
+task skills:lint
 task eval:check
 task check
 ```

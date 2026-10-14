@@ -21,7 +21,7 @@ The umbrella is user-run and explicitly optional, the same class as
 
 ## Run It
 
-1. Build and start what the harness families need: `task build:skills`
+1. Build and start what the harness families need: `task skills:build`
    (the task does this), and for the live families `task env:up`.
 2. Export explicit provider credentials, for example
    `OPENCODE_CONFIG_CONTENT` (or a provider API key). Credentials are never

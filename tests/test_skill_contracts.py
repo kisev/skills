@@ -115,7 +115,7 @@ def test_spec_manage_openspec_coexistence_contract() -> None:
     map_marker = " ".join(map_text.split())
 
     # AC1: the map keeps every service; its byte cap is enforced by the fast
-    # canon lint (scripts/check_skill_canon.py, task lint:skills).
+    # canon lint (scripts/check_skill_canon.py, task skills:lint).
     for marker in (
         "`openspec/specs/` is the OpenSpec project's source of truth",
         "never create a parallel `specs/` tree",
@@ -485,7 +485,7 @@ def test_team_profile_contract_is_distributed_without_private_values() -> None:
 
 def test_skills_use_english_canonical_workflows_without_locale_references() -> None:
     # The cyrillic-free canon itself lives in scripts/check_skill_canon.py
-    # (task lint:skills); this contract only proves that the fast layer runs
+    # (task skills:lint); this contract only proves that the fast layer runs
     # and passes, keeping one home for the rules.
     result = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "check_skill_canon.py")],

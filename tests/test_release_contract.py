@@ -1354,6 +1354,36 @@ def test_ci_trust_decides_only_on_terminal_success() -> None:
         await_ci_success.decide([{"id": 4, "status": "completed", "conclusion": "failure"}])
 
 
+def test_ci_trust_dry_run_classifies_without_publication_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CI_REVISION", "a" * 40)
+    runs = [
+        {"id": 1, "status": "completed", "conclusion": "success", "html_url": "https://run/1"},
+        {"id": 2, "status": "in_progress", "conclusion": None, "html_url": "https://run/2"},
+    ]
+    assert await_ci_success.dry_run_decision(runs) == {"decision": "wait", "runs": 2}
+    assert await_ci_success.dry_run_decision(
+        [{"id": 1, "status": "completed", "conclusion": "success", "html_url": "https://run/1"}]
+    ) == {
+        "decision": "success",
+        "runs": 1,
+        "run": 1,
+        "url": "https://run/1",
+    }
+    failed = await_ci_success.dry_run_decision(
+        [{"id": 3, "status": "completed", "conclusion": "failure", "html_url": "https://run/3"}]
+    )
+    assert failed["decision"] == "stop"
+    assert "failed" in failed["reason"]
+    superseded = await_ci_success.dry_run_decision(
+        [{"id": 4, "status": "completed", "conclusion": "cancelled", "html_url": "https://run/4"}]
+    )
+    assert superseded["decision"] == "stop"
+    assert "superseded" in superseded["reason"]
+    assert await_ci_success.dry_run_decision([]) == {"decision": "wait", "runs": 0}
+
+
 def test_release_workflow_gates_publication_and_final_release() -> None:
     workflow = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
     assert (

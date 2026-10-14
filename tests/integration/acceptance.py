@@ -190,7 +190,7 @@ def progress(skill: str, family: str, stage: str, model: str, started: float) ->
 
 def all_skills() -> list[str]:
     if not BUILT_SKILLS.is_dir():
-        raise UmbrellaError("the built skill archives are missing; run task build:skills")
+        raise UmbrellaError("the built skill archives are missing; run task skills:build")
     return sorted(path.name for path in BUILT_SKILLS.iterdir() if (path / "SKILL.md").is_file())
 
 
@@ -349,7 +349,7 @@ def run_probe_once(
     workspace = private_directory(attempt_dir / "workspace")
     built = BUILT_SKILLS / name
     if not (built / "SKILL.md").is_file():
-        raise UmbrellaError(f"the built {name} archive is missing; run task build:skills")
+        raise UmbrellaError(f"the built {name} archive is missing; run task skills:build")
     shutil.copytree(built, workspace / ".agents/skills" / name)
     for relative, content in spec["fixture"].items():
         path = workspace / relative
