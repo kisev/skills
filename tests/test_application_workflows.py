@@ -41,6 +41,25 @@ def load_module(path: Path, name: str) -> ModuleType:
     return module
 
 
+def fixture_git_env(name: str, email: str) -> dict[str, str]:
+    """Environment for fixture `git` calls: drop every inherited GIT_* variable
+    (hooks and parallel jobs export ones that redirect identity and object
+    lookup at another repository) and pin the fixture identity explicitly, so
+    ambient configuration can never author fixture commits."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.update(
+        {
+            "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_SYSTEM": os.devnull,
+            "GIT_AUTHOR_NAME": name,
+            "GIT_AUTHOR_EMAIL": email,
+            "GIT_COMMITTER_NAME": name,
+            "GIT_COMMITTER_EMAIL": email,
+        }
+    )
+    return env
+
+
 class PortableWorkflowTests(unittest.TestCase):
     def run_runner(
         self,
@@ -131,7 +150,7 @@ elif endpoint.startswith("projects/19/issues/") and endpoint.endswith("/links?pe
     value = []
 elif endpoint.startswith("projects/19/issues/"):
     iid = int(endpoint.split("/issues/", 1)[1].split("/", 1)[0])
-    value = {{"project_id": 19, "iid": iid, "title": f"Work item {{iid}}", "state": "opened"}}
+    value = {{"project_id": 19, "iid": iid, "title": f"Work item {{iid}}", "state": "opened", "web_url": f"https://gitlab.example/group/project/-/issues/{{iid}}"}}
 elif "/repository/tags/" in endpoint:
     value = {{"name": endpoint.rsplit("/", 1)[-1], "created_at": "2026-01-01T00:00:00Z", "commit": {{"created_at": "2026-01-01T00:00:00Z"}}}}
 elif endpoint == "user":
@@ -692,6 +711,7 @@ print(json.dumps(value))
             root = Path(temporary)
             repository = root / "repository"
             repository.mkdir()
+            git_env = fixture_git_env("Example Developer", "developer@example.invalid")
             for arguments in (
                 ("init", "-q"),
                 ("config", "commit.gpgsign", "false"),
@@ -699,25 +719,39 @@ print(json.dumps(value))
                 ("config", "user.email", "developer@example.invalid"),
                 ("config", "user.name", "Example Developer"),
             ):
-                subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+                subprocess.run(
+                    ["git", *arguments],
+                    cwd=repository,
+                    env=git_env,
+                    check=True,
+                    capture_output=True,
+                )
             source = repository / "release.txt"
             source.write_text("base\n", encoding="utf-8")
-            subprocess.run(["git", "add", "release.txt"], cwd=repository, check=True)
-            subprocess.run(["git", "commit", "-qm", "base"], cwd=repository, check=True)
-            subprocess.run(["git", "tag", "v1.0.0"], cwd=repository, check=True)
+            subprocess.run(["git", "add", "release.txt"], cwd=repository, env=git_env, check=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "base"], cwd=repository, env=git_env, check=True
+            )
+            subprocess.run(["git", "tag", "v1.0.0"], cwd=repository, env=git_env, check=True)
             base_sha = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+                ["git", "rev-parse", "HEAD"], cwd=repository, env=git_env, text=True
             ).strip()
             source.write_text("base\ndirect\n", encoding="utf-8")
             subprocess.run(
-                ["git", "commit", "-qam", "fix direct behavior"], cwd=repository, check=True
+                ["git", "commit", "-qam", "fix direct behavior"],
+                cwd=repository,
+                env=git_env,
+                check=True,
             )
             source.write_text("base\ndirect\nassociated\n", encoding="utf-8")
             subprocess.run(
-                ["git", "commit", "-qam", "add associated behavior"], cwd=repository, check=True
+                ["git", "commit", "-qam", "add associated behavior"],
+                cwd=repository,
+                env=git_env,
+                check=True,
             )
             head_sha = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"], cwd=repository, text=True
+                ["git", "rev-parse", "HEAD"], cwd=repository, env=git_env, text=True
             ).strip()
 
             _glab, state = self.fake_glab(root)

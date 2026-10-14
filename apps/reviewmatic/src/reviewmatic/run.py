@@ -524,6 +524,7 @@ class ReviewRun:
             "--participant",
             participant,
         )
+        assigned = run_panel.assigned_question_ids(root)
         self.log(f"waiting for the critic receipt of {participant} at stage {self.stage}")
         return {
             "status": "waiting",
@@ -541,6 +542,8 @@ class ReviewRun:
             "panel": run_panel.summary(panel),
             "template_path": str(template_path),
             "identity_rule": run_panel.IDENTITY_RULE,
+            "contract": context.critic_receipt_contract(),
+            "assigned_question_ids": assigned,
             "manual_command": action["command"],
             "manual_argv": action["argv"],
             "resume_command": self.resume_command(),
@@ -566,6 +569,16 @@ class ReviewRun:
                 for key in ("context_path", "evidence_path", "critic_receipt_path", "repo_root")
             },
             **({"panel": run_panel.summary(panel)} if panel is not None else {}),
+            **(
+                {
+                    "vocabularies": {
+                        name: list(values) for name, values in context.DECISION_VOCABULARIES.items()
+                    },
+                    "blocking_rule": context.BLOCKING_RULE,
+                }
+                if kind == "decision"
+                else {}
+            ),
             "manual_command": template["next_action"]["command"],
             "manual_argv": template["next_action"]["argv"],
             "resume_command": self.resume_command(),

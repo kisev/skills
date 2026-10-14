@@ -10,6 +10,32 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
+- `reviewmatic` prints its authoring contracts at every authoring surface:
+  critic tasks and stops carry the complete receipt dictionary (finding and
+  question-answer fields, assigned question ids, and the context-digest
+  semantics), the decision stop carries the response/verdict/CI vocabularies
+  with the blocking rule, and `replace-artifact` prints the rewound stage and
+  the exact continuation; `record-artifact` and `record-run-critic` gain a
+  write-free `--validate-only` probe, and `start-review` honors
+  `--fix-policy` in the draft flow.
+- Release preparation materializes a prefilled content template
+  (`content-template`) with the printed field contract, treats description
+  and announcement as prose asset files, and rebinds a stale plan in one
+  invocation (`rebind`); review and release runbooks carry a format legend,
+  and release runbooks use full work-item URLs.
+- A refreshed review materializes the context package prefilled from the
+  recorded one: goal, criteria, claims, and questions move verbatim, the
+  binding and thread registry stay machine-fresh, and `supersedes` is preset
+  to the previous package digest.
+
+### Changed
+
+- Release content accepts an empty `illustration_prompt` as a declined
+  illustration — the runtime records the declined note, drops the attachment,
+  and never invents a prompt — and a stale finalize prints the exact one-step
+  rebind command instead of a four-command chain; the code-review and
+  release-prepare skill texts pin the printed contracts as the only format
+  source and the humanize pass as a required workflow step.
 - `spec-manage` keeps an OpenSpec coexistence map (`references/openspec.md`): in
   projects that use OpenSpec (`openspec/`), the skill complements it without
   duplicating its core — a proposal gate before `/opsx:propose` (interview,

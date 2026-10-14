@@ -35,14 +35,26 @@ substitute a configuration silently: the recorded profile, provider, and
 model names appear in the runbook, and the arbitrator receipt must name the
 selected arbitrator.
 After the package is recorded, the runtime returns one ready critic task per
-selected participant with the exact receipt template and the exact
-`record-critic --participant <name>` import command. Launch every critic in
+selected participant with the exact receipt template, the printed receipt
+contract, and the exact
+`record-critic --participant <name>` import command. The printed contract is
+the complete receipt dictionary: the field dictionary of every finding (`id`,
+`severity`, `summary`, `risk`, `evidence[]`, `consequence`,
+`relation_to_change`, `minimum_fix`), the field dictionary of every
+question answer (`question_id`, `verdict` `confirmed|refuted|not_verified`,
+`evidence` or `reason`, and the question's own `context_digest` from the
+recorded package), the assigned question ids, and the semantics of that
+digest — it names the package version the answer was produced against, never
+the evidence digest. Treat the printed contract as complete: never open a
+schema or a reference to learn a receipt field, and never copy a digest from
+anywhere but the recorded package. Launch every critic in
 parallel, in native background mode when supported. Each critic performs one
 complete independent review from the same recorded package and exact
 snapshots: findings plus answers to its assigned questions, and the
 validation question assigned from the context-package contract (does the
 change solve the problem it was made for? — the arbitrator weighs those
-answers). Pass the
+answers). Every model critic answers every question the package assigns to
+critics; one critic's answer never covers another critic's assignment. Pass the
 materialized `references/simplification-criteria.md` path into every critic task and into the arbitrator task; critics report complexity as normal findings with every required field,
 and the arbitrator verdicts each complexity candidate without dropping a refuted one. Critics never see each other's output, never
 recollect GitLab, never rebuild the file map, and may read related code in

@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Any, cast
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-from reviewmatic import context, ocr_critic
+from reviewmatic import context, context_package, ocr_critic
 from reviewmatic import draft as draft_module
 from reviewmatic.portable.portable_gitlab import contract
 
@@ -585,3 +585,8 @@ def critic_template(
         context_digest,
         draft_module._critic_receipt(review_context, mode),
     )
+
+
+def assigned_question_ids(root: Path) -> list[str] | None:
+    """Ids of the questions the recorded context package assigns to critics."""
+    return context_package.assigned_question_ids(root)

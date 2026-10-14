@@ -304,6 +304,11 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
                 "selected model critic participant name this receipt binds to",
                 required=True,
             ),
+            OptionSpec(
+                "validate-only",
+                "run every record validation and write nothing: stage and digests stay unchanged",
+                flag=True,
+            ),
         ),
     ),
     CommandSpec(
@@ -414,6 +419,12 @@ DEFINITIONS: tuple[CommandSpec, ...] = (
             ),
             OptionSpec("evidence", "evidence snapshot path", required=True),
             OptionSpec("input", "artifact input path", required=True),
+            OptionSpec(
+                "validate-only",
+                "probe a critic receipt: run every record validation and write nothing; "
+                "the run state, stage, and digests stay unchanged",
+                flag=True,
+            ),
         ),
     ),
     CommandSpec(
@@ -1063,6 +1074,7 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
                 review_mode=_field(namespace, "reviewMode"),
                 locale=_field(namespace, "locale"),
                 incremental=_field(namespace, "incremental"),
+                fix_policy=_field(namespace, "fixPolicy"),
             )
         elif name == "resume-review":
             result = draft_module.resume_review(str(_field(namespace, "artifactRoot")))
@@ -1130,6 +1142,7 @@ def _dispatch_business(name: str, namespace: argparse.Namespace) -> int:
                     artifact_root=_field(namespace, "artifactRoot"),
                     input=_field(namespace, "input"),
                     participant=_field(namespace, "participant"),
+                    validate_only=_field(namespace, "validateOnly"),
                 )
             )
         )
@@ -1193,6 +1206,7 @@ def _workflow_namespace(name: str, namespace: argparse.Namespace) -> argparse.Na
         critic_receipt=_field(namespace, "criticReceipt"),
         input=_field(namespace, "input"),
         path=_field(namespace, "path"),
+        validate_only=_field(namespace, "validateOnly"),
     )
 
 
