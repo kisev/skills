@@ -94,6 +94,9 @@ pre-commit:
       group:
         parallel: true
         jobs:
+          # The product tests spawn git against fixture repositories, and git
+          # hooks inherit GIT_DIR/GIT_INDEX_FILE; scrub the local env vars the
+          # same way the pre-push core job does before its full gate.
           - name: python
             glob: "**/{test_*.py,*_test.py}"
             exclude:
@@ -102,17 +105,29 @@ pre-commit:
             # Changed test files run directly; a staged module with no
             # collected tests (exit code 5) is not a failure, the full
             # suites stay owned by pre-push and CI.
-            run: sh -c 'mise exec -- uv run --locked pytest "$@" || test "$?" -eq 5' _ {files}
+            run: |
+              for variable in $(git rev-parse --local-env-vars); do
+                unset "$variable"
+              done
+              sh -c 'mise exec -- uv run --locked pytest "$@" || test "$?" -eq 5' _ {files}
 
           - name: reviewmatic
             root: apps/reviewmatic/
             glob: "**/{test_*.py,*_test.py}"
-            run: mise exec -- uv run --locked pytest {files}
+            run: |
+              for variable in $(git rev-parse --local-env-vars); do
+                unset "$variable"
+              done
+              mise exec -- uv run --locked pytest {files}
 
           - name: shopmatic
             root: apps/shopmatic/
             glob: "**/{test_*.py,*_test.py}"
-            run: mise exec -- uv run --locked pytest {files}
+            run: |
+              for variable in $(git rev-parse --local-env-vars); do
+                unset "$variable"
+              done
+              mise exec -- uv run --locked pytest {files}
 
           - name: agentomatic
             glob: "packages/agentomatic/**"

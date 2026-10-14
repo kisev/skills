@@ -23,14 +23,18 @@ from reviewmatic import (
 )
 from reviewmatic.context import reviewmatic_review_identity
 from reviewmatic.context_package import (
+    PREFILL_CARRIED_FIELDS,
     ExpectedPackage,
+    assigned_question_ids,
     bind_question_contexts,
     canonical_package_digest,
     collect_answers,
     extract_superseded_results,
     is_current_result,
     narrative_package_digest,
+    package_contract,
     package_template_for_mr,
+    prefill_package_from_previous,
     question_context_version_list,
     question_context_versions,
     question_report,
@@ -134,16 +138,7 @@ _DISPOSITION = {
 
 _FINDING = {
     **cast("dict[str, Any]", _DEFS["finding"]),
-    "required": [
-        "id",
-        "severity",
-        "summary",
-        "risk",
-        "evidence",
-        "consequence",
-        "relation_to_change",
-        "minimum_fix",
-    ],
+    "required": list(context.DETAILED_FINDING_FIELDS),
 }
 
 _METADATA_SCHEMA = cast(
@@ -808,7 +803,10 @@ def resume_review(root_value: str) -> dict[str, Any]:
             "instructions": (
                 "Record the agent-authored context package first with the returned record-package "
                 "action; critics never start before it is recorded, and record-package returns the "
-                "ready critic task with the recorded package path, question context versions, and the "
+                "ready critic task with the recorded package path, question context versions, the "
+                "printed receipt contract (the complete field dictionaries for findings and "
+                "question_answers, the assigned question ids, and the context_digest semantics - "
+                "never open a schema to learn a field), and the "
                 "exact record-critic import command. Launch immediately after recording, in native "
                 "background mode when supported, alongside primary inspection. Run an independent "
                 "read-only subagent of the current agent, without primary findings. Pass these exact "
@@ -901,6 +899,12 @@ def record_draft_package(path: str, input_path: str) -> dict[str, Any]:
             "response_contract": {
                 "receipt_schema": "portable-gitlab/critic-receipt/v2",
                 "template": _critic_receipt(review_context, str(progress["mode"])),
+                "contract": context.critic_receipt_contract(),
+                "assigned_question_ids": [
+                    str(question["id"])
+                    for question in cast("list[dict[str, Any]]", user_input["questions"])
+                    if question.get("critic") is True
+                ],
                 "import_command": context.runner_action(
                     "record-critic",
                     "--draft",
@@ -911,8 +915,10 @@ def record_draft_package(path: str, input_path: str) -> dict[str, Any]:
                 "rules": (
                     "One receipt file with complete findings and one question_answers entry per "
                     "critic-assigned question; every answer copies that question's context_digest "
-                    "listed above. The primary imports the file with record-critic without "
-                    "rewriting findings, answers, or authorship."
+                    "listed above. The printed contract is the complete receipt dictionary: never "
+                    "open a schema or reference to learn a field or an accepted value. The primary "
+                    "imports the file with record-critic without rewriting findings, answers, or "
+                    "authorship."
                 ),
             },
             "instructions": (
@@ -923,7 +929,7 @@ def record_draft_package(path: str, input_path: str) -> dict[str, Any]:
         },
         **(
             {
-                "critic_tasks": _panel_critic_tasks(draft, path, progress, review_context),
+                "critic_tasks": _panel_critic_tasks(draft, path, progress, review_context, root),
                 "arbitrator_task_hint": (
                     "After every selected critic receipt is imported, the record-critic response "
                     "returns the ready arbitrator task; the arbitrator consolidates the receipts "
@@ -1119,10 +1125,16 @@ def _panel_contradiction_coverage(draft: dict[str, Any]) -> None:
 # reviewmatic itself renders the background file, invokes the configured OCR
 # CLI, maps the comments, and imports the receipt.
 def _panel_critic_tasks(
-    draft: dict[str, Any], path: str, progress: dict[str, Any], review_context: dict[str, Any]
+    draft: dict[str, Any],
+    path: str,
+    progress: dict[str, Any],
+    review_context: dict[str, Any],
+    root: Path | None = None,
 ) -> list[dict[str, Any]]:
     critics = cast("list[dict[str, Any]]", cast("dict[str, Any]", draft["participants"])["critics"])
     resolved_draft = str(Path(path).resolve())
+    receipt_contract = context.critic_receipt_contract()
+    assigned = assigned_question_ids(root) if root is not None else None
     tasks: list[dict[str, Any]] = []
     for critic in critics:
         shared = {
@@ -1161,6 +1173,8 @@ def _panel_critic_tasks(
                 **shared,
                 "receipt_schema": "portable-gitlab/critic-receipt/v2",
                 "template": _critic_receipt(review_context, str(progress["mode"])),
+                "contract": receipt_contract,
+                **({"assigned_question_ids": assigned} if assigned is not None else {}),
                 "import_command": context.runner_action(
                     "record-critic",
                     "--draft",
@@ -1173,7 +1187,9 @@ def _panel_critic_tasks(
                 "rules": (
                     "One receipt per selected critic: a complete independent review with detailed "
                     "findings and one question_answers entry per critic-assigned question, every "
-                    "answer copying that question's context_digest. Critics run in parallel, never "
+                    "answer copying that question's context_digest. The printed contract above is "
+                    "the complete receipt dictionary: never open a schema or reference to learn a "
+                    "field or an accepted value. Critics run in parallel, never "
                     "see each other's output, never recollect GitLab or the prepared file map, and "
                     "may read related code in the review worktree. Import verbatim with the exact "
                     "--participant name. Every finding must trace its symptom to the changed lines: "
@@ -1408,7 +1424,7 @@ def record_draft_participants(
         "participants": draft["participants"],
         "critic_count": draft["critic_count"],
         **(
-            {"critic_tasks": _panel_critic_tasks(draft, path, progress, review_context)}
+            {"critic_tasks": _panel_critic_tasks(draft, path, progress, review_context, _root)}
             if package_recorded
             else {
                 "critic_tasks_hint": (
@@ -2209,6 +2225,7 @@ def start_review(
     locale: str | None = None,
     incremental: str | None = None,
     supersede_root: str | None = None,
+    fix_policy: str | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     mode = review_mode or "normal"
@@ -2218,8 +2235,9 @@ def start_review(
         mode not in {"fast", "normal"}
         or user_locale not in {"en", "ru"}
         or user_incremental not in {"auto", "off"}
+        or fix_policy not in {None, "none", "suggestion", "patch"}
     ):
-        raise contract.WorkflowError("Invalid mode, locale, or incremental policy")
+        raise contract.WorkflowError("Invalid mode, locale, incremental, or fix policy")
     target = contract.parse_target(url, {"merge_requests"})
     bundle = contract.collect(target, "code-review", locale=user_locale)
     collected = time.monotonic()
@@ -2267,6 +2285,7 @@ def start_review(
         mode,
         user_locale,
         user_incremental,
+        fix_policy=fix_policy,
     )
     result = context.prepare_context(
         str(bundle["preview_artifact_path"]), review["path"], user_incremental, mode, user_locale
@@ -2818,6 +2837,7 @@ def check_review(path: str) -> dict[str, Any]:
                             "list[dict[str, Any]]", compiled["decision"]["accepted_findings"]
                         )
                     },
+                    fix_policy=progress.get("fix_policy"),
                 ),
             )
             if not errors:
@@ -3439,6 +3459,44 @@ def refresh_review(path: str) -> dict[str, Any]:
         "Carry still-valid context package items forward, update entries that cite stale "
         "threads or changed evidence, and keep prior answers in the previous draft."
     )
+    # Decision 80/A7: the refreshed package template is materialized prefilled
+    # from the previous recorded package - goal, criteria, claims, constraints,
+    # background, and questions verbatim; binding and thread registry stay
+    # machine-fresh; supersedes names the previous digest. The agent edits
+    # semantics and prose, never rebuilds the package by hand.
+    prefilled_from: dict[str, Any] | None = None
+    if (
+        previous_package is not None
+        and previous_package["payload"].get("mode") == "mr"
+        and isinstance(result.get("context_package"), dict)
+    ):
+        template_path = Path(str(result["context_package"]["template_path"]))
+        template = contract.read_json(template_path, "context package template")
+        prefilled = prefill_package_from_previous(
+            cast("dict[str, Any]", previous_package["payload"]),
+            template,
+            str(previous_package["digest"]),
+        )
+        contract.write_json(template_path, prefilled)
+        prefilled_from = {
+            "package_path": previous_package["path"],
+            "package_digest": previous_package["digest"],
+            "carried_fields": list(PREFILL_CARRIED_FIELDS),
+            "stale_threads": stale_threads,
+            "contract": package_contract(),
+            "note": (
+                "The template above is prefilled from the recorded package: goal, criteria, "
+                "claims, constraints, background, and questions are carried verbatim; update "
+                "entries that cite stale threads or changed evidence, keep the rest, and run "
+                "the printed record-package command - the machine re-stamps question context "
+                "bindings and the thread registry stays fresh from the collected context."
+            ),
+        }
+    context_package_section: dict[str, Any] = {"context_package": result.get("context_package")}
+    if prefilled_from is not None and isinstance(result.get("context_package"), dict):
+        context_package_section = {
+            "context_package": {**result["context_package"], "prefilled_from": prefilled_from}
+        }
     return {
         **result,
         "status": "needs_reassessment",
@@ -3453,13 +3511,13 @@ def refresh_review(path: str) -> dict[str, Any]:
                 "supersedes set to its digest."
             ),
         },
-        "context_package": result.get("context_package"),
+        **context_package_section,
         "critic_task": critic_task,
         "reason": (
             "Findings and decisions were retained. Reassess the returned delta and affected "
             "consumers. Original critic receipts remain in the previous draft, never rebound to "
-            "new evidence. The context package must be re-recorded for the refreshed evidence; "
-            "the previous package stays immutable."
+            "new evidence. The context package template is prefilled from the recorded package; "
+            "the previous package stays immutable and is named by supersedes."
         ),
         "external_mutations": False,
     }
@@ -4301,7 +4359,7 @@ def record_draft_critic(
 # prose as placeholders), the agent edits only the prose surface, and drift
 # re-anchors machine fields instead of re-authoring the review.
 def render_content_review(path: str) -> dict[str, Any]:
-    draft, root, _progress, evidence, review_context = _selected_draft(path)
+    draft, root, progress, evidence, review_context = _selected_draft(path)
     if "participants" in draft and "arbitration" not in draft:
         raise contract.WorkflowError(
             "render-review requires the recorded arbitration receipt; import it with "
@@ -4314,7 +4372,9 @@ def render_content_review(path: str) -> dict[str, Any]:
             "render-review requires the recorded decision; record the dispositions and "
             "identity with record-input first"
         )
-    content = render.render_content(draft, review_context, evidence)
+    content = render.render_content(
+        draft, review_context, evidence, fix_policy=progress.get("fix_policy")
+    )
     draft["content"] = content
     draft["rendered"] = {
         "context_digest": draft["context_digest"],

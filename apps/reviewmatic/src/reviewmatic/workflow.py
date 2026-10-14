@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from reviewmatic import context, run_panel, tail
+from reviewmatic import context, ocr_critic, run_panel, tail
 from reviewmatic import draft as draft_module
 
 if TYPE_CHECKING:
@@ -87,6 +87,16 @@ def selected(root: Path, stages: set[str]) -> dict[str, Any]:
     return progress
 
 
+# Decision 80/A2: a validate-only probe answers "does this receipt pass?" without
+# the write: no artifact store entry, no panel binding, no stage advance, no
+# digest change. The response never mutates review state.
+VALIDATE_ONLY_NOTE = (
+    "Validate-only probe: every record validation ran and nothing was written - the "
+    "review state, stage, and digests are unchanged. Re-run without --validate-only to "
+    "record the artifact."
+)
+
+
 def replace_artifact(args: argparse.Namespace) -> dict[str, Any]:
     """Validate one replacement artifact, rebind it, and rewind the stage.
 
@@ -115,6 +125,10 @@ def replace_artifact(args: argparse.Namespace) -> dict[str, Any]:
         changes[f"{item}_path"] = None
         changes[f"{item}_digest"] = None
     context.advance_progress(root, target_stage, **changes)
+    repo_root = progress.get("repo_root")
+    continuation: list[str] = ["run", "--resume", "--url", _run_resume_url(root)]
+    if isinstance(repo_root, str) and repo_root:
+        continuation.extend(("--repo-root", repo_root))
     return {
         "status": "ok",
         "kind": kind,
@@ -123,8 +137,26 @@ def replace_artifact(args: argparse.Namespace) -> dict[str, Any]:
         "previous_digest": progress.get(f"{prefix}_digest"),
         "stage": target_stage,
         "cleared": sorted(f"{item}_*" for item in downstream),
+        "continuation": (
+            f"The derived stages are rewound: continue from the {target_stage} stage - rerun "
+            "the same reviewmatic run --resume command, or on the repair path follow the "
+            "printed next_action; the replaced artifact is rebound and everything downstream "
+            "is rebuilt by the machine, never retranscribed."
+        ),
+        "next_action": context.runner_action(*continuation),
         "external_mutations": False,
     }
+
+
+def _run_resume_url(root: Path) -> str:
+    _, evidence = context.review_evidence_from_root(root)
+    target = evidence.get("target")
+    url = target.get("url") if isinstance(target, dict) else None
+    if not portable.nonempty_string(url):
+        raise portable.WorkflowError(
+            "the replace-artifact continuation requires the collected merge request URL"
+        )
+    return str(url)
 
 
 def _validate_replacement(
@@ -307,6 +339,16 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         portable.validate_critic(value, evidence_digest, scope)
         if not portable.detailed_findings_are_valid(value.get("findings")):
             raise portable.WorkflowError("critic findings require complete structured evidence")
+        # Decision 80/A2: the probe answers "does this receipt pass?" and stops
+        # before any write, so trying a receipt can never advance the stage.
+        if getattr(args, "validate_only", False):
+            return {
+                "status": "valid",
+                "kind": args.kind,
+                "validate_only": True,
+                "note": VALIDATE_ONLY_NOTE,
+                "external_mutations": False,
+            }
     path, digest = portable.write_artifact(root, args.kind, value)
     response: dict[str, Any] = {
         "status": "ok",
@@ -318,6 +360,7 @@ def record(args: argparse.Namespace) -> dict[str, Any]:
         bind_critic_receipt(root, progress, path, digest)
         response.update(
             stage="finalize_missing",
+            contract=context.critic_receipt_contract(),
             next_action=context.runner_action("finalize", "--artifact-root", str(root)),
         )
     return response
@@ -365,6 +408,41 @@ def record_run_critic(args: argparse.Namespace) -> dict[str, Any]:
         if progress["mode"] == "incremental"
         else None
     )
+    selected_critic = next(
+        (
+            critic
+            for critic in run_panel.selected_critics(panel)
+            if str(critic["name"]) == str(args.participant)
+        ),
+        None,
+    )
+    if selected_critic is None:
+        raise portable.WorkflowError(
+            f"Unknown run-panel participant {args.participant}; the selected critics are "
+            + ", ".join(str(critic["name"]) for critic in run_panel.selected_critics(panel))
+        )
+    if ocr_critic.critic_engine(selected_critic) == "ocr":
+        raise portable.WorkflowError(
+            f"Participant {args.participant} is an OCR critic; the run executes it "
+            "mechanically on the next resume"
+        )
+    if isinstance(selected_critic.get("receipt"), dict):
+        raise portable.WorkflowError(
+            f"Participant {args.participant} already has a bound receipt; each selected "
+            "critic is imported exactly once"
+        )
+    portable.validate_critic(receipt, str(progress["evidence_digest"]), scope)
+    if not portable.detailed_findings_are_valid(receipt.get("findings")):
+        raise portable.WorkflowError("critic findings require complete structured evidence")
+    # Decision 80/A2: the same write-free probe as record-artifact --validate-only.
+    if getattr(args, "validate_only", False):
+        return {
+            "status": "valid",
+            "participant": str(args.participant),
+            "validate_only": True,
+            "note": VALIDATE_ONLY_NOTE,
+            "external_mutations": False,
+        }
     panel = run_panel.bind_receipt(
         root,
         panel,
@@ -390,6 +468,7 @@ def record_run_critic(args: argparse.Namespace) -> dict[str, Any]:
         "artifact_root": str(root),
         "participant": str(args.participant),
         "panel": run_panel.summary(panel),
+        "contract": context.critic_receipt_contract(),
         "next_action": context.runner_action(
             "record-run-critic",
             "--artifact-root",
@@ -449,6 +528,7 @@ def complete_run_panel(root_value: str) -> dict[str, Any]:
         "artifact_path": str(path),
         "digest": digest,
         "panel": run_panel.summary(panel),
+        "contract": context.critic_receipt_contract(),
         "next_action": context.runner_action(*continuation),
         "external_mutations": False,
     }

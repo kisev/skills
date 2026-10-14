@@ -23,9 +23,11 @@ edits, not a repeat of panel → decision → content.
    printed commands.
 2. **Critic content checked before arbitration.** A critic receipt whose
    content needs correction before the panel is arbitrated: in the run path
-   replace the aggregate receipt with `reviewmatic replace-artifact --artifact-root ROOT --kind critic_receipt --path FILE` and continue from
-   the finalize stage; in the draft path a recorded receipt is never edited in
-   place — run `reviewmatic refresh-review --draft DRAFT` and import fresh
+   replace the aggregate receipt with `reviewmatic replace-artifact --artifact-root ROOT --kind critic_receipt --path FILE`; the response prints
+   the rewound stage and the exact continuation — continue from the finalize
+   stage with the printed `run --resume` command, and the machine rebuilds
+   everything downstream; in the draft path a recorded receipt is never edited
+   in place — run `reviewmatic refresh-review --draft DRAFT` and import fresh
    receipts, because the panel selection is fixed once receipts exist.
 3. **Post-plan texts.** Wording, layout, commands, positions, or fix
    representation of a finalized plan: `reviewmatic repair-review --artifact-root ROOT --kind presentation` (below). Changed decisions of a
@@ -74,10 +76,13 @@ fresh critic receipts plus a fresh arbitration receipt against the refreshed
 package. Reassess the reported delta and affected consumers. Old critic receipts
 remain in the old draft and are never rebound by replacing digests. Obtain real
 independent coverage when the changed analysis scope requires it. The context
-package is re-recorded for the refreshed evidence: carry still-valid items
-forward, update entries that cite stale threads or changed evidence, set
-`supersedes` to the previous package digest, and keep prior answers in the
-previous draft; the runtime reports the previous package and its stale threads.
+package template is materialized prefilled from the recorded package — goal,
+criteria, claims, constraints, background, and questions carried verbatim, the
+binding and thread registry refreshed by the machine, `supersedes` preset to the
+previous package digest, and the printed package contract naming the stale
+threads: update entries that cite stale threads or changed evidence, keep the
+rest, and run the printed record-package command; the runtime reports the
+previous package and re-stamps question context bindings on record.
 
 Finalization itself no longer contacts GitLab: a CI-only or material drift after
 preparation is caught by an explicit `refresh-review` and by the head check that

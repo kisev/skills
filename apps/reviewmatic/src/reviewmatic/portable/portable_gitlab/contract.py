@@ -1944,6 +1944,333 @@ def companions_are_valid(value: object) -> bool:
     return True
 
 
+# Decision 80/B3: an author may decline the release illustration. The declined
+# form is the canonical note below - never an invented prompt (a dummy value
+# would fabricate artwork direction the user never chose). The stored
+# release_content schema keeps its required non-empty string, so the note is
+# the honest stored representation, and every consumer below treats it as
+# "no artwork": no prompt asset, no announcement attachment.
+ILLUSTRATION_DECLINED_NOTE = "Illustration declined for this release: no artwork ships with it."
+
+
+def illustration_is_declined(content: dict[str, Any]) -> bool:
+    return str(content.get("illustration_prompt")) == ILLUSTRATION_DECLINED_NOTE
+
+
+def normalize_release_content_input(value: object, base_directory: Path) -> dict[str, Any]:
+    """Materialize the authoring content input into the stored release_content
+    form (decision 80/B3+B5): description and announcement may arrive as prose
+    asset files referenced by ``description_file``/``announcement_file``, and
+    an empty ``illustration_prompt`` records the declined illustration. The
+    frozen stored shape is produced here; the input file itself is never
+    stored, so long prose never travels through JSON strings."""
+    if not isinstance(value, dict):
+        raise WorkflowError("release content input must be a JSON object")
+    known = {
+        "title",
+        "description",
+        "version",
+        "announcement",
+        "illustration_prompt",
+        "label_intent",
+        "milestone_title",
+        "contributors",
+        "reviewers",
+        "illustration_style",
+        "work_items",
+        "description_file",
+        "announcement_file",
+    }
+    unknown = sorted(set(value) - known)
+    if unknown:
+        raise WorkflowError(
+            "release content input has unknown keys "
+            + ", ".join(unknown)
+            + "; description and announcement are prose assets referenced by "
+            "description_file/announcement_file or inline non-empty strings"
+        )
+    content = {
+        key: value[key] for key in value if key not in {"description_file", "announcement_file"}
+    }
+    for prose_key, file_key in (
+        ("description", "description_file"),
+        ("announcement", "announcement_file"),
+    ):
+        if file_key in value:
+            if not isinstance(value[file_key], str) or value[file_key] == "":
+                raise WorkflowError(f"{file_key} must name the prose asset file for {prose_key}")
+            if isinstance(content.get(prose_key), str) and content[prose_key] != "":
+                raise WorkflowError(
+                    f"provide either the inline {prose_key} or {file_key}, never both"
+                )
+            prose_path = Path(cast("str", value[file_key]))
+            if not prose_path.is_absolute():
+                prose_path = base_directory / prose_path
+            if not prose_path.is_file():
+                raise WorkflowError(
+                    f"release {prose_key} prose asset {prose_path} is missing; author the "
+                    "file first - scaffold never writes prose for you"
+                )
+            try:
+                prose = regular_file(prose_path, f"release {prose_key} prose asset").read_text(
+                    encoding="utf-8"
+                )
+            except (OSError, UnicodeDecodeError) as exc:
+                raise WorkflowError(
+                    f"release {prose_key} prose asset {prose_path} is unreadable; author the "
+                    "file first - scaffold never writes prose for you"
+                ) from exc
+            if prose.strip() == "":
+                raise WorkflowError(
+                    f"release {prose_key} prose asset {prose_path} is empty; author the prose "
+                    "before scaffolding"
+                )
+            content[prose_key] = prose
+        if not isinstance(content.get(prose_key), str) or content[prose_key] == "":
+            raise WorkflowError(
+                f"{prose_key} must be non-empty prose: inline it or reference the prose asset "
+                f"with {file_key}"
+            )
+    prompt = content.get("illustration_prompt")
+    if not isinstance(prompt, str):
+        raise WorkflowError(
+            "illustration_prompt must be present: an empty string declines the illustration "
+            "(the runtime records the declined note), and a non-empty string is the artwork "
+            "prompt - never invent one when the illustration is declined"
+        )
+    if prompt == "":
+        content["illustration_prompt"] = ILLUSTRATION_DECLINED_NOTE
+    return cast("dict[str, Any]", content)
+
+
+def release_content_template(bundle_file: str, inventory_file: str) -> dict[str, object]:
+    """Materialize the prefilled release content template with its printed
+    field contract (decision 80/B2): the author edits semantics and prose
+    assets only, never learns the format from runtime sources."""
+    source = regular_file(Path(bundle_file), "evidence snapshot")
+    _, bundle = artifact_payload(source, "evidence_snapshot")
+    root = artifact_root(Path(str(bundle["artifact_root"])))
+    inventory_module = importlib.import_module("release_inventory")
+    _, release_inventory, _inventory_digest = inventory_module.validate_inventory_binding(
+        inventory_file, source
+    )
+    authoring = private_directory(root / "authoring")
+    template_path = authoring / "release-content.template.json"
+    description_path = authoring / "release-description.md"
+    announcement_path = authoring / "release-announcement.md"
+    contributors = [
+        str(item["display"])
+        for item in cast("list[dict[str, Any]]", release_inventory.get("contributors", []))
+        if isinstance(item, dict) and nonempty_string(item.get("display"))
+    ]
+    reviewers = [
+        f"@{item['username']}"
+        for item in cast("list[dict[str, Any]]", release_inventory.get("reviewers", []))
+        if isinstance(item, dict) and nonempty_string(item.get("username"))
+    ]
+    work_items = [
+        {
+            "project_id": int(item["project_id"]),
+            "iid": int(item["iid"]),
+            "action": "",
+            "rationale": "",
+            "uncertain": False,
+            "comment": None,
+        }
+        for item in cast("list[dict[str, Any]]", release_inventory.get("work_item_candidates", []))
+        if isinstance(item, dict)
+    ]
+    template = {
+        "title": "",
+        "description_file": description_path.name,
+        "announcement_file": announcement_path.name,
+        "version": "",
+        "illustration_prompt": "",
+        "label_intent": {
+            **dict.fromkeys(LABEL_ROLE_VALUES),
+            "change_type": "release",
+            "compatibility": "",
+        },
+        "milestone_title": "",
+        "contributors": contributors,
+        "reviewers": reviewers,
+        "illustration_style": {"preset": "", "reference": None, "custom": None},
+        "work_items": work_items,
+    }
+    write_json(template_path, template)
+    for prose_path, role in (
+        (description_path, "description"),
+        (announcement_path, "announcement"),
+    ):
+        if not prose_path.exists():
+            write_bytes(
+                prose_path,
+                (
+                    f"<!-- Replace this whole file with the release {role} prose in the "
+                    "language of the latest user request; scaffold reads it as the published "
+                    f"{role}. -->\n"
+                ).encode(),
+            )
+    milestone_titles = [
+        str(item.get("title"))
+        for item in cast("list[dict[str, Any]]", release_inventory.get("milestone_candidates", []))
+        if isinstance(item, dict) and nonempty_string(item.get("title"))
+    ]
+    previous_ref = release_inventory.get("previous_ref")
+    return {
+        "status": "ok",
+        "summary": {
+            "tldr": "Materialized the prefilled release content template and prose assets.",
+            "scope": [str(cast("dict[str, Any]", bundle["target"]).get("url", "local"))],
+            "risks": [],
+            "checks": ["exact inventory binding", "prefilled inventory choices"],
+        },
+        "template_path": str(template_path),
+        "prose_assets": [
+            {"role": "description", "path": str(description_path)},
+            {"role": "announcement", "path": str(announcement_path)},
+        ],
+        "inventory_choices": {
+            "contributors": contributors,
+            "reviewers": reviewers,
+            "milestone_candidates": milestone_titles,
+            "work_item_candidates": [
+                {"project_id": item["project_id"], "iid": item["iid"]} for item in work_items
+            ],
+            "previous_ref": previous_ref if isinstance(previous_ref, str) else None,
+        },
+        "contract": {
+            "reading_discipline": (
+                "This response is the complete content contract: never read runtime sources, "
+                "schemas, or references to learn the content format."
+            ),
+            "version": (
+                "exact next stable SemVer bump of previous_ref "
+                f"({previous_ref if isinstance(previous_ref, str) else 'none: only 1.0.0 with major'}); "
+                "prerelease, build metadata, and pre-1.0 fail closed"
+            ),
+            "label_intent": {role: sorted(values) for role, values in LABEL_ROLE_VALUES.items()},
+            "label_intent_release_rule": (
+                "change_type must stay release and compatibility must be one of major, minor, "
+                "patch; every other role stays null unless a label is actually applied"
+            ),
+            "illustration_style": (
+                "preset one of pixel_art, literary, neutral_abstract, custom; literary requires "
+                "a non-null reference, custom requires non-null custom text, the other presets "
+                "keep reference and custom null"
+            ),
+            "illustration_prompt": (
+                "optional: leave the empty string to decline the illustration - the runtime "
+                "records the declined note; never invent an artwork prompt"
+            ),
+            "work_items[].action": "one of: close, comment, no_action",
+            "work_items[].comment": ("non-null prose only when action is comment; null otherwise"),
+            "work_items[].rationale": "non-empty, evidence-based",
+            "work_items[].uncertain": "boolean; make uncertainty prominent, never ask work-item questions",
+            "work_items coverage": (
+                "exactly one decision row per inventory work_item_candidate, no extras"
+            ),
+            "prose": (
+                "description and announcement are prose assets: author the listed .md files "
+                "in the language of the latest user request; never inline long prose into the "
+                "JSON, and run the humanize pass over both before scaffolding"
+            ),
+            "contributors_reviewers": (
+                "subsets of the inventory lists prefilled above; deduplicated by verified "
+                "GitLab identity"
+            ),
+        },
+        "next_action": {
+            "command": (
+                f"{Path(sys.argv[0]).name} scaffold --bundle {shlex.quote(bundle_file)} "
+                f"--content {shlex.quote(str(template_path))} "
+                f"--inventory {shlex.quote(inventory_file)}"
+            ),
+            "note": ("fill the template and the two prose assets, then run the scaffold command"),
+        },
+        "external_mutations": False,
+    }
+
+
+def rebind_release_plan(plan_value: str) -> dict[str, object]:
+    """One-step stale rebind (decision 80/B4): collect fresh evidence, refresh
+    the inventory, and rebuild the publication plan from the recorded content
+    in one invocation - the agent never re-runs the four-step chain by hand."""
+    root, _plan_path, plan, _plan_digest, _source, baseline, previous_inventory = plan_context(
+        plan_value
+    )
+    del root  # the rebuild derives its own artifact root from the fresh bundle
+    if previous_inventory is None:
+        raise WorkflowError(
+            "the release plan rebind requires the recorded release inventory of a "
+            "release-prepare plan"
+        )
+    content = cast("dict[str, Any]", plan["release_content"])
+    target = cast("dict[str, Any]", baseline["target"])
+    bundle = collect(
+        target,
+        "release-prepare",
+        persist=True,
+        locale=cast("str", baseline.get("project", {}).get("locale", "en")),
+    )
+    source = Path(str(bundle["preview_artifact_path"]))
+    inventory_module = importlib.import_module("release_inventory")
+    previous_ref = (
+        cast("str", previous_inventory.get("previous_ref"))
+        if previous_inventory.get("previous_ref_explicit")
+        and isinstance(previous_inventory.get("previous_ref"), str)
+        else None
+    )
+    inventory_result = inventory_module.prepare_inventory(
+        str(source), str(previous_inventory["repo_root"]), previous_ref
+    )
+    _, release_inventory, inventory_digest = inventory_module.validate_inventory_binding(
+        str(inventory_result["artifact_path"]), source
+    )
+    result = write_release_plan(
+        source,
+        bundle,
+        release_inventory,
+        inventory_digest,
+        content,
+        str(plan.get("plan_name") or "release-publication.md"),
+    )
+    before, after = fingerprint(baseline), fingerprint(bundle)
+    changed = [name for name in before if before[name] != after[name]]
+    finalize_result, _froot, finalize_evidence_path, finalize_bundle = finalize_plan(
+        str(result["plan_pointer_path"]), str(result["binding"])
+    )
+    finalize_result = finalize_payload(
+        finalize_result, finalize_evidence_path, finalize_bundle, "evidence_snapshot"
+    )
+    return {
+        "status": "ok" if not changed else "rebound",
+        "summary": {
+            "tldr": "Rebound the publication plan to fresh evidence in one step.",
+            "scope": [str(target.get("url", "local"))],
+            "risks": [f"changed: {', '.join(changed)}"] if changed else [],
+            "checks": ["fresh evidence", "fresh inventory", "recorded content reused verbatim"],
+        },
+        "changed": changed,
+        "inventory": {
+            "artifact_path": str(inventory_result["artifact_path"]),
+            "digest": inventory_digest,
+            "complete": release_inventory.get("complete") is True,
+        },
+        "binding": result["binding"],
+        "plan_path": result["plan_path"],
+        "plan_pointer_path": result["plan_pointer_path"],
+        "markdown_path": result["markdown_path"],
+        "finalize": finalize_result,
+        "note": (
+            "The recorded release content moved verbatim: nothing was re-authored. Review the "
+            "printed changed fingerprints with the user, then run the printed finalize command "
+            "before any publication command."
+        ),
+        "external_mutations": False,
+    }
+
+
 def release_content_shape_is_valid(value: object) -> bool:
     required = {
         "title",
@@ -4189,12 +4516,19 @@ def release_request_specs(
 
     if stage == "pre_merge":
         announcement = release_asset(root, "announcement", "md", content["announcement"])
-        prompt = release_asset(root, "illustration-prompt", "md", content["illustration_prompt"])
+        declined_illustration = illustration_is_declined(content)
+        release_assets = [description, announcement]
+        prompt: dict[str, str] | None = None
+        if not declined_illustration:
+            prompt = release_asset(
+                root, "illustration-prompt", "md", content["illustration_prompt"]
+            )
+            release_assets.append(prompt)
         request(
             "release-assets",
             "record immutable release assets",
             None,
-            [description, announcement, prompt],
+            release_assets,
         )
         milestone_exists = any(
             isinstance(item, dict) and item.get("title") == content["milestone_title"]
@@ -4251,23 +4585,25 @@ def release_request_specs(
         if changed:
             update.append("--yes")
             request("update-release-mr", "update release merge request", update, [description])
+        announcement_command = [
+            "glab",
+            "mr",
+            "note",
+            "create",
+            iid,
+            "-R",
+            repo,
+            "--resolvable=false",
+            "--message",
+            content["announcement"],
+        ]
+        if prompt is not None:
+            announcement_command.extend(("--attach", prompt["path"]))
         request(
             "publish-announcement",
-            "publish announcement and attach illustration prompt",
-            [
-                "glab",
-                "mr",
-                "note",
-                "create",
-                iid,
-                "-R",
-                repo,
-                "--resolvable=false",
-                "--message",
-                content["announcement"],
-                "--attach",
-                prompt["path"],
-            ],
+            "publish announcement"
+            + ("" if prompt is not None else " without an illustration attachment"),
+            announcement_command,
         )
         request(
             "merge-release-mr",
@@ -4464,23 +4800,41 @@ def release_publication_markdown(
         f"- Illustration reference: {content['illustration_style']['reference'] or 'none'}",
         f"- Illustration custom direction: {content['illustration_style']['custom'] or 'none'}",
         "- `external_mutations=false` means every shown command is manual only; this helper never executes it.",
+        (
+            "- Format: `sh` blocks are exact manual commands (none was executed); payload files"
+            " are immutable and consumed by their commands; work-item lines carry full GitLab"
+            " URLs; short `!IID` refs appear only inside content destined for GitLab."
+        ),
         "",
         "## Release content",
         "",
         f"### Title\n\n{content['title']}",
         f"\n### Description\n\n{content['description']}",
         f"\n### Announcement\n\n{content['announcement']}",
-        f"\n### Illustration prompt\n\n{content['illustration_prompt']}",
+        (
+            f"\n### Illustration prompt\n\n{content['illustration_prompt']}"
+            if not illustration_is_declined(content)
+            else "\n### Illustration\n\nDeclined: no artwork ships with this release."
+        ),
         "",
         "## Work-item decisions",
         "",
     ]
+    work_item_urls = {
+        (int(item["project_id"]), int(item["iid"])): str((item.get("details") or {}).get("web_url"))
+        for item in cast("list[dict[str, Any]]", inventory.get("work_item_candidates", []))
+        if isinstance(item, dict) and isinstance(item.get("details"), dict)
+    }
     for decision in content["work_items"]:
         uncertainty = "uncertain" if decision["uncertain"] else "certain"
-        lines.append(
-            f"- `{decision['project_id']}#{decision['iid']}`: `{decision['action']}`; "
-            f"{uncertainty}; {decision['rationale']}"
+        identity = (int(decision["project_id"]), int(decision["iid"]))
+        work_item_url = work_item_urls.get(identity, "")
+        locator = (
+            f"[{work_item_url}]({work_item_url})"
+            if work_item_url
+            else (f"`{decision['project_id']}#{decision['iid']}`")
         )
+        lines.append(f"- {locator}: `{decision['action']}`; {uncertainty}; {decision['rationale']}")
     lines.extend(["", "## Finalize this stage", ""])
     if complete:
         lines.extend(["```sh", finalize_command, "```"])
@@ -4504,9 +4858,11 @@ def release_publication_markdown(
                 for item in content["work_items"]
                 if item["project_id"] == project_id and item["iid"] == iid
             )
+            work_item_url = work_item_urls.get((project_id, iid), "")
             lines.extend(
                 [
                     "",
+                    *([f"Work item: {work_item_url}"] if work_item_url else []),
                     f"Rationale: {decision['rationale']}",
                     f"Uncertain: `{'true' if decision['uncertain'] else 'false'}`",
                 ]
@@ -4588,6 +4944,127 @@ def publish_stable_release(
     return stable_plan, stable_markdown
 
 
+def write_release_plan(
+    source: Path,
+    bundle: dict[str, Any],
+    release_inventory: dict[str, Any],
+    inventory_digest: str,
+    content: dict[str, Any],
+    plan_name: str,
+) -> dict[str, object]:
+    """Build and persist one release publication plan from validated content
+    (the shared body of ``scaffold`` and ``rebind-release``)."""
+    root = artifact_root(Path(str(bundle["artifact_root"])))
+    release_label_intent = cast("dict[str, str | None]", content["label_intent"])
+    if release_label_intent["change_type"] != "release" or release_label_intent[
+        "compatibility"
+    ] not in {"major", "minor", "patch"}:
+        raise WorkflowError("release content requires release and compatibility label intent")
+    label_review = review_labels(bundle, release_label_intent)
+    complete = (
+        bundle.get("retrieval_complete") is True
+        and release_inventory.get("complete") is True
+        and label_review.get("complete") is True
+        and cast("dict[str, Any]", bundle.get("object", {})).get("state") == "opened"
+    )
+    requests = release_request_specs(
+        root, bundle, content, release_inventory, label_review, "pre_merge", None, complete
+    )
+    write_release_request_assets(root, requests)
+    binding = release_binding(
+        hashlib.sha256(source.read_bytes()).hexdigest(),
+        inventory_digest,
+        content,
+        requests,
+        "pre_merge",
+        None,
+        None,
+    )
+    markdown = release_publication_markdown(
+        root,
+        bundle,
+        release_inventory,
+        content,
+        requests,
+        "pre_merge",
+        None,
+        binding,
+        complete,
+    )
+    companion_pairs: list[tuple[str, str]] = [
+        ("description", content["description"]),
+        ("announcement", content["announcement"]),
+    ]
+    if not illustration_is_declined(content):
+        companion_pairs.append(("illustration-prompt", content["illustration_prompt"]))
+    release_companions = [
+        {
+            "name": f"release-{role}-v{content['version']}.md",
+            "content": value,
+            "sha256": hashlib.sha256(value.encode()).hexdigest(),
+        }
+        for role, value in companion_pairs
+    ]
+    payload = {
+        "profile": "release-prepare",
+        "external_mutations": False,
+        "target": bundle["target"],
+        "evidence_digest": hashlib.sha256(source.read_bytes()).hexdigest(),
+        "complete": complete,
+        "markdown": markdown,
+        "plan_name": Path(plan_name).name,
+        "inventory_digest": inventory_digest,
+        "release_version": content["version"],
+        "companions": release_companions,
+        "label_review": label_review,
+        "stage": "pre_merge",
+        "release_content": content,
+        "requests": requests,
+        "post_merge_sha": None,
+        "release_target_state": None,
+    }
+    path, plan_digest = write_artifact(root, "publication_plan", payload)
+    markdown_path, markdown_digest = write_companion(path.with_suffix(".md"), markdown)
+    companion_outputs: list[dict[str, str]] = []
+    for companion in release_companions:
+        companion_path, companion_digest = write_companion(
+            path.with_name(f"{plan_digest}-{companion['name']}"), companion["content"]
+        )
+        companion_outputs.append(
+            {
+                "name": companion["name"],
+                "path": str(companion_path),
+                "digest": companion_digest,
+            }
+        )
+    stable_plan_path: Path | None = None
+    stable_markdown_path: Path | None = None
+    if complete:
+        stable_plan_path, stable_markdown_path = publish_stable_release(
+            root, path, plan_digest, binding, markdown
+        )
+    return {
+        "status": "ok" if complete else "incomplete",
+        "summary": {
+            "tldr": "Prepared a local Markdown plan for manual release publication.",
+            "scope": [str(bundle.get("target", {}).get("url", "local"))],
+            "risks": [] if complete else ["collection, inventory, or label intent incomplete"],
+            "checks": ["schema-valid evidence", "exact release inventory", "semantic binding"],
+        },
+        "artifact_path": str(path),
+        "digest": plan_digest,
+        "plan_path": str(stable_plan_path) if stable_plan_path is not None else None,
+        "plan_pointer_path": str(root / "release-publication.json"),
+        "binding": binding,
+        "markdown_path": str(stable_markdown_path) if stable_markdown_path is not None else None,
+        "immutable_markdown_path": str(markdown_path),
+        "markdown_digest": markdown_digest,
+        "companions": companion_outputs,
+        "requests": requests,
+        "external_mutations": False,
+    }
+
+
 def scaffold(
     bundle_file: str,
     content_file: str,
@@ -4613,112 +5090,22 @@ def scaffold(
         _, release_inventory, inventory_digest = inventory_module.validate_inventory_binding(
             inventory_file, source
         )
-        content = read_json(Path(content_file), "release content")
+        content = normalize_release_content_input(
+            read_json(Path(content_file), "release content"),
+            Path(content_file).resolve().parent,
+        )
         if not release_content_is_valid(content, release_inventory):
             raise WorkflowError(
                 "release content is invalid or contains choices outside the exact inventory"
             )
-        release_label_intent = cast("dict[str, str | None]", content["label_intent"])
-        if release_label_intent["change_type"] != "release" or release_label_intent[
-            "compatibility"
-        ] not in {"major", "minor", "patch"}:
-            raise WorkflowError("release content requires release and compatibility label intent")
-        label_review = review_labels(bundle, release_label_intent)
-        complete = (
-            bundle.get("retrieval_complete") is True
-            and release_inventory.get("complete") is True
-            and label_review.get("complete") is True
-            and cast("dict[str, Any]", bundle.get("object", {})).get("state") == "opened"
-        )
-        requests = release_request_specs(
-            root, bundle, content, release_inventory, label_review, "pre_merge", None, complete
-        )
-        write_release_request_assets(root, requests)
-        binding = release_binding(
-            evidence_digest, inventory_digest, content, requests, "pre_merge", None, None
-        )
-        markdown = release_publication_markdown(
-            root,
+        return write_release_plan(
+            source,
             bundle,
             release_inventory,
+            inventory_digest,
             content,
-            requests,
-            "pre_merge",
-            None,
-            binding,
-            complete,
+            plan_name,
         )
-        release_companions = [
-            {
-                "name": f"release-{role}-v{content['version']}.md",
-                "content": value,
-                "sha256": hashlib.sha256(value.encode()).hexdigest(),
-            }
-            for role, value in (
-                ("description", content["description"]),
-                ("announcement", content["announcement"]),
-                ("illustration-prompt", content["illustration_prompt"]),
-            )
-        ]
-        payload = {
-            "profile": "release-prepare",
-            "external_mutations": False,
-            "target": bundle["target"],
-            "evidence_digest": evidence_digest,
-            "complete": complete,
-            "markdown": markdown,
-            "plan_name": Path(plan_name).name,
-            "inventory_digest": inventory_digest,
-            "release_version": content["version"],
-            "companions": release_companions,
-            "label_review": label_review,
-            "stage": "pre_merge",
-            "release_content": content,
-            "requests": requests,
-            "post_merge_sha": None,
-            "release_target_state": None,
-        }
-        path, plan_digest = write_artifact(root, "publication_plan", payload)
-        markdown_path, markdown_digest = write_companion(path.with_suffix(".md"), markdown)
-        companion_outputs: list[dict[str, str]] = []
-        for companion in release_companions:
-            companion_path, companion_digest = write_companion(
-                path.with_name(f"{plan_digest}-{companion['name']}"), companion["content"]
-            )
-            companion_outputs.append(
-                {
-                    "name": companion["name"],
-                    "path": str(companion_path),
-                    "digest": companion_digest,
-                }
-            )
-        stable_plan_path: Path | None = None
-        stable_markdown_path: Path | None = None
-        if complete:
-            stable_plan_path, stable_markdown_path = publish_stable_release(
-                root, path, plan_digest, binding, markdown
-            )
-        return {
-            "status": "ok" if complete else "incomplete",
-            "summary": {
-                "tldr": "Prepared a local Markdown plan for manual release publication.",
-                "scope": [str(bundle.get("target", {}).get("url", "local"))],
-                "risks": [] if complete else ["collection, inventory, or label intent incomplete"],
-                "checks": ["schema-valid evidence", "exact release inventory", "semantic binding"],
-            },
-            "artifact_path": str(path),
-            "digest": plan_digest,
-            "plan_path": str(stable_plan_path) if stable_plan_path is not None else None,
-            "binding": binding,
-            "markdown_path": str(stable_markdown_path)
-            if stable_markdown_path is not None
-            else None,
-            "immutable_markdown_path": str(markdown_path),
-            "markdown_digest": markdown_digest,
-            "companions": companion_outputs,
-            "requests": requests,
-            "external_mutations": False,
-        }
     content_value = exact_keys(
         read_json(Path(content_file), "content"), {"title", "description"}, "content"
     )
@@ -5879,6 +6266,11 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         inventory.add_argument("--repo-root", required=True)
         inventory.add_argument("--previous-ref")
         inventory.add_argument("--workers", type=int, default=8)
+        content_template = subparsers.add_parser("content-template")
+        content_template.add_argument("--bundle", required=True)
+        content_template.add_argument("--inventory", required=True)
+        rebind = subparsers.add_parser("rebind")
+        rebind.add_argument("--plan", required=True)
         post_merge = subparsers.add_parser("post-merge")
         post_merge.add_argument("--plan", required=True)
         post_merge.add_argument("--expected-binding", required=True)
@@ -5910,8 +6302,10 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
             "scaffold",
             "finalize",
             "post-merge",
+            "content-template",
+            "rebind",
         }:
-            if args.command == "scaffold":
+            if args.command in {"scaffold", "content-template"}:
                 _, input_payload = artifact_payload(Path(args.bundle), "evidence_snapshot")
             else:
                 input_path = Path(args.plan)
@@ -5946,6 +6340,13 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
         if args.command == "post-merge":
             result = post_merge_plan(args.plan, args.expected_binding, args.content)
             emit(result)
+            return 0
+        if args.command == "content-template":
+            emit(release_content_template(args.bundle, args.inventory))
+            return 0
+        if args.command == "rebind":
+            rebind_result = rebind_release_plan(args.plan)
+            emit(rebind_result)
             return 0
         if args.command == "prepare":
             if bool(args.url) == bool(args.project_url):
@@ -6089,6 +6490,25 @@ def run(profile: str, expected: set[str], argv: list[str] | None = None) -> int:
                 "result": result,
                 "external_mutations": False,
             }
+            if profile == "release-prepare" and result["status"] == "stale":
+                # Decision 80/B4: the stale refusal prints the one-step rebind
+                # pipeline - one command rebuilds plan and inventory from the
+                # recorded content in a single invocation.
+                response["rebind_command"] = shlex.join(
+                    [
+                        sys.executable,
+                        str(Path(sys.argv[0]).resolve()),
+                        "rebind",
+                        "--plan",
+                        str(args.plan),
+                    ]
+                )
+                response["rebind_note"] = (
+                    "The plan is stale. Run the printed rebind command: one invocation collects "
+                    "fresh evidence, refreshes the inventory, rebuilds the plan from the recorded "
+                    "content, and finalizes - never re-run the prepare, inventory, scaffold, "
+                    "finalize chain by hand."
+                )
             if profile == "mr-prepare":
                 from .mr_publication import freshness_chat
 

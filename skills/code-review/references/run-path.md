@@ -59,7 +59,10 @@ background (thread registry and open questions verbatim, judgment sections
 under their byte caps — the poll measured exactly this render), invokes the
 `ocr` CLI over the exact base..head range, maps the comments into one
 receipt, and binds it to the selected critic. Each model critic stops the run
-once: the stop names the participant, prints its ready receipt template, and
+once: the stop names the participant, prints its ready receipt template, the
+printed receipt contract (the complete field dictionaries for findings and
+question answers, the assigned question ids when a package is recorded, and
+the context\_digest semantics), and
 the exact `reviewmatic record-run-critic --artifact-root <root> --input <template> --participant <name>` command — launch the critic as an
 independent subagent over the collected context and the managed review
 worktree, fill the receipt verbatim, and run the printed command; with the
@@ -68,11 +71,29 @@ The remaining stops are the decision and the prose. At the decision stop,
 launch the selected arbitrator in a separate native session: it verdicts every
 critic finding and may record `publication_intents` (one finding ID with
 `publication: {kind, fix_mode}` and optional dependencies); import the
-decision with the returned `reviewmatic finalize-review` command. A recorded
+decision with the returned `reviewmatic finalize-review` command. The decision
+stop prints its own contract: the template arrives prefilled from the recorded
+finalize report and critic receipt (blocking ids, one response row per
+candidate finding and open thread, one CI assessment row per unsuccessful job
+— edit semantics, never retype prepared rows), next to the dictionaries
+`responses[].decision` (`accept|reject`), severity, verdict
+(`ready|blocked|not_ready`), `ci_job_assessments[].classification`, and the
+arbitration `merge_verdict` ladder, plus the blocking rule: every accepted
+non-low finding is blocking, "accepted but not blocking" exists only as a
+`severity_override` to low with a reason, and a refused merge with salvaged
+work is the `push_back` verdict — never a hidden finding.
+Before importing a critic receipt you may probe it without any write:
+`reviewmatic record-artifact --kind critic_receipt --validate-only` (with the
+same `--evidence`/`--input` arguments) runs every record validation and changes
+nothing — the stage and every digest stay identical, so a probe can never
+advance the run; the same `--validate-only` flag exists on
+`reviewmatic record-run-critic`.
+A recorded
 refusal names the rule, the offending path, the valid form, and — for a wrong
 recorded artifact before the final plan — the exact `replace-artifact` repair
 command: correct the offending authored artifact and run that printed command;
-it rebinds the artifact and rewinds the derived stages. Never edit a bound
+it rebinds the artifact, rewinds the derived stages, and prints the stage to
+continue from. Never edit a bound
 artifact file behind the runtime's back, and never read contract references to
 re-derive a refusal: the printed message is the complete repair contract. The run then
 invokes the shared renderer, materializes `content-prose-<digest>.json`, and

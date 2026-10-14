@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from reviewmatic import context
 from reviewmatic.portable.portable_gitlab import contract
@@ -176,8 +177,109 @@ def extract_superseded_results(
     )
 
 
+def assigned_question_ids(root: str | Path) -> list[str] | None:
+    """Ids of the questions the recorded context package assigns to critics.
+
+    None when this review has no recorded package: nothing is assigned and no
+    answer is owed. Every critic authoring surface prints the list (decision
+    80/A4).
+    """
+    pointer = read_package_pointer(root)
+    if pointer is None:
+        return None
+    try:
+        _, payload = contract.artifact_payload(
+            Path(str(pointer["package_path"])), "context_package"
+        )
+    except contract.WorkflowError:
+        return None
+    return [
+        str(question["id"])
+        for question in cast("list[dict[str, Any]]", payload.get("questions") or [])
+        if question.get("critic") is True
+    ]
+
+
 def package_pointer_path(root: str | Path) -> Path:
     return Path(root) / PACKAGE_POINTER_NAME
+
+
+# Decision 80/A7: the authored narrative fields a refreshed package template
+# carries verbatim from the previous recorded package. Machine-owned fields
+# (binding, thread_registry, prior_decisions) stay fresh from the new context.
+PREFILL_CARRIED_FIELDS = (
+    "goal",
+    "acceptance_criteria",
+    "claims",
+    "constraints",
+    "background",
+    "questions",
+)
+
+
+def prefill_package_from_previous(
+    previous_payload: dict[str, Any], template: dict[str, Any], previous_digest: str
+) -> dict[str, Any]:
+    """Materialize the refreshed package template prefilled from the previous
+    recorded package: goal, criteria, claims, constraints, background, and
+    questions verbatim; the machine-owned binding and thread registry stay
+    fresh from the collected context; ``supersedes`` names the previous digest.
+    Question context bindings are dropped, so record-package re-stamps them
+    against the refreshed package."""
+    value = copy.deepcopy(template)
+    for key in PREFILL_CARRIED_FIELDS:
+        if key in previous_payload:
+            value[key] = copy.deepcopy(previous_payload[key])
+    for question in cast("list[dict[str, Any]]", value.get("questions") or []):
+        question.pop("context_digest", None)
+    # The thread registry stays machine-fresh from the collected context, but
+    # the authored summary and relevance of a still-present thread are rebound
+    # by machine: the agent never retypes them and never edits state or url.
+    previous_registry = {
+        str(item.get("id")): item
+        for item in cast("list[dict[str, Any]]", previous_payload.get("thread_registry") or [])
+        if isinstance(item, dict)
+    }
+    for item in cast("list[dict[str, Any]]", value.get("thread_registry") or []):
+        previous_entry = previous_registry.get(str(item.get("id")))
+        if previous_entry is None:
+            continue
+        for prose_field in ("summary", "review_relevance"):
+            if not str(item.get(prose_field) or "") and previous_entry.get(prose_field):
+                item[prose_field] = previous_entry[prose_field]
+    value["supersedes"] = previous_digest
+    return value
+
+
+def package_contract() -> dict[str, Any]:
+    """The printed context-package contract (decision 80/A4+A8): field
+    dictionaries and rules for the package authoring surface."""
+    return {
+        "goal": "status: known (with non-empty text) or unknown; never invented",
+        "acceptance_criteria": {
+            "status": "one of: known, unknown",
+            "items": "non-empty strings; known requires at least one",
+        },
+        "claims[*]": "unique id + text (+ disputed_by: ids of disputed claims)",
+        "constraints[*]": "non-empty strings",
+        "questions[*]": {
+            "id": "unique id",
+            "text": "non-empty question text",
+            "critic": "true assigns the question to every model critic",
+        },
+        "thread_registry[*]": (
+            "machine-rendered from the collected discussions: id, state, summary, "
+            "review_relevance - never authored by hand"
+        ),
+        "binding": "machine-owned: stamps the exact evidence identity",
+        "context_digest_rule": (
+            "question context_digest values are stamped by record-package from the package's "
+            "meaningful context; every critic answer copies the answered question's own "
+            "context_digest - never the evidence digest"
+        ),
+        "answer_verdicts": "one of: confirmed, refuted, not_verified",
+        "verification_verdicts": "one of: confirmed, refuted, unresolved",
+    }
 
 
 def read_package_pointer(root: str | Path) -> dict[str, Any] | None:

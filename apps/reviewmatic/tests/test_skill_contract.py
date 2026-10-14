@@ -666,3 +666,111 @@ def test_standalone_runbook_and_semantic_input_contract_are_documented() -> None
         "Green",  # Timing acceptance must not be inferred from offline tests.
     ):
         assert fragment in history, fragment
+
+
+def _normalized(path: Path) -> str:
+    # The markdown formatter escapes underscores in prose; unescape them so
+    # assertions can use the runtime's literal field names.
+    return " ".join(path.read_text(encoding="utf-8").split()).replace("\\_", "_")
+
+
+def test_the_printed_critic_contract_is_the_pinned_receipt_source() -> None:
+    """A1/A4/A8: every critic surface prints the receipt contract; the skill
+    pins the printout as the only format source and the digest semantics."""
+    panel = _normalized(SKILL_DIR / "references" / "review-panel.md")
+    run_path = _normalized(SKILL_DIR / "references" / "run-path.md")
+    for fragment in (
+        "the complete receipt dictionary",
+        "confirmed|refuted|not_verified",
+        "the question's own `context_digest` from the recorded package",
+        "never the evidence digest",
+        "never open a schema or a reference to learn a receipt field",
+        "answers every question the package assigns to critics",
+    ):
+        assert fragment in panel, fragment
+    for fragment in (
+        "the printed receipt contract",
+        "the context_digest semantics",
+    ):
+        assert fragment in run_path, fragment
+
+
+def test_the_validate_only_probe_is_documented_as_write_free() -> None:
+    """A2: the skill documents the write-free receipt probe."""
+    run_path = _normalized(SKILL_DIR / "references" / "run-path.md")
+    assert "--validate-only" in run_path
+    assert "the stage and every digest stay identical" in run_path
+    flags = {command: flags for _file, command, flags, _doc in parse_invocations()}
+    assert "--validate-only" in flags.get("record-artifact", set()), (
+        "run-path.md must invoke record-artifact --validate-only so the flag stays "
+        "checked against the real CLI surface"
+    )
+
+
+def test_the_decision_surface_contract_is_documented() -> None:
+    """A3/A9: the decision stop prints vocabularies, the blocking rule, and a
+    prefilled template; the skill pins all three."""
+    run_path = _normalized(SKILL_DIR / "references" / "run-path.md")
+    for fragment in (
+        "the template arrives prefilled from the recorded",
+        "responses[].decision",
+        "`ready|blocked|not_ready`",
+        "ci_job_assessments[].classification",
+        "arbitration `merge_verdict` ladder",
+        "every accepted non-low finding is blocking",
+        "`severity_override` to low",
+        "`push_back` verdict",
+    ):
+        assert fragment in run_path, fragment
+
+
+def test_the_replace_artifact_continuation_is_printed_and_documented() -> None:
+    """A5: the runtime prints the rewound stage; repair.md routes by it."""
+    repair = _normalized(SKILL_DIR / "references" / "repair.md")
+    assert "the response prints" in repair
+    assert "the rewound stage and the exact continuation" in repair
+    assert "continue from the finalize stage" in repair
+
+
+def test_the_refresh_prefill_contract_is_documented() -> None:
+    """A7: the refreshed package materializes prefilled from the recorded one."""
+    repair = _normalized(SKILL_DIR / "references" / "repair.md")
+    for fragment in (
+        "materialized prefilled from the recorded package",
+        "carried verbatim",
+        "the binding and thread registry refreshed by the machine",
+        "`supersedes` preset to the previous package digest",
+        "the printed package contract naming the stale",
+    ):
+        assert fragment in repair, fragment
+
+
+def test_release_prepare_pins_reading_discipline_humanize_and_the_helper_contracts() -> None:
+    """B1-B5 + C1/C4: the release family prints its contracts, keeps prose in
+    assets, treats the illustration as optional, routes staleness through the
+    one-step rebind, and pins the humanize pass as a required step."""
+    release = REPO_ROOT / "skills" / "release-prepare" / "references"
+    workflow = _normalized(release / "workflow.md")
+    for fragment in (
+        # B1/B2: the printed answer is the only format source.
+        "the complete contract of every helper surface is printed",
+        "never read runtime sources",
+        "content-template --bundle",
+        # B5: prose lives in asset files, never in JSON strings.
+        "description and the announcement are prose assets",
+        "description_file",
+        "never inline long prose into the JSON content",
+        # B3: the illustration is optional without invented values.
+        "The illustration is optional",
+        "leave `illustration_prompt` empty",
+        "Never invent an artwork prompt",
+        # B4: staleness routes through the one-step rebind.
+        "rebind --plan",
+        "re-walking the prepare → inventory → scaffold → finalize chain",
+        # C1/C4: the humanize pass is a pinned workflow step with a done-when.
+        "apply the `humanize` skill to the title, description, and announcement",
+        "required workflow step, not a suggestion",
+        "garden suggestion",
+        "no sentence of the final prose relies on those patterns",
+    ):
+        assert fragment in workflow, fragment

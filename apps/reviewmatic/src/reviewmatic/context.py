@@ -1580,6 +1580,99 @@ AUTHORING_VOCABULARIES: dict[str, tuple[str, ...]] = {
     "thread_decisions[*].fix_mode": portable.THREAD_FIX_MODES,
 }
 
+# Decision 80/A3+A9: the decision surface prints its own dictionaries too —
+# responses, severities, the verdict ladder, CI classifications, and the
+# arbitration verdict ladder, so the arbitrator never transcribes an accepted
+# value from a schema or hides a push_back outside the printed vocabulary.
+DECISION_VOCABULARIES: dict[str, tuple[str, ...]] = {
+    "responses[].decision": ("accept", "reject"),
+    "severity": ("critical", "high", "medium", "low"),
+    "verdict": ("ready", "blocked", "not_ready"),
+    "ci_job_assessments[].classification": (
+        "process_gate",
+        "code_failure",
+        "infrastructure_failure",
+        "unknown",
+    ),
+    "merge_verdict": ("decline", "push_back", "merge_then_fix", "merge"),
+}
+
+# Decision 80/A9: the lock semantics the decision surface prints next to its
+# dictionaries, so "accepted but not blocking" is expressible only through the
+# sanctioned severity_override and a refused merge only through push_back.
+BLOCKING_RULE = (
+    "Blocking semantics: every accepted non-low finding is blocking (verdict not_ready); "
+    "an accepted finding becomes non-blocking only through a severity_override to low with "
+    "a recorded reason, and a refused merge with salvaged work is the arbitration "
+    "merge_verdict push_back - never a hidden accepted finding."
+)
+
+
+# Decision 80/A1: the complete detailed-finding field list - the single source
+# for the critic schema input and the printed critic receipt contract.
+DETAILED_FINDING_FIELDS: tuple[str, ...] = (
+    "id",
+    "severity",
+    "summary",
+    "risk",
+    "evidence",
+    "consequence",
+    "relation_to_change",
+    "minimum_fix",
+)
+
+
+def _printed_field_contract(property_schema: dict[str, Any]) -> str:
+    if "enum" in property_schema:
+        return "one of: " + ", ".join(str(item) for item in property_schema["enum"])
+    if property_schema.get("type") == "array":
+        items = property_schema.get("items")
+        if isinstance(items, dict) and "enum" in items:
+            return "array of: " + ", ".join(str(item) for item in items["enum"])
+        return "array of non-empty strings" if isinstance(items, dict) else "array"
+    if property_schema.get("type") == "string" and property_schema.get("minLength") == 1:
+        return "non-empty string"
+    return str(property_schema.get("type", "value"))
+
+
+# Decision 80/A1+A4+A8: the critic receipt contract the runtime prints at every
+# critic authoring surface. The field dictionaries are derived from the stored
+# artifact schema, so the printed form cannot drift from the validated form and
+# the author never opens a schema to learn a field or an accepted value.
+def critic_receipt_contract() -> dict[str, Any]:
+    definitions = cast("dict[str, Any]", portable.artifact_schema()["$defs"])
+    finding = cast("dict[str, Any]", definitions["finding"])
+    finding_properties = cast("dict[str, Any]", finding["properties"])
+    answer = cast("dict[str, Any]", definitions["context_answer"])
+    answer_properties = cast("dict[str, Any]", answer["properties"])
+    return {
+        "findings[*]": {
+            key: _printed_field_contract(finding_properties[key]) for key in DETAILED_FINDING_FIELDS
+        },
+        "question_answers[*]": {
+            "question_id": "id of one question of the recorded context package",
+            "verdict": _printed_field_contract(answer_properties["verdict"]),
+            "evidence": "concrete supporting evidence (required unless reason is set)",
+            "reason": "concrete reason (required unless evidence is set)",
+            "run_id": "this critic's real native run id",
+            "session_id": "this critic's real native session id",
+            "context_digest": "the answered question's own context_digest from the recorded context package",
+        },
+        "assigned_questions_rule": (
+            "Every model critic answers every question the recorded context package assigns "
+            "to critics (critic: true) with one question_answers entry each; one critic's "
+            "answer never covers another critic's assignment, and OCR critics answer nothing."
+        ),
+        "context_digest_rule": (
+            "question_answers[*].context_digest copies the answered question's own "
+            "context_digest from the recorded context package - the digest of that package's "
+            "meaningful context the answer was produced against. It is never the evidence "
+            "digest, never self-computed, and an answer bound to another package version is "
+            "rejected as stale."
+        ),
+    }
+
+
 # Decision 75.6 (MR !517/!538 evidence): every published answer opens with its
 # Conventional Comments label - real runbooks carried zero marks because the
 # validator stayed silent. The label is required, not decorative.
@@ -3332,6 +3425,29 @@ def structured_publication_preview(
     return result, enriched_findings, enriched_issues, enriched_threads
 
 
+def runbook_legend(locale: str) -> list[str]:
+    """The header legend that makes the runbook format explain itself
+    (decision 80/C3): a reader never guesses what a fenced preview block, a
+    command block, or a thread link is."""
+    if locale == "ru":
+        return [
+            (
+                "- Формат: fenced-блоки `PUBLICATION <id>`/`METADATA PROPOSAL <id>` - готовые тела"
+                " комментариев для вставки в GitLab; блоки ```sh - ручные команды, подготовка не"
+                " выполняла ни одной; ссылки тредов ведут на их полные URL; хэши проверенной"
+                " ревизии в скопированном тексте заменены пометкой «reviewed revision»."
+            )
+        ]
+    return [
+        (
+            "- Format: fenced `PUBLICATION <id>`/`METADATA PROPOSAL <id>` blocks are ready comment"
+            " bodies to paste into GitLab; ```sh blocks are manual commands - this preparation"
+            " executed none of them; thread links carry their full URLs; raw hashes of the"
+            " reviewed revision in copied text are replaced by a «reviewed revision» marker."
+        )
+    ]
+
+
 def review_markdown(
     evidence: dict[str, Any],
     context: dict[str, Any],
@@ -3444,6 +3560,7 @@ def review_markdown(
             if auto
             else f"- {presentation['publication_warning']}"
         ),
+        *runbook_legend(locale),
         "",
         content["summary"],
         "",
@@ -5870,6 +5987,35 @@ def template_review(artifact_root: str, kind: str) -> dict[str, Any]:
         "template_kind": kind,
         "template_path": str(path),
         "next_action": next_action,
+        **(
+            {
+                "contract": critic_receipt_contract(),
+                "prefill": (
+                    "The template is pre-stamped: run_id already carries this reviewmatic "
+                    "run's identity and stays unchanged, and session_id is the real session "
+                    "id of the critic subagent."
+                ),
+            }
+            if kind == "critic"
+            else {}
+        ),
+        **(
+            {
+                "vocabularies": {
+                    name: list(values) for name, values in DECISION_VOCABULARIES.items()
+                },
+                "blocking_rule": BLOCKING_RULE,
+                "prefill": (
+                    "The template is materialized prefilled from the recorded finalize report and "
+                    "critic receipt: blocking ids, one response row per candidate finding and "
+                    "open thread, and one CI assessment row per unsuccessful job are machine-"
+                    "transferred; edit only the semantic fields (responses[].decision with "
+                    "reasons, classifications, verdict), never retype the prepared rows."
+                ),
+            }
+            if kind == "decision"
+            else {}
+        ),
         "external_mutations": False,
     }
 
