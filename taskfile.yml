@@ -473,6 +473,7 @@ tasks:
 
   python:test:
     desc: Run Python tests against materialized skills
+    deps: [skills:build]
     cmds:
       - SKILLS_BINARY="$(mise which skills)" mise exec -- uv run --locked pytest -n auto --dist loadgroup
 
@@ -536,7 +537,7 @@ tasks:
     desc: Materialize portable skills
     run: once
     cmds:
-      - mise exec -- uv run --locked python scripts/build_skills.py
+      - mise exec -- uv run --locked python scripts/build_skills.py --ensure-fresh
 
   distribution:build:
     desc: Build the GitHub Pages portable distribution
@@ -710,18 +711,39 @@ tasks:
     deps: [package:install]
     run: once
     cmds:
-      - mise exec -- npm run build --workspace @kisev/safe-fs
-      - mise exec -- node scripts/materialize_cli_runtime.mjs
-      - mise exec -- npm run build --workspace @kisev/memomatic
-      - mise exec -- npm run build --workspace @kisev/taskmatic
-      - mise exec -- npm run build --workspace @kisev/agentomatic
+      - >-
+        mise exec -- uv run --locked python scripts/fresh_command.py
+        --lock .build/locks/package-build.lock
+        --stamp .build/stamps/package-build
+        --input package-lock.json
+        --input package.json
+        --input 'packages/*/package.json'
+        --input 'apps/*/package.json'
+        --input 'packages/*/tsconfig.json'
+        --input 'apps/*/tsconfig.json'
+        --input 'packages/*/scripts/*.mjs'
+        --input 'apps/*/scripts/*.mjs'
+        --input 'packages/safe-fs/src/**'
+        --input 'apps/memomatic/src/**'
+        --input 'apps/taskmatic/src/**'
+        --input 'packages/agentomatic/src/**'
+        --input scripts/materialize_cli_runtime.mjs
+        --input shared/references
+        --
+        sh -c 'mise exec -- npm run build --workspace @kisev/safe-fs && mise exec -- node scripts/materialize_cli_runtime.mjs && mise exec -- npm run build --workspace @kisev/memomatic && mise exec -- npm run build --workspace @kisev/taskmatic && mise exec -- npm run build --workspace @kisev/agentomatic'
 
   package:install:
     internal: true
     run: once
     dir: .
     cmds:
-      - mise exec -- npm ci
+      - >-
+        mise exec -- uv run --locked python scripts/fresh_command.py
+        --lock .build/locks/npm-install.lock
+        --stamp .build/stamps/npm-install
+        --input package-lock.json
+        --input package.json
+        -- mise exec -- npm ci
 
   package:smoke:
     desc: Install the packed workspace tarballs into a throwaway consumer and typecheck them

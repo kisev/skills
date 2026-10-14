@@ -255,8 +255,12 @@ def test_default_runner_timeout_covers_wait_after_output_eof(monkeypatch: Any) -
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX process groups are required")
 def test_default_runner_kills_descendants_on_timeout(tmp_path: Path, monkeypatch: Any) -> None:
-    monkeypatch.setattr(metrics, "DEFAULT_TIMEOUT_SECONDS", 0.1)
-    monkeypatch.setattr(metrics, "TERMINATION_GRACE_SECONDS", 0.05)
+    # The margins stay generous on purpose: the forked descendant must boot,
+    # install its handler, and write its marker even when parallel gate jobs
+    # saturate the machine; the contract under test is the process-group
+    # kill, not the specific timeout duration.
+    monkeypatch.setattr(metrics, "DEFAULT_TIMEOUT_SECONDS", 1.0)
+    monkeypatch.setattr(metrics, "TERMINATION_GRACE_SECONDS", 1.0)
     ready_path = tmp_path / "ready"
     terminated_path = tmp_path / "terminated"
     command = (

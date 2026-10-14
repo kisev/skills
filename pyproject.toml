@@ -95,6 +95,9 @@
         "PLC0415",                                                          # Lazy imports avoid loading build-only modules for metadata checks.
         "S607",                                                             # Git is a required PATH-resolved build dependency.
       ]
+      "scripts/fresh_command.py" = [
+        "S603",                                                             # The command vector is fixed by the taskfile, not user input.
+      ]
       "scripts/record_gate_benchmarks.py" = [
         "S607",                                                             # Git is a required PATH-resolved benchmark context.
       ]

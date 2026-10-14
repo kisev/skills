@@ -214,7 +214,9 @@ def test_package_build_materializes_once_per_invocation() -> None:
     ), "package:build is referenced by three dependents and must declare run: once"
     # typescript:typecheck, package:test, and package:smoke each depend on the
     # workspace build; before the run: once guard the dry graph showed every
-    # build command three times per task check.
+    # build command three times per task check. The fresh_command wrapper is
+    # one command line carrying all five builds, so it must appear exactly
+    # once.
     dry = subprocess.run(
         ["task", "check", "--dry"],
         cwd=ROOT,
@@ -225,7 +227,9 @@ def test_package_build_materializes_once_per_invocation() -> None:
     build_commands = [
         line for line in (dry.stdout + dry.stderr).splitlines() if "task: [package:build]" in line
     ]
-    assert len(build_commands) == len(set(build_commands)) == 5
+    assert len(build_commands) == len(set(build_commands)) == 1
+    for workspace in ("safe-fs", "memomatic", "taskmatic", "agentomatic"):
+        assert f"npm run build --workspace @kisev/{workspace}" in build_commands[0]
 
 
 def test_root_pytest_and_mypy_do_not_repeat_scoped_application_gates() -> None:

@@ -4,11 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import shutil
 import stat
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared"
@@ -22,6 +28,19 @@ STABLE_SOURCE_URL = "https://kisev.github.io/skills"
 
 class BuildError(Exception):
     """A build input or path safety error."""
+
+
+@contextmanager
+def exclusive_build_lock(output: Path) -> Iterator[None]:
+    """Serialize writers so parallel gate jobs never swap the tree mid-read."""
+    lock_path = output.parent / f"{output.name}.build.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("w", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def safe_relative(value: object, label: str) -> Path:
@@ -245,17 +264,47 @@ def check_materialized(root: Path, entries: list[tuple[Path, Path]]) -> None:
                 raise BuildError(f"undeclared generated copy: {relative}")
 
 
-def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int:
+def drift_problems(staged: Path, output: Path) -> list[str]:
+    """Return every difference between the staged build and the output tree."""
+    problems: list[str] = []
+    for source in staged.rglob("*"):
+        if source.is_file() and not source.is_symlink() and "__pycache__" not in source.parts:
+            relative = source.relative_to(staged)
+            target = output / relative
+            if (
+                not target.is_file()
+                or target.is_symlink()
+                or target.read_bytes() != source.read_bytes()
+                or stat.S_IMODE(target.stat().st_mode) != stat.S_IMODE(source.stat().st_mode)
+            ):
+                problems.append(f"build artifact drift: {relative} (refresh with task generate)")
+    for target in output.rglob("*"):
+        if (
+            target.is_file()
+            and not target.is_symlink()
+            and "__pycache__" not in target.parts
+            and not (staged / target.relative_to(output)).is_file()
+        ):
+            problems.append(
+                f"unexpected build artifact: {target.relative_to(output)}"
+                " (refresh with task generate)"
+            )
+    return problems
+
+
+def build(
+    output: Path, check: bool, source_url: str = STABLE_SOURCE_URL, ensure_fresh: bool = False
+) -> int:
     entries = manifest_entries()
     related = load_relations()
     check_sources(entries)
     if output.is_symlink():
         raise BuildError("output must not be a symbolic link")
     stage_parent = output.parent
-    if not check:
+    if not check or ensure_fresh:
         stage_parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
-        prefix="skills-build-", dir=None if check else stage_parent
+        prefix="skills-build-", dir=None if check and not ensure_fresh else stage_parent
     ) as temporary:
         staged = Path(temporary) / "skills"
         copy_source(staged)
@@ -269,40 +318,18 @@ def build(output: Path, check: bool, source_url: str = STABLE_SOURCE_URL) -> int
                     f"validated {len(entries)} portable materialization(s) in an isolated staging area"
                 )
                 return 0
-            for source in staged.rglob("*"):
-                if (
-                    source.is_file()
-                    and not source.is_symlink()
-                    and "__pycache__" not in source.parts
-                ):
-                    relative = source.relative_to(staged)
-                    target = output / relative
-                    if (
-                        not target.is_file()
-                        or target.is_symlink()
-                        or target.read_bytes() != source.read_bytes()
-                        or stat.S_IMODE(target.stat().st_mode)
-                        != stat.S_IMODE(source.stat().st_mode)
-                    ):
-                        raise BuildError(
-                            f"build artifact drift: {relative} (refresh with task generate)"
-                        )
-            for target in output.rglob("*"):
-                if (
-                    target.is_file()
-                    and not target.is_symlink()
-                    and "__pycache__" not in target.parts
-                    and not (staged / target.relative_to(output)).is_file()
-                ):
-                    raise BuildError(
-                        f"unexpected build artifact: {target.relative_to(output)}"
-                        " (refresh with task generate)"
-                    )
+            problems = drift_problems(staged, output)
+            if problems:
+                raise BuildError(problems[0])
             print(f"checked {len(entries)} portable materialization(s)")
             return 0
-        if output.exists():
-            shutil.rmtree(output)
-        shutil.move(str(staged), output)
+        with exclusive_build_lock(output):
+            if ensure_fresh and output.is_dir() and not drift_problems(staged, output):
+                print(f"fresh {len(entries)} portable materialization(s) at {output}")
+                return 0
+            if output.exists():
+                shutil.rmtree(output)
+            shutil.move(str(staged), output)
     print(f"built {len(entries)} portable materialization(s) at {output}")
     return 0
 
@@ -311,12 +338,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--check", action="store_true")
+    parser.add_argument(
+        "--ensure-fresh",
+        action="store_true",
+        help="rebuild only when the output tree drifted from the sources",
+    )
     parser.add_argument("--source-url", default=STABLE_SOURCE_URL)
     args = parser.parse_args(argv)
     try:
         if args.output.is_symlink():
             raise BuildError("output must not be a symbolic link")
-        return build(args.output.absolute(), args.check, args.source_url)
+        return build(args.output.absolute(), args.check, args.source_url, args.ensure_fresh)
     except BuildError as error:
         parser.error(str(error))
     return 2

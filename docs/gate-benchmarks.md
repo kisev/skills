@@ -109,6 +109,12 @@ its suite under `pytest-xdist -n auto --dist loadgroup`, and every
 (mypy 2.4, pytest 9.1, ruff 0.17). The composite runs sequentially inside
 `task check`; the parallel pre-push wall is bounded by the slowest job.
 
+Parallel pre-push simulation (`lefthook run pre-push`, full push delta, all
+seven jobs): 89 s first cold run and 85 s warm rerun after the shared-state
+race fixes (advisory-locked npm ci and workspace builds with input stamps,
+byte-exact `--ensure-fresh` materialization, and load-tolerant timing-test
+margins); the sequential composite `task check` stays at 208.66 s.
+
 | Command | Mean (s) | Stddev (s) | Min (s) | Max (s) |
 | - | - | - | - | - |
 | `reviewmatic:check` | 29.18 | 2.48 | 25.38 | 34.56 |
