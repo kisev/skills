@@ -655,7 +655,7 @@ tasks:
     dir: apps/reviewmatic
     cmds:
       - mise exec -- uv lock --check
-      - mise exec -- uv run --locked pytest
+      - mise exec -- uv run --locked pytest -n auto --dist loadgroup
       - mise exec -- uv run --locked mypy
       - mise exec -- uv build
       - mise exec -- uv run --locked reviewmatic --version

@@ -91,6 +91,8 @@ editing the registry, run `task gates:render`.
   `mise current`.
 - If `uv run --locked` reports drift, deliberately update the pin in
   `pyproject.toml`, then run `uv lock`; do not update dependencies implicitly.
+  Every pin uses the latest `== major.minor.*` wildcard, so `uv lock --upgrade`
+  picks up patch releases while minor and major bumps stay deliberate.
 - If `generate:check` reports drift, fix the canonical source and run
   `task generate`; never edit a build artifact directly.
 - Agnix errors block validation. Existing warnings are printed and recorded in
@@ -134,7 +136,9 @@ release checks stay owned by pre-push and CI.
 
 `pre-push` scopes its jobs to the push delta: the delta resolves against the
 branch upstream and falls back to every tracked file when there is none, so
-first pushes run the complete gate. The always-on job runs `task check:core`,
+first pushes run the complete gate. The jobs run in parallel, mirroring the
+CI matrix they duplicate, so the local gate finishes well inside the SSH
+transport idle window. The always-on job runs `task check:core`,
 which includes the documentation, docs-site, and dependency-audit layers;
 `task python:test` and `task package:check` run only when the delta touches
 their stack inputs, and every scoped glob list carries the meta triggers, so

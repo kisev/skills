@@ -99,3 +99,19 @@ rework lands) is free to revisit the slow layers, dominated today by
 | `check` | 432.61 | 5.94 | 426.87 | 438.72 |
 
 Raw hyperfine export: `.build/gates-bench.json` (untracked).
+
+## 2026-10-14 — 32d3f2e — parallel/xdist/upgrade step
+
+Intermediate measurements of the push-latency step on the worktree of
+`32d3f2e`: the pre-push jobs now run in parallel, `reviewmatic:check` runs
+its suite under `pytest-xdist -n auto --dist loadgroup`, and every
+`pyproject.toml` pin moved to the latest `== major.minor.*` wildcard
+(mypy 2.4, pytest 9.1, ruff 0.17). The composite runs sequentially inside
+`task check`; the parallel pre-push wall is bounded by the slowest job.
+
+| Command | Mean (s) | Stddev (s) | Min (s) | Max (s) |
+| - | - | - | - | - |
+| `reviewmatic:check` | 29.18 | 2.48 | 25.38 | 34.56 |
+| `check` | 208.66 | 0.00 | 208.66 | 208.66 |
+
+Raw hyperfine export: `.build/gates-bench.json` (untracked).

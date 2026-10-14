@@ -47,7 +47,10 @@ def test_hooks_keep_precommit_fast_and_prepush_scoped() -> None:
         assert full_gate not in pre_commit
     # The hook stays scoped: the delta resolves against the branch upstream and
     # falls back to every tracked file, so first pushes run the complete gate.
-    assert pre_push.lstrip().startswith("parallel: false")
+    # Jobs run in parallel like the CI matrix they mirror: the serialized
+    # schedule (09da046) exceeded the SSH transport idle window and killed
+    # pushes whose gate ran longer than about five minutes.
+    assert pre_push.lstrip().startswith("parallel: true")
     assert "git diff --name-only @{upstream} HEAD 2>/dev/null || git ls-files" in pre_push
     for job in ("task check:core", "task python:test", "task package:check"):
         assert job in pre_push
@@ -200,7 +203,7 @@ def test_root_npm_workspace_is_private_exact_and_reviewmatic_is_python_only() ->
     assert (ROOT / "apps/reviewmatic/pyproject.toml").is_file()
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "dependencies = []" in pyproject
-    assert "skills-ref==0.1.1" in pyproject
+    assert "skills-ref==0.1.*" in pyproject
 
 
 def test_package_build_materializes_once_per_invocation() -> None:

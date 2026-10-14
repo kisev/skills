@@ -57,9 +57,10 @@ def _statistics(result: dict[str, Any], primary: str) -> tuple[float, float, flo
     count = metric.get("count")
     if not isinstance(count, int) or count < 1:
         raise RecordError(f"the hyperfine export has no run count for {primary}")
+    stddev = metric.get("stddev")
     return (
         float(metric["mean"]),
-        float(metric.get("stddev", 0.0)),
+        float(stddev) if isinstance(stddev, int | float) else 0.0,
         float(metric["min"]),
         float(metric["max"]),
         count,
@@ -121,6 +122,7 @@ def main(argv: list[str] | None = None) -> int:
         existing = ""
     # Atomic replacement: the curated file only ever grows by one section.
     content = existing if existing.endswith("\n") or not existing else existing + "\n"
+    content += "\n" if content else ""
     content += section
     descriptor, temporary = tempfile.mkstemp(dir=target.parent, prefix=target.name)
     try:

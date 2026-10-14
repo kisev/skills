@@ -7,16 +7,16 @@
 
 [dependency-groups]
   dev = [
-    "jsonschema[format-nongpl]==4.26.0",
-    "mypy==2.3.1",
-    "pip-audit==2.10.1",
-    "pytest==9.0.3",
-    "pytest-xdist>=3.8.0",
-    "ruff==0.16.6",
-    "skills-ref==0.1.1",
-    "types-PyYAML==6.0.12.20260906",
-    "types-jsonschema==4.26.0.20260518",
-    "yamllint==1.38.0",
+    "jsonschema[format-nongpl]==4.26.*",
+    "mypy==2.4.*",
+    "pip-audit==2.10.*",
+    "pytest==9.1.*",
+    "pytest-xdist==3.8.*",
+    "ruff==0.17.*",
+    "skills-ref==0.1.*",
+    "types-PyYAML==6.0.*",
+    "types-jsonschema==4.26.*",
+    "yamllint==1.38.*",
   ]
 
 [tool.mypy]
