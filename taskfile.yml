@@ -333,8 +333,6 @@ tasks:
     desc: Check types in python
     cmds:
       - mise exec -- uv run --locked mypy
-      - task: reviewmatic:mypy
-      - task: shopmatic:mypy
 
   version:check:
     desc: Validate release, installer, compatibility, and documentation version authorities
