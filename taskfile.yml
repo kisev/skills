@@ -528,6 +528,8 @@ tasks:
     desc: Fail when a rendered gate copy drifts from the gate registry
     cmds:
       - mise exec -- uv run --locked python scripts/generate_gates.py --check
+      - mise exec -- openspec validate --specs --strict
+      - mise exec -- openspec validate --changes --strict
 
   build:skills:
     desc: Materialize portable skills
