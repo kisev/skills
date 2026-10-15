@@ -7,7 +7,7 @@ compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: "1.0"
-  generatedBy: "1.14.1"
+  generatedBy: "1.14.2"
 ---
 
 Archive a completed change in the experimental workflow.
@@ -34,7 +34,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 1. **Select the change**
 
    If a name is provided, use it. Otherwise:
-
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
    - If ambiguous, run `openspec list --json` to get available changes and ask the user to select one
@@ -47,11 +46,9 @@ In both branches, never create the root as a side effect: do not run `openspec i
    **Load current archive inputs before the existing archive checks:**
 
    After resolving the selected change and planning root, run:
-
    ```bash
    openspec instructions archive --change "<name>" --json
    ```
-
    Keep the same selected-root flags on this command. This lookup is advisory and
    optional: it only supplies extra prompt inputs, so it must never block archiving.
    If it exits non-zero or returns invalid JSON — for example on an older CLI that
@@ -78,13 +75,11 @@ In both branches, never create the root as a side effect: do not run `openspec i
    Run `openspec status --change "<name>" --json` to check artifact completion.
 
    Parse the JSON to understand:
-
    - `schemaName`: The workflow being used
    - `planningHome`, `changeRoot`, `artifactPaths`, and `actionContext`: path and scope context
    - `artifacts`: List of artifacts with their status (`done`, `skipped`, or other)
 
-   **If any artifacts are neither `done` nor `skipped`** (skipped artifacts satisfy the requirement - the change declares skip\_specs):
-
+   **If any artifacts are neither `done` nor `skipped`** (skipped artifacts satisfy the requirement - the change declares skip_specs):
    - Display warning listing incomplete artifacts
    - Ask the user to confirm they want to proceed
    - Proceed if user confirms
@@ -107,7 +102,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    other markers, including unfamiliar ones, remain incomplete.
 
    **If incomplete tasks found:**
-
    - Display warning showing count of incomplete tasks
    - Ask the user to confirm they want to proceed
    - Proceed if user confirms
@@ -122,7 +116,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    delta specs from other artifacts.
 
    **If delta specs exist:**
-
    - Compare each delta spec with its corresponding main spec at `<planningHome.root>/openspec/specs/<capability-path>/spec.md` (use the store-aware `planningHome.root` from step 2, not a hardcoded repo path)
    - A missing main spec is **not automatically** "already synced". For a new capability, the main spec is an *output* of the sync, not an input:
      - If the delta has MODIFIED or RENAMED requirements, report that only ADDED requirements can create a new main spec and mark that capability as sync-blocked. Never invent a requirement that has no current version.
@@ -133,13 +126,11 @@ In both branches, never create the root as a side effect: do not run `openspec i
    - Continue assessing the remaining capabilities even when one is sync-blocked. Show a combined summary before prompting.
 
    **Prompt options:**
-
    - If any capability is sync-blocked: explain why and offer only "Archive without syncing", "Cancel"
    - Otherwise, if changes needed: "Sync now (recommended)", "Archive without syncing"
    - Otherwise, if already synced: "Archive now", "Sync anyway", "Cancel"
 
    Route on the answer:
-
    - "Cancel" — stop, do not archive
    - "Archive without syncing" or "Archive now" — proceed to archive
    - "Sync now" or "Sync anyway" — sync, then verify (below). Do not start any sync while a capability is sync-blocked; explain the blocker and repeat the available choices.
@@ -161,7 +152,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    Nothing has moved, so the user can fix the blocking condition or re-run the sync.
 
    After the sync writes each main spec, verify its structure against the canonical sync contract:
-
    - A new main spec starts with a `# <capability> Specification` title. An existing main spec keeps its title exactly as it is.
    - Preserve existing `## Purpose` sections completely untouched for established main specs.
    - For a new main spec, copy the delta `## Purpose` verbatim. Warn only if the purpose text is shorter than standard validation expects. Do not regenerate or rewrite existing authored purpose. If no usable `## Purpose` is provided, use the existing TBD Purpose behavior and warning.
@@ -169,7 +159,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    - Requirement blocks the sync wrote or changed use `### Requirement:` headings, and their scenarios use `#### Scenario:` headings, under the spec's `## Requirements` section. Leave content the delta does not mention exactly as it is.
 
    Then re-run the comparison from the top of this step, including the explicitly retired, missing-spec case, against every capability that has a delta spec in `artifactPaths.specs.existingOutputPaths` — not only the ones the sync reports it touched. A successful sync leaves nothing left to apply, so each capability must now read as already synced:
-
    - ADDED requirements present
    - MODIFIED requirements carrying the scenario and description changes named in the delta, with their other scenarios intact
    - REMOVED requirements gone — and where this sync retired a capability (removed its last requirement, leaving `## Requirements` empty), its main spec deleted rather than left empty.
@@ -180,7 +169,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 5. **Perform the archive**
 
    Create an `archive` directory under `planningHome.changesDir` if it doesn't exist:
-
    ```bash
    mkdir -p "<planningHome.changesDir>/archive"
    ```
@@ -188,7 +176,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    Generate the target name: use the change name as-is when it already starts with a `YYYY-MM-DD-` prefix; otherwise prepend the current date as `YYYY-MM-DD-<change-name>`. Never stack a second date (same rule as `openspec archive`).
 
    **Check if target already exists:**
-
    - If yes: Fail with error, suggest renaming existing archive or using different date
    - If no: Move `changeRoot` to the archive directory
 
@@ -199,7 +186,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 6. **Display summary**
 
    Show archive completion summary including:
-
    - Change name
    - Schema that was used
    - Archive location
@@ -220,7 +206,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 ```
 
 **Guardrails**
-
 - Announce the selected change; prompt for selection when it is ambiguous
 - Use artifact graph (openspec status --json) for completion checking
 - Don't block archive on warnings - just inform and confirm

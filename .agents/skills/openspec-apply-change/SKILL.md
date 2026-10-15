@@ -7,7 +7,7 @@ compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: "1.0"
-  generatedBy: "1.14.1"
+  generatedBy: "1.14.2"
 ---
 
 Implement tasks from an OpenSpec change.
@@ -32,7 +32,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 1. **Select the change**
 
    If a name is provided, use it. Otherwise:
-
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
    - If ambiguous, run `openspec list --json` to get available changes and ask the user to select one
@@ -40,13 +39,10 @@ In both branches, never create the root as a side effect: do not run `openspec i
    Always announce: "Using change: <name>" and how to override (e.g., `/openspec-apply-change <other>`).
 
 2. **Check status to understand the schema**
-
    ```bash
    openspec status --change "<name>" --json
    ```
-
    Parse the JSON to understand:
-
    - `schemaName`: The workflow being used (e.g., "spec-driven")
    - `planningHome`, `changeRoot`, and `actionContext`: planning scope and edit constraints
    - Which artifact contains the tasks (typically "tasks" for spec-driven, check status for others)
@@ -58,7 +54,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    ```
 
    This returns:
-
    - `contextFiles`: artifact ID -> array of concrete file paths (varies by schema - could be proposal/specs/design/tasks or spec/tests/implementation/docs)
    - Progress (total, complete, remaining)
    - Task list with status, source path, and source line
@@ -68,7 +63,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    - `missingArtifacts` (when present): required artifact ids with no output
 
    **Handle states:**
-
    - If `state: "blocked"`: show the message and pause implementation.
      - If `missingArtifacts` is non-empty: suggest completing the missing artifacts. Run `openspec status --change "<name>" --json`, select the next `ready` artifact (not `skipped` or `blocked`), and use `openspec instructions "<artifact-id>" --change "<name>" --json` for its rules and template. Keep the selected `--store <id>` on both commands.
      - Otherwise, follow the CLI instruction to create or repair the schema-configured tracking file from existing planning artifacts. Do not assume another artifact is ready or start implementation while blocked.
@@ -94,7 +88,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 
    Read every file path listed under `contextFiles` from the apply instructions output.
    The files depend on the schema being used:
-
    - **spec-driven**: proposal, specs, design, tasks
    - Other schemas: follow the contextFiles from CLI output
 
@@ -104,7 +97,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 5. **Show current progress**
 
    Display:
-
    - Schema being used
    - Progress: "N/M tasks complete"
    - Remaining tasks overview
@@ -113,7 +105,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 6. **Implement tasks (loop until done or blocked)**
 
    For each pending task:
-
    - Show which task is being worked on
    - Make the code changes required
    - Keep changes minimal and focused
@@ -123,7 +114,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
    - Continue to next task
 
    **Pause if:**
-
    - Task is unclear → ask for clarification
    - Implementation reveals a design issue → suggest updating artifacts
    - A task needs work beyond what the spec and tasks describe, or you are tempted to drop, narrow, defer, or accept exceptions to specified behavior to make it fit → surface the added scope and ask; do not absorb it silently
@@ -133,7 +123,6 @@ In both branches, never create the root as a side effect: do not run `openspec i
 7. **On completion or pause, show status**
 
    Display:
-
    - Tasks completed this session
    - Overall progress: "N/M tasks complete"
    - If all done: report that tracked tasks are complete and suggest review or verification as appropriate before archiving
@@ -192,7 +181,6 @@ What would you like to do?
 ```
 
 **Guardrails**
-
 - Keep going through tasks until done or blocked
 - Always read context files before starting (from the apply instructions output)
 - If task is ambiguous, pause and ask before implementing
