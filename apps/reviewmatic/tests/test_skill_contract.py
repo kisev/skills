@@ -8,7 +8,11 @@ directions:
    names a real command and real options of this runtime;
 2. every primary-path command the runtime owns is documented in the skill
    texts, so a renamed, added, or removed surface cannot silently lose its
-   agent wiring.
+   agent wiring;
+3. the reference maps in ``docs/`` (the pipeline map of the review line and
+   the release chain map) name the same runtime vocabulary: every documented
+   command and runtime stage is on the map, and the map names no command,
+   option, or stage the runtime does not own.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from reviewmatic.cli import DEFINITIONS, GLOBAL_OPTIONS
+from reviewmatic.context import REVIEW_STAGES
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_DIR = REPO_ROOT / "skills" / "code-review"
@@ -97,11 +102,11 @@ def code_lines(path: Path) -> list[str]:
     return lines
 
 
-def parse_invocations() -> list[tuple[str, str, set[str], Path]]:
+def invocations_in(documents: list[Path]) -> list[tuple[str, str, set[str], Path]]:
     """Extract (file, command, flags, snippet) for every reviewmatic invocation."""
     options = command_options()
     invocations: list[tuple[str, str, set[str], Path]] = []
-    for document in skill_documents():
+    for document in documents:
         for snippet in code_lines(document):
             tokens = snippet.replace("=", " ").split()
             if "reviewmatic" not in tokens:
@@ -122,6 +127,10 @@ def parse_invocations() -> list[tuple[str, str, set[str], Path]]:
             )
             invocations.append((document.name, command, flags, document))
     return invocations
+
+
+def parse_invocations() -> list[tuple[str, str, set[str], Path]]:
+    return invocations_in(skill_documents())
 
 
 def test_skill_invocations_name_real_commands_and_options() -> None:
@@ -774,3 +783,222 @@ def test_release_prepare_pins_reading_discipline_humanize_and_the_helper_contrac
         "no sentence of the final prose relies on those patterns",
     ):
         assert fragment in workflow, fragment
+
+
+# --- Reference map pins: the docs maps and the runtime vocabulary move together. ---
+
+# The pipeline map is the first section of the review reference, both locales.
+REVIEW_MAP_FILES = {
+    "en": REPO_ROOT / "docs" / "reference" / "code-review.md",
+    "ru": REPO_ROOT / "docs" / "ru" / "reference" / "code-review.md",
+}
+RELEASE_MAP_FILES = {
+    "en": REPO_ROOT / "docs" / "reference" / "release-prepare.md",
+    "ru": REPO_ROOT / "docs" / "ru" / "reference" / "release-prepare.md",
+}
+MAP_SECTIONS = {"en": "## Pipeline map", "ru": "## Карта конвейера"}
+
+# The one-process run emits this waiting stage on top of the progress stages
+# in REVIEW_STAGES.
+RUN_STAGES = frozenset(REVIEW_STAGES) | {"delta_check_missing"}
+
+# Snake-case surface names on the review map that are not progress stages.
+REVIEW_SNAKE_TOKENS = frozenset({"poll_block", "final_checklist"})
+
+# The release chain the release-prepare skill drives: the portable contract
+# subcommands behind scripts/prepare_release.py, pinned like REQUIRED_DOCUMENTED.
+RELEASE_DOCUMENTED = (
+    "prepare",
+    "inventory",
+    "content-template",
+    "scaffold",
+    "finalize",
+    "rebind",
+    "post-merge",
+)
+RELEASE_STAGES = ("pre_merge", "post_merge")
+
+# The materialized template, the prose assets, and the declined-illustration
+# key the content stage owns.
+RELEASE_ASSET_MARKERS = (
+    "release-content.template.json",
+    "release-description.md",
+    "release-announcement.md",
+    "description_file",
+    "announcement_file",
+    "illustration_prompt",
+)
+
+# Snake-case fields on the release map beyond the two publication stages.
+RELEASE_SNAKE_TOKENS = frozenset({"description_file", "announcement_file", "illustration_prompt"})
+
+# Hyphenated tokens on the maps that are neither commands nor options: the
+# skill names and the materialized file names printed by the runtime.
+MAP_DOMAIN_TOKENS = frozenset(
+    {
+        "code-review",  # the skill line name
+        "release-prepare",  # the skill name
+        "out-of-order",  # recorded-artifact ordering class, not a command
+        "release-publication",  # the release-publication.json plan pointer
+        "release-content",  # the release-content.template.json template
+        "release-description",  # the release-description.md prose asset
+        "release-announcement",  # the release-announcement.md prose asset
+        "prepare_release",  # the portable helper script name
+        "work-item",  # the GitLab work-item domain term
+    }
+)
+
+MAP_TOKEN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z][a-z0-9]+)+")
+SNAKE_TOKEN = re.compile(r"\b[a-z]+(?:_[a-z]+)+\b")
+FLAG_TOKEN = re.compile(r"--[a-z][a-z-]*")
+
+CONTRACT_SOURCE = (
+    REPO_ROOT
+    / "apps"
+    / "reviewmatic"
+    / "src"
+    / "reviewmatic"
+    / "portable"
+    / "portable_gitlab"
+    / "contract.py"
+)
+
+
+def document_section(path: Path, heading: str) -> str:
+    """From the pinned heading to the next same-level heading."""
+    text = path.read_text(encoding="utf-8")
+    start = text.index(f"{heading}\n") + len(heading)
+    rest = text[start:]
+    stop = rest.find("\n## ")
+    return rest if stop < 0 else rest[:stop]
+
+
+def map_code_lines(text: str) -> list[str]:
+    """One entry per inline code span and fenced-block line, as code_lines does."""
+    lines: list[str] = []
+    fenced = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            fenced = not fenced
+            continue
+        if fenced:
+            lines.append(stripped)
+        else:
+            lines.extend(match.strip() for match in re.findall(r"`([^`]+)`", line))
+    return lines
+
+
+def map_token_violations(
+    text: str,
+    *,
+    commands: set[str],
+    options: set[str],
+    stages: set[str],
+    snake: set[str],
+) -> list[str]:
+    """Command, option, and stage tokens on a map that the runtime does not own.
+
+    Angle-bracket placeholders are not tokens; flags are checked by their
+    stripped option names against the runtime option vocabulary.
+    """
+    violations: set[str] = set()
+    for line in map_code_lines(text):
+        # Mermaid labels carry literal reflow markers; placeholders are not tokens.
+        remainder = re.sub(r"\\n", " ", line)
+        remainder = re.sub(r"<[^>]*>", " ", remainder)
+        for flag in FLAG_TOKEN.findall(remainder):
+            if flag[2:] not in options:
+                violations.add(flag)
+            remainder = remainder.replace(flag, " ")
+        for token in MAP_TOKEN.findall(remainder):
+            if token not in commands and token not in MAP_DOMAIN_TOKENS:
+                violations.add(token)
+        for token in SNAKE_TOKEN.findall(remainder):
+            if token not in stages and token not in snake and token not in MAP_DOMAIN_TOKENS:
+                violations.add(token)
+    return sorted(violations)
+
+
+def runtime_command_vocabulary() -> tuple[set[str], set[str]]:
+    commands = set(command_options())
+    options = {
+        name.removeprefix("--") for names in command_options().values() for name in names
+    } | {option.name for option in GLOBAL_OPTIONS}
+    return commands, options
+
+
+def portable_command_vocabulary() -> tuple[set[str], set[str]]:
+    """Subcommands and options materialized from the portable GitLab contract."""
+    source = CONTRACT_SOURCE.read_text(encoding="utf-8")
+    commands = set(re.findall(r'subparsers\.add_parser\("([a-z-]+)"\)', source))
+    options = set(re.findall(r'add_argument\("--([a-z-]+)"', source))
+    return commands, options
+
+
+def test_the_pipeline_map_is_the_first_section_of_the_review_reference() -> None:
+    for locale, path in REVIEW_MAP_FILES.items():
+        text = path.read_text(encoding="utf-8")
+        assert text.index(MAP_SECTIONS[locale]) == text.index("\n## ") + 1, (
+            f"{locale}: the pipeline map must be the first section"
+        )
+
+
+def test_the_pipeline_map_names_every_runtime_command_and_stage() -> None:
+    for locale, path in REVIEW_MAP_FILES.items():
+        section = document_section(path, MAP_SECTIONS[locale])
+        missing = [
+            name for name in (*REQUIRED_DOCUMENTED, *sorted(RUN_STAGES)) if name not in section
+        ]
+        assert not missing, f"{locale}: the pipeline map must name {missing}"
+
+
+def test_the_pipeline_map_does_not_invent_runtime_tokens() -> None:
+    commands, options = runtime_command_vocabulary()
+    for locale, path in REVIEW_MAP_FILES.items():
+        section = document_section(path, MAP_SECTIONS[locale])
+        violations = map_token_violations(
+            section,
+            commands=commands,
+            options=options,
+            stages=set(RUN_STAGES),
+            snake=set(REVIEW_SNAKE_TOKENS),
+        )
+        assert not violations, (
+            f"{locale}: the pipeline map names tokens the runtime does not own: {violations}"
+        )
+
+
+def test_the_release_map_names_the_release_chain() -> None:
+    for locale, path in RELEASE_MAP_FILES.items():
+        text = path.read_text(encoding="utf-8")
+        missing = [
+            name
+            for name in (*RELEASE_DOCUMENTED, *RELEASE_STAGES, *RELEASE_ASSET_MARKERS)
+            if name not in text
+        ]
+        assert not missing, f"{locale}: the release map must name {missing}"
+
+
+def test_the_release_map_does_not_invent_runtime_tokens() -> None:
+    portable_commands, portable_options = portable_command_vocabulary()
+    commands, options = runtime_command_vocabulary()
+    for locale, path in RELEASE_MAP_FILES.items():
+        violations = map_token_violations(
+            path.read_text(encoding="utf-8"),
+            commands=commands | portable_commands,
+            options=options | portable_options,
+            stages=set(RELEASE_STAGES),
+            snake=set(RELEASE_SNAKE_TOKENS),
+        )
+        assert not violations, (
+            f"{locale}: the release map names tokens the runtime does not own: {violations}"
+        )
+
+
+def test_the_maps_invoke_only_real_reviewmatic_surfaces() -> None:
+    documents = [*REVIEW_MAP_FILES.values(), *RELEASE_MAP_FILES.values()]
+    invocations = invocations_in(documents)
+    assert any(command == "run" for _file, command, _flags, _doc in invocations), (
+        "the pipeline map must invoke the runtime it maps"
+    )

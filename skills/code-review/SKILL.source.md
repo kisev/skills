@@ -49,3 +49,5 @@ assumptions, manual confirms its recommendations in one round, and the
 defined there.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+The one-page map of the whole review line — every stage, authoring surface, and emergency path, pinned to this runtime — is the repository page `docs/reference/code-review.md`.

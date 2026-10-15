@@ -8,6 +8,86 @@
 инвертированный хвост с его поведением при дрейфе. Операционную доктрину
 владеют тексты скилла в `skills/code-review/`; здесь — архитектурный вид.
 
+## Карта конвейера
+
+Одна карта на линию ревью: однопроцессный run-путь, явно отмеченные draft- и
+repair-пути, режим локального WIP и аварийные выходы. Узлы, стадии и команды
+называют канонические токены рантайма; контрактный тест в
+apps/reviewmatic/tests/test\_skill\_contract.py пинит оба направления, так
+что переименованная стадия или новая команда не могут появиться на одной
+стороне в одиночку. Каждый авторинг-стоп печатает свой шаблон, полный
+контракт полей и точную команду продолжения; операционная доктрина остаётся
+в `skills/code-review/`.
+
+**Диаграмма 1. Run-путь: один `reviewmatic run` от сборки до `plan_ready`.**
+
+```mermaid
+flowchart TD
+    P0[Закреплённая эфемерная установка\nREVIEWMATIC_FROM проверяется через runtime-info] --> P1[run\nсбор доказательств и контекста\nprepared, затем context_ready]
+    P1 --> P2{critic_missing\nединственный опрос панели}
+    P2 -->|fast-ревью без панели| P4
+    P2 -->|выбор записан| P3[Стопы рецептов критиков\nrecord-run-critic\nконтракт рецепта напечатан]
+    P3 --> P4[Машинный отчёт финализации\nfinalize_missing]
+    P4 --> P5{decision_missing\nстоп арбитра}
+    P5 -->|finalize-review| P6[Общий рендер\ncontent_missing]
+    P6 -->|record-prose| P7{Дрейф головы?}
+    P7 -->|да| P8[re-anchor-review сохраняет авторство\ndelta_check_missing: record-delta]
+    P8 --> P9[plan_ready\nfinal_checklist, затем отчёт]
+    P7 -->|нет| P9
+```
+
+**Диаграмма 2. Отмеченные draft- и repair-пути и lane локального WIP.**
+
+```mermaid
+flowchart TD
+    D0[start-review\nодна редактируемая черновая сессия на голове MR] --> D1[record-package\nсначала пакет контекста\ncontext_ready]
+    D1 --> D2[record-participants\nвыбор панели\ncritic_missing]
+    D2 --> D3[record-input\nполя идентичности]
+    D2 --> D4[record-critic и record-ocr-critic\nпо одному рецепту на критика]
+    D4 --> D5[record-arbitration\nрецепт арбитража завершает content]
+    D5 --> D6[check-review\nfinalize_missing] --> D7[finish-review\nplan_ready]
+    D7 --> D8[scrub-preview, затем отчёт]
+    D0 -.прервана.-> D9[resume-review\nтот же черновик, без пересбора]
+    D9 --> D1
+    D7 --> X0{Что изменилось?}
+    X0 -->|тексты финализированного плана| X1[repair-review\npresentation, fix, decision]
+    X0 -->|изменившиеся факты MR| X2[refresh-review\nпредзаполненный пакет, preset supersedes]
+    X0 -->|формулировки хвоста| X3[render-review\nrecord-prose --draft]
+    L0[prepare-local\nснимок локального WIP] --> L1[finalize-local\nпроверка свежести]
+```
+
+Каждая строка таблицы стадий — один авторинг-стоп: что там пишет агент,
+какой командой это применяется и какой контракт печатает стоп.
+
+| Стадия | Путь | Пишет агент | Продолжение командой | Печатается на стопе |
+| - | - | - | - | - |
+| `prepared` | run и draft | пока ничего: сбор — машинная работа, draft открывает одну редактируемую черновую сессию | `reviewmatic run` продолжает сам; `reviewmatic start-review` открывает черновик | схема черновика и input-контракт |
+| `context_ready` | draft | пакет контекста: цель, утверждения, ограничения, вопросы, реестр тредов | `reviewmatic record-package` | контракт пакета с назначенными вопросами |
+| `critic_missing` | run и draft | выбор в опросе, затем по одному рецепту на критика, дословно | run: `reviewmatic run --resume --participants <template>`; draft: `reviewmatic record-participants`, `reviewmatic record-input`, `reviewmatic record-critic`, `reviewmatic record-ocr-critic` | `poll_block` с шаблоном выбора; контракт рецепта на каждом стопе критика |
+| `finalize_missing` | run и draft | ничего: машина рисует отчёт финализации, draft валидируется локально | resume; `reviewmatic check-review`, `reviewmatic finish-review` | итог финализации; отчёт валидации |
+| `decision_missing` | run | решение арбитра: responses, оценки CI, вердикт | `reviewmatic finalize-review` | предзаполненный шаблон, словари и правило блокировки |
+| `content_missing` | run и хвост draft | файл прозы: публикации, решения тредов, метки, SemVer | run: `reviewmatic record-prose`; отдельный draft: сначала `reviewmatic render-review` | прозовая проекция со словарями авторинга |
+| `delta_check_missing` | дрейф | свежая дельта-проверка затронутых выводов | `reviewmatic record-delta` | дельта-шаблон и правила верификатора |
+| `plan_ready` | run и draft | только итоговое резюме в чат | больше ничего: публикация остаётся ручной | `final_checklist`; ранбук |
+| `stale` | refresh | обновлённые записи для устаревших тредов и изменившихся доказательств | `reviewmatic refresh-review` | изменившиеся отпечатки и предзаполненный пакет |
+
+Каждый выход из нормальной последовательности берёт самый дешёвый путь,
+который честно покрывает изменение.
+
+| Триггер | Самый дешёвый честный путь | Команда |
+| - | - | - |
+| Записанный артефакт неверен или записан вне порядка до финального плана | исправить артефакт; рантайм отматывает производные стадии и печатает продолжение | `reviewmatic replace-artifact` |
+| Рецепт вызывает сомнения до импорта | write-free проба: стадия и все дайджесты остаются неизменными | `reviewmatic record-artifact --validate-only` |
+| Дрейф головы после сборки | переанкеровать машинные поля, затем одна свежая дельта-проверка | `reviewmatic re-anchor-review`, `reviewmatic record-delta` |
+| Изменились факты MR | освежить черновик, сохранив выбор панели | `reviewmatic refresh-review` |
+| Финализированный план: формулировки, представление фикса или решение | точечный ремонт по стоимости | `reviewmatic repair-review` с `--kind presentation`, `--kind fix` или `--kind decision` |
+| Сессия потеряна или прервана | тот же черновик и панель, без пересбора | `reviewmatic resume-review` |
+| Вопрос о scope возник посреди ревью | снова напечатать обзор scope | `reviewmatic scope-review` |
+| Ревью локального WIP | локальный режим: те же стадии без MR | `reviewmatic prepare-local`, `reviewmatic finalize-local` |
+| Профили сессии | явные XDG-профили, записываются один раз | `reviewmatic profile-setup`, `reviewmatic profile-show` |
+| Утечка raw SHA до отчёта | предпросмотр каждой утечки | `reviewmatic scrub-preview` |
+| Незнакомая идентичность рантайма | проверить закреплённую установку | `reviewmatic runtime-info` |
+
 ## Волна ревью
 
 Одно удалённое ревью проходит сбор доказательств, панель, арбитраж,
