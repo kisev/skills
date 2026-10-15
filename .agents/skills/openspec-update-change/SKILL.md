@@ -7,7 +7,7 @@ compatibility: Requires openspec CLI.
 metadata:
   author: openspec
   version: "1.0"
-  generatedBy: "1.14.1"
+  generatedBy: "1.14.2"
 ---
 
 Revise a change's existing planning artifacts and keep them coherent. Never edit code.
@@ -34,13 +34,11 @@ This workflow revises artifacts that already exist; it never creates missing one
 1. **Select the change**
 
    If a name is provided, use it. Otherwise:
-
    - Infer from conversation context if the user mentioned a change
    - Auto-select if only one active change exists
    - If ambiguous, run `openspec list --json` to get available changes sorted by most recently modified, and ask the user to select one
 
    When prompting, present the top 3-4 most recently modified changes as options, showing:
-
    - Change name
    - Status (e.g., "0/5 tasks", "complete", "no tasks")
    - How recently it was modified (from `lastModified` field)
@@ -50,13 +48,10 @@ This workflow revises artifacts that already exist; it never creates missing one
    Always announce: "Using change: <name>" and how to override (e.g., `/openspec-update-change <other>`).
 
 2. **Get the change's artifacts**
-
    ```bash
    openspec status --change "<name>" --json
    ```
-
    Parse the JSON to understand current state. The response includes:
-
    - `schemaName`: The workflow schema being used (e.g., "spec-driven")
    - `artifacts`: Array of artifacts with their status ("done", "skipped", "ready", "blocked")
    - `isPlanningComplete`: Boolean indicating if all planning artifacts are complete. Older CLI versions expose the same value as `isComplete`.
@@ -64,7 +59,7 @@ This workflow revises artifacts that already exist; it never creates missing one
 
    The artifact ids and paths come from the active schema - do NOT assume them, and do NOT branch on hardcoded artifact names. Custom schemas must work unchanged.
 
-   The files to edit are `artifactPaths.<id>.existingOutputPaths` - the concrete files that exist on disk, already glob-expanded for glob artifacts (e.g. `specs/**/*.md`). Do NOT write to `resolvedOutputPath`: for a glob artifact it is still the glob pattern, not a real file.
+   The files to edit are `artifactPaths.<id>.existingOutputPaths` - the concrete files that exist on disk, already glob-expanded for glob artifacts (e.g. `specs/**/*.md`), plus any confirmed concrete path allowed under a partly populated glob artifact (step 4). Do NOT write to `resolvedOutputPath`: for a glob artifact it is still the glob pattern, not a real file.
 
 3. **Understand the request**
    - If the user asked for a specific revision ("the design now uses X"), that is the starting edit.
@@ -88,7 +83,6 @@ This workflow revises artifacts that already exist; it never creates missing one
    - Show each proposed revision and why - including the requested edit drafted in step 4. Write only after the user confirms.
    - If the user rejects a revision, do not write it - leave that artifact unchanged.
    - When a substantial rewrite is needed, get that artifact's rules and template first:
-
      ```bash
      openspec instructions "<artifact-id>" --change "<name>" --json
      ```
@@ -101,17 +95,15 @@ This workflow revises artifacts that already exist; it never creates missing one
 **Output**
 
 After each invocation, show:
-
 - Which artifacts were revised (and which proposed revisions were rejected)
 - Any file created under a glob artifact that was already partially populated
 - Anything deferred because it does not exist yet (artifacts with no files and status `ready` or `blocked`, never `skipped` artifacts)
 - Where the change stands and the recommended next command
 
 **Guardrails**
-
 - Planning artifacts only - NEVER edit implementation code. If the revised plan implies code changes, stop and point to `/openspec-apply-change`.
 - Use the artifact ids and paths reported by `openspec status`; never branch on hardcoded artifact names.
-- Edit only the concrete files in `existingOutputPaths`; never write to a glob `resolvedOutputPath`.
+- Edit only the concrete files in `existingOutputPaths`, plus any confirmed concrete path allowed under a partly populated glob artifact (step 4); never write to a glob `resolvedOutputPath`.
 - Do not advance the build frontier: if an artifact has empty `existingOutputPaths` and status `ready` or `blocked`, creating them is a separate step, outside this workflow. Leave `skipped` artifacts untouched. The only new-file scope is a confirmed concrete path under a glob artifact whose `existingOutputPaths` is non-empty.
 - Confirm every edit with the user before writing.
 - If the request changes the change's *intent* rather than refining it, ask for a distinct unused change name and recommend `openspec new change "<new-change-name>"` instead (the "Update vs. Start Fresh" heuristic).

@@ -2,7 +2,7 @@
   "schema": "opencode-compatibility/v1",
   "package": "@kisev/agentomatic",
   "range": ">=2.0.0 <2.1.0",
-  "versions": ["2.0.26", "2.0.27"],
+  "versions": ["2.0.26", "2.0.27", "2.0.29"],
   "checks": [
     "package-build",
     "tool-registration",
