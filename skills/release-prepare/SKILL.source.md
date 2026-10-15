@@ -18,3 +18,5 @@ metadata:
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+The one-page map of the release chain — every stage from the release MR evidence through finalize, rebind, and the post-merge refresh — is the repository page `docs/reference/release-prepare.md`.
