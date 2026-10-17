@@ -108,6 +108,29 @@ takes skill names, not source URLs, as positional arguments. OpenCode package
 assets have a separate update lifecycle described in the
 [OpenCode integration guide](opencode-integration.md#update).
 
+## Check the Environment Contract
+
+Every skill that needs an external tool carries a materialized
+`references/requirements.json` in its installed directory. It records each tool
+with its `check` command, a copy-ready `install` command, the pinned tool
+version, and the distribution `source_revision`. Run the bundled stdlib check in
+the first session and show its output. The first path below is the global scope,
+the second the project scope:
+
+```shell
+python3 ~/.agents/skills/code-review/scripts/check_environment.py
+python3 .agents/skills/code-review/scripts/check_environment.py
+```
+
+Each line is `OK` or `FAIL`, and a failure prints the exact repair command
+instead of dead-ending. The runner installs nothing and makes no network call.
+The manifest is stitched at build time and is deterministic: `task generate:check`
+validates it, and the local channel check compares the manifest
+`source_revision` with the Pages index and the workspace npm pin without the
+registry. `agentomatic doctor` reads the installed manifests for the global and
+project scopes and prints the same contract; without an installed manifest it
+reports an honest "not found".
+
 ## Remove Retired Names
 
 The current [migration inventory](../migration-inventory.md) defines thirteen
@@ -178,6 +201,9 @@ future work by default.
 
 - Portable skills are self-contained and do not depend on the repository or the
   OpenCode npm package after installation.
+- Skills with external tools carry their environment contract inside the archive;
+  the bundled runner only checks tools and prints repair commands, it never
+  installs or removes anything.
 - Cross-skill relations are install recommendations: the build materializes each
   skill's declared companions into its `SKILL.md` "Related skills" section, and
   every archive still works on its own.

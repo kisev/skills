@@ -24,3 +24,4 @@ items.
 - [ADR-0018: Unify the gate registry and trust one terminal CI success](0018-unify-gate-registry-and-ci-trust.md) - accepted
 - [ADR-0020: Drive marketplace storefronts through agent-browser](0020-drive-marketplace-storefronts-through-agent-browser.md) - accepted
 - [ADR-0021: Run reviewmatic from Python Git sources](0021-run-reviewmatic-from-python-git-sources.md) - accepted
+- [ADR-0022: Print the skill environment contract](0022-print-the-skill-environment-contract.md) - accepted

@@ -364,3 +364,29 @@ identities and retention without inspecting the free zone or creating another
 server. Offline cleanup tests verify exact service scope, rejection of foreign
 resources and symlink state, and retained reports. Live tests require actual
 configured host/model execution; no hostless result substitutes for them.
+
+### REQ-F-566 - Print the skill environment contract
+
+Every skill archive with external tool dependencies shall carry a materialized
+`references/requirements.json` stitched from the authored inventory in
+`shared/runtime-requirements.json`; each entry shall name the tool, its check
+command, a copy-ready install command, and a version or pin, and the manifest
+shall record the single channel `source_revision`. Archives without external
+dependencies shall not carry the manifest. Each dependency archive shall also
+ship a standard-library-only `scripts/check_environment.py` that reads its own
+manifest, prints one OK/FAIL line per tool with the repair command for every
+failure, supports `--json`, installs nothing, and makes no network call. The
+skill texts shall require the first session to run the check and show its
+output. The distribution build shall print a local channel verdict that
+cross-checks the materialized pin, the channel index revision, and the
+workspace npm pin without contacting a registry. Installed archives predating
+this contract shall keep working through the documented legacy
+`runtime-pin.json` fallback.
+
+#### Verification
+
+`tests/test_environment_contract.py` pins the inventory coverage, the
+per-archive materialization, and the no-network channel agreement;
+`tests/test_distribution.py` pins reproducible archives with the manifest;
+the skill-contract suite pins the skill-text wiring to the runner and
+manifest, and `agentomatic doctor` tests pin the manifest reading.

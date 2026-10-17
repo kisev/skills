@@ -1433,6 +1433,50 @@
     {
       "source": "references/work_item_runtime/triage.py",
       "destination": "task-triage/scripts/portable_runtime/triage.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "ast-grep/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "code-review/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "commit-msg/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "mr-prepare/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "release-prepare/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "release-review/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "rtk/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "task-prepare/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "task-triage/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "taskmatic/scripts/check_environment.py"
+    },
+    {
+      "source": "references/environment_check.py",
+      "destination": "team-retro/scripts/check_environment.py"
     }
   ]
 }

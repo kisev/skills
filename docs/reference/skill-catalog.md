@@ -151,6 +151,9 @@ do not put credentials or personal notes in them.
 - Portable runners use Python 3.12+ standard library only when a runner is
   needed.
 - `ast-grep` and `rtk` require their external CLI; skills do not install them.
+- Skills with external tools ship `references/requirements.json` and
+  `scripts/check_environment.py`; the check prints repair commands and installs
+  nothing.
 - Portable skills work without `@kisev/agentomatic`.
 - Skills do not replace repository policy, review, secret scanning, access
   control, or the user's final judgment.

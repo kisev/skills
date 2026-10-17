@@ -69,17 +69,20 @@ runtime response already answers.
 ## Runtime selection and pin
 
 Before the first `reviewmatic` call, apply runtime selection and pin exactly
-as `SKILL.source.md` specifies — the entrypoint owns the channel choice (ask
+as `SKILL.source.md` specifies — the entrypoint owns the first-session
+`python3 scripts/check_environment.py` run, the channel choice (ask
 if unclear — never choose silently), the runtime pin read from the installed
-tree's `references/runtime-pin.json` (the `skills update` flow stitched the
-resolved commit there; a session never runs `git ls-remote` when the file
-exists, and only a development checkout without the file resolves the moving
-`dev` tip once), the `REVIEWMATIC_FROM` pin, the PATH-binary ban, and the
-`runtime-info` verification. A fresh checkout of the moving `dev` ref without
-the pin file repeats the resolution and pin. The first response of the
-session opens with the version banner: the skill version from the runtime
-pin, the reviewmatic version and resolved commit from `runtime-info`, and
-`glab --version` — assembled locally, never through the network.
+tree's `references/requirements.json` (the `skills update` flow stitched the
+resolved commit there; an archive installed before this contract carries the
+legacy `references/runtime-pin.json`, so a session never runs `git ls-remote`
+when either file exists, and only a development checkout without both
+resolves the moving `dev` tip once), the `REVIEWMATIC_FROM` pin, the
+PATH-binary ban, and the `runtime-info` verification. A fresh checkout of the
+moving `dev` ref without the manifest repeats the resolution and pin. The
+first response of the session opens with the version banner: the skill version
+from the environment manifest, the reviewmatic version and resolved commit
+from `runtime-info`, and `glab --version` — assembled locally, never through
+the network.
 
 ## Invocation mode
 

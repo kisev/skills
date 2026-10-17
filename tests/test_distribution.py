@@ -30,6 +30,10 @@ PACKAGE_METADATA = json.loads(
 RELEASE_VERSION = PACKAGE_METADATA["version"]
 SKILLS_INSTALLER_VERSION = PACKAGE_METADATA["skillsInstallerVersion"]
 PINNED_SKILLS = ["npx", "--yes", f"skills@{SKILLS_INSTALLER_VERSION}"]
+REQUIREMENTS_SOURCE = json.loads(
+    (ROOT / "shared" / "runtime-requirements.json").read_text(encoding="utf-8")
+)
+REQUIREMENT_SKILLS = set(REQUIREMENTS_SOURCE["skills"])
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
@@ -97,19 +101,27 @@ def test_distribution_has_reproducible_well_known_archives_and_lock() -> None:
             if entry["name"] == "mattermost":
                 assert "scripts/mattermost.py" in document.getnames()
                 assert "scripts/mattermost_publication.py" in document.getnames()
-            if entry["name"] == "code-review":
-                # Decision 76 stage 3: the resolved commit is stitched into the
-                # installed tree as its runtime pin, so a session reads the
-                # pin locally and never runs git ls-remote per review.
-                member = document.extractfile("references/runtime-pin.json")
+            if entry["name"] in REQUIREMENT_SKILLS:
+                # The resolved channel revision is stitched into every archive
+                # with external dependencies as its requirements manifest, so a
+                # session reads the tool contract and the pin from the installed
+                # tree and never runs git ls-remote per session.
+                member = document.extractfile("references/requirements.json")
                 assert member is not None
-                pin = json.loads(member.read().decode("utf-8"))
-                assert pin == {
-                    "schema": "@kisev/skills/runtime-pin/v1",
-                    "version": release["version"],
-                    "source_revision": release["source_revision"],
-                }
+                manifest = json.loads(member.read().decode("utf-8"))
+                assert manifest["schema"] == "@kisev/skills/requirements/v1"
+                assert manifest["skill"] == entry["name"]
+                assert manifest["version"] == release["version"]
+                assert manifest["source_revision"] == release["source_revision"]
+                assert manifest["requirements"], "a requirements manifest must list its tools"
+                assert {node["tool"] for node in manifest["requirements"]} == set(
+                    REQUIREMENTS_SOURCE["skills"][entry["name"]]
+                )
+                for node in manifest["requirements"]:
+                    assert node["tool"] and node["check"] and node["install"]
+                    assert node["source_revision"] == release["source_revision"]
             else:
+                assert "references/requirements.json" not in names
                 assert "references/runtime-pin.json" not in names
 
 
@@ -156,8 +168,26 @@ def test_distribution_check_pins_stored_provenance_across_new_commits(
     )
     inventory = tmp_path / "public-surfaces.json"
     inventory.write_text(json.dumps({"skills": ["demo"]}), encoding="utf-8")
+    requirements = tmp_path / "runtime-requirements.json"
+    requirements.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "tools": {
+                    "git": {
+                        "check": "git --version",
+                        "install": "install git",
+                        "version": None,
+                    }
+                },
+                "skills": {"demo": ["git"]},
+            }
+        ),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(build_distribution, "BUILT_SKILLS", built)
     monkeypatch.setattr(build_distribution, "INVENTORY", inventory)
+    monkeypatch.setattr(build_distribution, "REQUIREMENTS", requirements)
     monkeypatch.setattr(build_distribution, "revision", lambda: "a" * 40)
     output = tmp_path / "skills"
     assert build_distribution.build(output, False, f"1.2.3-dev.7.g{'c' * 12}") == 0

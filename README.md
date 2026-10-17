@@ -88,6 +88,26 @@ revision the running build came from.
 former `@kisev/reviewmatic` npm package is not deprecated by this change; any
 registry deprecation requires separate confirmation.
 
+## Check the Environment Contract
+
+Some skills need external tools: `git`, `glab`, `uv`/`uvx`, or an npm
+`@kisev/*` application (for example `code-review`, `mr-prepare`, or
+`taskmatic`). Every archive with such a dependency
+carries a materialized `references/requirements.json` that lists each tool with
+its check command, a copy-ready install command, and the distribution
+`source_revision`. Run the bundled stdlib check in the first session and show
+its output; it installs nothing and makes no network call:
+
+```shell
+python3 ~/.agents/skills/code-review/scripts/check_environment.py
+```
+
+Each line is `OK` or `FAIL`, and every failure prints the exact repair command.
+`agentomatic doctor` reads the same manifests for the global and project scopes
+and reports the contract; without an installed manifest it reports an honest
+"not found". The same pin lets a session cross-check the manifest
+`source_revision` against the installed npm pin instead of resolving a branch.
+
 ## Guides
 
 - [Portable skills](docs/how-to/portable-skills.md): project installs, updates, cleanup, and troubleshooting. All `.agents/skills` hosts are selected by default; the picker preselects all skills. Use `--skill <name>` to limit selection. Upgrade a global installation interactively with `npx --yes skills@latest update --global` so retired names are offered for removal. See the [tutorial](docs/tutorials/getting-started.md) and [catalog](docs/reference/skill-catalog.md).

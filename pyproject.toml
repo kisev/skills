@@ -133,6 +133,10 @@
       ]
       "scripts/publish_npm_release.py" = ["S603"]                           # npm commands use fixed release argument vectors.
       "scripts/verify_distribution_url.py" = ["TRY300"]                     # Retry-loop success returns remain adjacent to verification.
+      "shared/references/environment_check.py" = [
+        "S602",                                                             # The check strings are authored constants, never user input.
+        "S607",                                                             # Declared tools are intentionally resolved through PATH.
+      ]
       "shared/references/portable_gitlab/contract.py" = [
         "B904",                                                             # Portable CLI errors preserve stable messages across Python versions.
         "C901",                                                             # The compatibility runtime is intentionally centralized and stateful.

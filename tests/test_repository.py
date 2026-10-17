@@ -657,7 +657,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                     ).read_bytes(),
                 )
         thin = BUILT_SKILLS / "code-review"
-        self.assertFalse((thin / "scripts").exists())
+        self.assertFalse((thin / "scripts/portable_runtime").exists())
+        self.assertEqual(
+            (thin / "scripts/check_environment.py").read_bytes(),
+            (ROOT / "shared/references/environment_check.py").read_bytes(),
+        )
         self.assertEqual(
             (thin / "references/portable-gitlab-contracts-v2.md").read_bytes(),
             (ROOT / "shared/references/portable_gitlab/contracts-v2.md").read_bytes(),

@@ -457,6 +457,122 @@ function reconcileProjection(plan: ReconcilePlan): {
   return { retired, conflicts };
 }
 
+async function childDirectories(path: string): Promise<{ names: string[]; incomplete: boolean }> {
+  try {
+    await assertSafePath(path, { target: "directory" });
+    const info = await lstat(path);
+    if (info.isSymbolicLink() || !info.isDirectory()) return { names: [], incomplete: true };
+    const names: string[] = [];
+    let incomplete = false;
+    for (const entry of (await readdir(path, { withFileTypes: true })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )) {
+      if (entry.isSymbolicLink()) {
+        incomplete = true;
+        continue;
+      }
+      if (entry.isDirectory()) names.push(entry.name);
+    }
+    return { names, incomplete };
+  } catch (error) {
+    return { names: [], incomplete: errorText(error) !== "ENOENT" };
+  }
+}
+
+type InstalledRequirement = {
+  tool: string;
+  check: string;
+  install: string;
+  version: string | null;
+};
+
+type InstalledManifest = {
+  skill: string;
+  version: string;
+  source_revision: string;
+  requirements: InstalledRequirement[];
+};
+
+function requirementsManifest(raw: Buffer): InstalledManifest | undefined {
+  const value = raw && json(raw);
+  if (
+    !value ||
+    value.schema !== "@kisev/skills/requirements/v1" ||
+    typeof value.skill !== "string" ||
+    !value.skill ||
+    typeof value.version !== "string" ||
+    !value.version ||
+    typeof value.source_revision !== "string" ||
+    !value.source_revision ||
+    !Array.isArray(value.requirements) ||
+    value.requirements.length === 0
+  )
+    return undefined;
+  const requirements: InstalledRequirement[] = [];
+  for (const item of value.requirements) {
+    if (!item || typeof item !== "object") return undefined;
+    const record = item as JsonObject;
+    if (
+      typeof record.tool !== "string" ||
+      !record.tool ||
+      typeof record.check !== "string" ||
+      !record.check ||
+      typeof record.install !== "string" ||
+      !record.install
+    )
+      return undefined;
+    requirements.push({
+      tool: record.tool,
+      check: record.check,
+      install: record.install,
+      version: typeof record.version === "string" && record.version ? record.version : null,
+    });
+  }
+  return {
+    skill: value.skill,
+    version: value.version,
+    source_revision: value.source_revision,
+    requirements,
+  };
+}
+
+async function installedRequirements(
+  project: string,
+  home: string,
+): Promise<{
+  manifests: InstalledManifest[];
+  legacyPins: string[];
+  invalid: number;
+  incomplete: boolean;
+}> {
+  const roots = [join(home, ".agents", "skills"), join(project, ".agents", "skills")];
+  const manifests: InstalledManifest[] = [];
+  const legacyPins: string[] = [];
+  let invalid = 0;
+  let incomplete = false;
+  for (const root of roots) {
+    const children = await childDirectories(root);
+    incomplete ||= children.incomplete;
+    for (const skill of children.names) {
+      const value = await regular(join(root, skill, "references", "requirements.json"));
+      if (value.status === "incomplete") {
+        incomplete = true;
+        continue;
+      }
+      if (value.status === "present") {
+        const parsed = requirementsManifest(value.raw!);
+        if (parsed) manifests.push(parsed);
+        else invalid += 1;
+        continue;
+      }
+      const legacy = await regular(join(root, skill, "references", "runtime-pin.json"));
+      if (legacy.status === "incomplete") incomplete = true;
+      if (legacy.status === "present") legacyPins.push(skill);
+    }
+  }
+  return { manifests, legacyPins, invalid, incomplete };
+}
+
 async function archiveFacts(
   scope: Scope,
   cwd: string,
@@ -887,6 +1003,47 @@ export async function collectDoctorFacts(
       "External tool availability is reported",
       { tools: tools.map((item) => `${item.name}:${item.available ? "available" : "missing"}`) },
       ["Install OpenCode or missing external tools when needed."],
+    ),
+  );
+  const requirements = await installedRequirements(project, homeRoot);
+  if (requirements.incomplete) partial.push("skills.requirements");
+  const requirementSkills = requirements.manifests.map((item) => `${item.skill}@${item.version}`);
+  const requirementContract = requirements.manifests.flatMap((manifest) =>
+    manifest.requirements.map(
+      (item) => `${manifest.skill}: ${item.tool} <- ${item.check} | repair: ${item.install}`,
+    ),
+  );
+  const sourceRevisions = [
+    ...new Set(requirements.manifests.map((item) => item.source_revision)),
+  ].sort();
+  const requirementsStatus: DoctorCheckStatus = requirements.incomplete
+    ? "incomplete"
+    : requirements.invalid
+      ? "fail"
+      : "pass";
+  checks.push(
+    check(
+      "skills.requirements",
+      requirementsStatus,
+      requirements.manifests.length
+        ? "Installed skill environment manifests are classified"
+        : "No installed skill environment manifest was found",
+      {
+        found: requirements.manifests.length > 0 || requirements.legacyPins.length > 0,
+        manifests: requirements.manifests.length,
+        invalid: requirements.invalid,
+        legacy_pins: requirements.legacyPins,
+        source_revisions: sourceRevisions,
+        skills: requirementSkills,
+        contract: requirementContract,
+      },
+      requirements.invalid
+        ? [
+            "Reinstall the affected skill with `npx --yes skills@latest update` to restore a valid references/requirements.json.",
+          ]
+        : [
+            "Run `python3 scripts/check_environment.py` from each installed skill directory to execute its checks.",
+          ],
     ),
   );
   const lsp = await lspFacts(project, partial);

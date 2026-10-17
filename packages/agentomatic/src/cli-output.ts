@@ -514,6 +514,18 @@ export function renderDoctor(report: DoctorReport): string {
           `  ${terminalSafe(String(item.path ?? "unknown"))} (${terminalSafe(String(item.reason ?? "conflict"))})`,
       ),
     );
+  const requirements = report.checks.find((item) => item.id === "skills.requirements");
+  if (requirements) {
+    const skills = Array.isArray(requirements.evidence.skills) ? requirements.evidence.skills : [];
+    const contract = Array.isArray(requirements.evidence.contract)
+      ? requirements.evidence.contract
+      : [];
+    lines.push(
+      "",
+      `Skill requirements: ${skills.length ? skills.map((item) => terminalSafe(String(item))).join(", ") : "not found"}`,
+      ...contract.map((item) => `  ${terminalSafe(String(item))}`),
+    );
+  }
   if (next.size)
     lines.push("", "Next commands:", ...[...next].map((item) => `  ${terminalSafe(item)}`));
   return `${lines.join("\n")}\n`;

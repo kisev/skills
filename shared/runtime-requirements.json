@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "tools": {
+    "git": {
+      "check": "git --version",
+      "install": "sudo apt-get install -y git || brew install git",
+      "version": ">=2.40",
+      "source": "system"
+    },
+    "glab": {
+      "check": "glab --version",
+      "install": "sudo apt-get install -y glab || brew install glab",
+      "version": ">=1.40",
+      "source": "system"
+    },
+    "uv": {
+      "check": "uv --version && uvx --version",
+      "install": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+      "version": ">=0.5.0",
+      "source": "astral-sh/uv"
+    },
+    "ast-grep": {
+      "check": "ast-grep --version",
+      "install": "npm install --global @ast-grep/cli",
+      "version": null,
+      "source": "ast-grep/ast-grep"
+    },
+    "rtk": {
+      "check": "rtk --version",
+      "install": "command -v rtk >/dev/null || echo 'Install the rtk CLI with your host toolchain, then re-run this check.'",
+      "version": null,
+      "source": "host-toolchain"
+    },
+    "@kisev/taskmatic": {
+      "check": "taskmatic --version",
+      "install": "npm install --global @kisev/taskmatic@{version}",
+      "version_ref": "apps/taskmatic/package.json#version",
+      "source": "npm"
+    }
+  },
+  "skills": {
+    "ast-grep": ["ast-grep"],
+    "code-review": ["git", "glab", "uv"],
+    "commit-msg": ["git"],
+    "mr-prepare": ["glab"],
+    "release-prepare": ["glab"],
+    "release-review": ["glab"],
+    "rtk": ["git", "rtk"],
+    "task-prepare": ["glab"],
+    "task-triage": ["git", "glab"],
+    "taskmatic": ["@kisev/taskmatic"],
+    "team-retro": ["glab"]
+  }
+}

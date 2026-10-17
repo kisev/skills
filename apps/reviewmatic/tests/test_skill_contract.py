@@ -17,6 +17,7 @@ directions:
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -206,22 +207,49 @@ def test_runtime_pin_and_self_report_are_documented() -> None:
 
 
 def test_the_runtime_pin_reads_locally_and_the_banner_opens_the_session() -> None:
-    """Decision 76 stage 3: the installed tree carries references/runtime-pin.json;
-    a session reads the pinned commit from it (no git ls-remote per run) and
-    opens its first response with the local version banner: skill version from
-    the pin, reviewmatic from runtime-info, glab from --version."""
+    """The environment contract replaces the runtime pin: the installed tree
+    carries references/requirements.json, a session reads the pinned commit and
+    the tool contract from it (no git ls-remote per run), and opens its first
+    response with the local version banner: skill version from the manifest,
+    reviewmatic from runtime-info, glab from --version. An archive installed
+    before this contract still carries the legacy references/runtime-pin.json."""
     entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
     workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
-    assert "references/runtime-pin.json" in entry
+    assert "references/requirements.json" in entry
     assert "stitched by the distribution build" in entry
     assert "a session never resolves the tip with `git ls-remote`" in entry
-    assert "Only when the pin file is absent" in entry
+    assert "references/runtime-pin.json" in entry
+    assert "when `references/requirements.json` is absent" in entry
+    assert "Only when neither file is present" in entry
     assert "version banner" in entry
     assert "`glab --version` line" in entry
     assert "no network call belongs to the banner" in entry
+    assert "references/requirements.json" in workflow
     assert "references/runtime-pin.json" in workflow
-    assert "never runs `git ls-remote` when the file" in workflow
+    assert "never runs `git ls-remote`" in workflow
     assert "version banner" in workflow
+
+
+def test_the_environment_check_wires_skill_runner_and_manifest() -> None:
+    """AC6: the skill text, the bundled runner, and the authored manifest move
+    together. The entrypoint requires the first-session run and its output; the
+    runner and the authored source exist; the distribution stiches the manifest
+    into every archive with dependencies."""
+    entry = (SKILL_DIR / "SKILL.source.md").read_text(encoding="utf-8")
+    workflow = (SKILL_DIR / "references" / "workflow.md").read_text(encoding="utf-8")
+    assert "python3 scripts/check_environment.py" in entry
+    assert "one OK/FAIL line per tool" in entry
+    assert "never install a tool automatically" in entry
+    assert "makes no network call" in entry
+    assert "python3 scripts/check_environment.py" in workflow
+    runner = REPO_ROOT / "shared" / "references" / "environment_check.py"
+    assert runner.is_file()
+    source = json.loads((REPO_ROOT / "shared" / "runtime-requirements.json").read_text("utf-8"))
+    assert "code-review" in source["skills"]
+    assert {"git", "glab", "uv"} == set(source["skills"]["code-review"])
+    builder = (REPO_ROOT / "scripts" / "build_distribution.py").read_text(encoding="utf-8")
+    assert "references/requirements.json" in builder
+    assert "runtime-requirements.json" in builder
 
 
 def test_the_single_pinned_runtime_ignores_any_path_binary() -> None:

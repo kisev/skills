@@ -393,7 +393,10 @@ npx --yes @kisev/agentomatic@latest doctor --json
 The report includes versions, ownership, drift, collisions, archive counts,
 redacted JSON/JSONC configuration projections, runtime summaries, and LSP facts
 marked unsupported in V2 rather than active. Missing LSP binaries are not OpenCode
-dependency failures. It does
+dependency failures. It also reads installed portable-skill
+`references/requirements.json` manifests in both scopes (`skills.requirements`)
+and reports their tool contract; without an installed manifest it reports an
+honest "not found". It does
 not serialize raw configuration, environment values, credentials, or secrets.
 Exit status `0` is clean, `1` reports findings, and `2` reports invalid
 input or an incomplete probe failure.

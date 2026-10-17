@@ -251,7 +251,12 @@ uvx --from 'git+https://github.com/kisev/skills.git@<ref>#subdirectory=apps/revi
 ```
 
 Stable skills shall select an exact release tag; development
-skills shall select the moving `dev` branch. The skill shall use the same
+skills shall select the moving `dev` branch. The installed skill tree shall
+read the pinned `source_revision` from `references/requirements.json` (see
+[REQ-F-549](../functional/README.md)); an archive installed before that
+contract falls back to the legacy `references/runtime-pin.json`, and a
+development checkout without either file resolves the dev tip once with
+`git ls-remote`. The skill shall use the same
 selected ref for returned continuation commands. The runtime shall use an
 ephemeral uv environment and shall not require `uv tool install`, an npm
 package, or a PyPI release. Existing XDG review state and artifacts shall remain

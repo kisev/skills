@@ -275,3 +275,63 @@ test("doctor reports archived configuration backups", async () => {
     rmSync(item.root, { recursive: true, force: true });
   }
 });
+
+test("doctor reads installed skill requirements manifests and reports not found", async () => {
+  const item = fixture();
+  try {
+    const absent = await collectDoctorFacts("global", item.project, item.home);
+    const empty = absent.checks.find((check) => check.id === "skills.requirements");
+    assert.equal(empty.status, "pass");
+    assert.equal(empty.evidence.found, false);
+    assert.equal(empty.evidence.manifests, 0);
+    assert.deepEqual(empty.evidence.contract, []);
+    assert.match(renderDoctor(absent), /Skill requirements: not found/);
+
+    const manifest = {
+      schema: "@kisev/skills/requirements/v1",
+      skill: "code-review",
+      version: "12.0.1",
+      source_revision: "a".repeat(40),
+      requirements: [
+        {
+          tool: "git",
+          check: "git --version",
+          install: "sudo apt-get install -y git",
+          version: ">=2.40",
+          source_revision: "a".repeat(40),
+        },
+      ],
+    };
+    mkdirSync(join(item.home, ".agents", "skills", "code-review", "references"), {
+      recursive: true,
+    });
+    writeFileSync(
+      join(item.home, ".agents", "skills", "code-review", "references", "requirements.json"),
+      JSON.stringify(manifest),
+    );
+    const report = await collectDoctorFacts("global", item.project, item.home);
+    const found = report.checks.find((check) => check.id === "skills.requirements");
+    assert.equal(found.status, "pass");
+    assert.equal(found.evidence.found, true);
+    assert.equal(found.evidence.manifests, 1);
+    assert.deepEqual(found.evidence.skills, ["code-review@12.0.1"]);
+    assert.deepEqual(found.evidence.source_revisions, ["a".repeat(40)]);
+    assert.match(String(found.evidence.contract[0]), /code-review: git <- git --version/);
+    const rendered = renderDoctor(report);
+    assert.match(rendered, /Skill requirements: code-review@12\.0\.1/);
+    assert.match(rendered, /repair:/);
+
+    mkdirSync(join(item.home, ".agents", "skills", "broken", "references"), { recursive: true });
+    writeFileSync(
+      join(item.home, ".agents", "skills", "broken", "references", "requirements.json"),
+      JSON.stringify({ schema: "wrong", skill: "broken" }),
+    );
+    const invalid = await collectDoctorFacts("global", item.project, item.home);
+    const broken = invalid.checks.find((check) => check.id === "skills.requirements");
+    assert.equal(broken.status, "fail");
+    assert.equal(broken.evidence.invalid, 1);
+    assert.ok(Array.isArray(broken.remediation) && broken.remediation.length > 0);
+  } finally {
+    rmSync(item.root, { recursive: true, force: true });
+  }
+});

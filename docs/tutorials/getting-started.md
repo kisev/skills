@@ -62,6 +62,18 @@ npx --yes skills@latest list --global
 Restart your host if it was running during installation. The installed
 skills should then be available from `~/.agents/skills`.
 
+Skills that need an external tool ship a `references/requirements.json` and a
+bundled environment check. Run it in the first session and show its output; it
+prints one `OK`/`FAIL` line per tool and a copy-ready repair command for every
+failure:
+
+```shell
+python3 ~/.agents/skills/code-review/scripts/check_environment.py
+```
+
+The [portable skills how-to](../how-to/portable-skills.md#check-the-environment-contract)
+explains the manifest and the channel cross-check.
+
 ## 3. Decide Whether You Need agentomatic
 
 Portable skills already work in OpenCode. Install `@kisev/agentomatic` only

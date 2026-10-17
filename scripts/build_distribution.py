@@ -22,7 +22,11 @@ from scripts.build_skills import DEFAULT_OUTPUT as BUILT_SKILLS  # noqa: E402
 
 PACKAGE = ROOT / "packages" / "skills"
 INVENTORY = ROOT / "evals" / "contracts" / "public-surfaces.json"
+REQUIREMENTS = ROOT / "shared" / "runtime-requirements.json"
+LOCKFILE = ROOT / "package-lock.json"
+NPM_MEMBER = "packages/agentomatic"
 DEFAULT_OUTPUT = ROOT / ".build" / "packages" / "skills"
+REQUIREMENTS_SCHEMA = "@kisev/skills/requirements/v1"
 
 
 class DistributionError(Exception):
@@ -58,6 +62,161 @@ def revision() -> str:
     if completed.returncode or not completed.stdout.strip():
         raise DistributionError("Git source revision is unavailable")
     return completed.stdout.strip()
+
+
+def read_json_object(path: Path, label: str) -> dict[str, object]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise DistributionError(f"{label} is unreadable: {path}") from error
+    if not isinstance(value, dict):
+        raise DistributionError(f"{label} must be an object: {path}")
+    return value
+
+
+def load_requirements() -> tuple[dict[str, dict[str, object]], dict[str, list[str]]]:
+    """The authored tool inventory and per-skill dependency lists."""
+    payload = read_json_object(REQUIREMENTS, "runtime requirements source")
+    if payload.get("version") != 1:
+        raise DistributionError("runtime requirements version must be 1")
+    tools = payload.get("tools")
+    skills = payload.get("skills")
+    if not isinstance(tools, dict) or not tools:
+        raise DistributionError("runtime requirements tools must be a non-empty object")
+    if not isinstance(skills, dict) or not skills:
+        raise DistributionError("runtime requirements skills must be a non-empty object")
+    normalized_tools: dict[str, dict[str, object]] = {}
+    for name, record in tools.items():
+        if not isinstance(name, str) or not name or not isinstance(record, dict):
+            raise DistributionError("runtime requirement tools must be named objects")
+        if not isinstance(record.get("check"), str) or not record["check"]:
+            raise DistributionError(f"runtime requirement tool lacks a check command: {name}")
+        if not isinstance(record.get("install"), str) or not record["install"]:
+            raise DistributionError(f"runtime requirement tool lacks an install command: {name}")
+        version = record.get("version")
+        if version is not None and (not isinstance(version, str) or not version):
+            raise DistributionError(f"runtime requirement tool version is invalid: {name}")
+        version_ref = record.get("version_ref")
+        if version_ref is not None and (
+            not isinstance(version_ref, str)
+            or "#" not in version_ref
+            or not version_ref.split("#", 1)[0]
+            or not version_ref.split("#", 1)[1]
+        ):
+            raise DistributionError(f"runtime requirement version_ref is invalid: {name}")
+        normalized_tools[name] = record
+    normalized_skills: dict[str, list[str]] = {}
+    for skill, dependencies in skills.items():
+        if not isinstance(skill, str) or not skill or not isinstance(dependencies, list):
+            raise DistributionError("runtime requirement skills must map names to tool lists")
+        if not dependencies or not all(isinstance(item, str) and item for item in dependencies):
+            raise DistributionError(f"runtime requirement skill has no tools: {skill}")
+        unknown = [item for item in dependencies if item not in normalized_tools]
+        if unknown:
+            raise DistributionError(
+                f"runtime requirement skill {skill} names unknown tools: {', '.join(unknown)}"
+            )
+        normalized_skills[skill] = list(dependencies)
+    return normalized_tools, normalized_skills
+
+
+def resolve_tool_version(record: dict[str, object]) -> str | None:
+    """Resolve a tool pin from its literal version or its version_ref source."""
+    version_ref = record.get("version_ref")
+    if version_ref is not None:
+        relative, _, key = str(version_ref).partition("#")
+        payload = read_json_object(ROOT / relative, "runtime requirement version source")
+        value = payload.get(key)
+        if not isinstance(value, str) or not value:
+            raise DistributionError(
+                f"runtime requirement version_ref has no version: {version_ref}"
+            )
+        return value
+    version = record.get("version")
+    return version if isinstance(version, str) else None
+
+
+def materialized_requirements(
+    skill: str,
+    version: str,
+    source_revision: str,
+    tools: dict[str, dict[str, object]],
+    dependencies: list[str],
+) -> bytes:
+    """One deterministic per-archive requirements manifest for the channel revision."""
+    nodes = []
+    for name in dependencies:
+        record = tools[name]
+        pin = resolve_tool_version(record)
+        check = str(record["check"])
+        install = str(record["install"])
+        if pin is not None:
+            check = check.replace("{version}", pin)
+            install = install.replace("{version}", pin)
+        nodes.append(
+            {
+                "tool": name,
+                "check": check,
+                "install": install,
+                "version": pin,
+                "source_revision": source_revision,
+            }
+        )
+    return canonical(
+        {
+            "schema": REQUIREMENTS_SCHEMA,
+            "skill": skill,
+            "version": version,
+            "source_revision": source_revision,
+            "requirements": nodes,
+        }
+    )
+
+
+def installed_npm_pin() -> str | None:
+    """The portal npm pin recorded in the workspace lockfile, never the registry."""
+    payload = read_json_object(LOCKFILE, "workspace lockfile")
+    packages = payload.get("packages")
+    if not isinstance(packages, dict):
+        return None
+    member = packages.get(NPM_MEMBER)
+    if not isinstance(member, dict):
+        return None
+    version = member.get("version")
+    return version if isinstance(version, str) and version else None
+
+
+def channel_verdict(
+    version: str,
+    source_revision: str,
+    manifests: dict[str, dict[str, object]],
+) -> str:
+    """Cross-check the manifest pin, the Pages index, and the local npm pin in one line.
+
+    The npm pin comes from the workspace lockfile, never the registry. A stable
+    Pages version must equal it; a dev snapshot legitimately carries its own
+    derived version, so only the manifest-to-index pins are compared there.
+    """
+    portable = read_json_object(PACKAGE / "package.json", "distribution package manifest")
+    npm_pin = installed_npm_pin()
+    drift = [
+        name
+        for name, manifest in manifests.items()
+        if manifest.get("version") != version or manifest.get("source_revision") != source_revision
+    ]
+    if drift:
+        raise DistributionError(
+            f"materialized requirements drift from the channel revision: {', '.join(sorted(drift))}"
+        )
+    stable = portable.get("version") == version
+    if stable and npm_pin is not None and npm_pin != version:
+        raise DistributionError(
+            f"installed npm pin {npm_pin} differs from the Pages version {version}"
+        )
+    return (
+        f"channel: version={version} source_revision={source_revision[:12]} "
+        f"npm_pin={npm_pin or 'unavailable'} verdict=ok"
+    )
 
 
 def archive(skill: Path, extra_files: dict[str, bytes] | None = None) -> bytes:
@@ -136,8 +295,21 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
         isinstance(name, str) for name in public_skills
     ):
         raise DistributionError("public skill inventory is invalid")
+    tools, requirement_skills = load_requirements()
+    unknown_skills = [name for name in requirement_skills if name not in public_skills]
+    if unknown_skills:
+        raise DistributionError(
+            f"runtime requirements name unpublished skills: {', '.join(sorted(unknown_skills))}"
+        )
     output.parent.mkdir(parents=True, exist_ok=True)
     source_revision = stored_revision or revision()
+    materialized = {
+        name: materialized_requirements(name, version, source_revision, tools, dependencies)
+        for name, dependencies in requirement_skills.items()
+    }
+    manifest_pins = {
+        name: json.loads(content.decode("utf-8")) for name, content in materialized.items()
+    }
     with tempfile.TemporaryDirectory(prefix="skills-dist-", dir=output.parent) as temporary:
         staged = Path(temporary) / "skills"
         archives = staged / "archives" / "sha256"
@@ -146,23 +318,14 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
         for skill in sorted(BUILT_SKILLS.iterdir()):
             if not skill.is_dir() or not (skill / "SKILL.md").is_file():
                 continue
-            # Decision 76 stage 3: the resolved source revision is stitched
-            # into the code-review archive as its runtime pin, so a session
-            # reads the pinned commit from the installed tree and never runs
-            # git ls-remote per review ("skills update" installs exactly this
-            # archive, carrying the pin with it).
+            # The resolved channel revision is stitched into every archive with
+            # external dependencies as its requirements manifest, so a session
+            # reads the tool contract and the pinned commit from the installed
+            # tree and never runs git ls-remote per session ("skills update"
+            # installs exactly this archive, carrying the manifest with it).
+            requirements = materialized.get(skill.name)
             extra_files = (
-                {
-                    "references/runtime-pin.json": canonical(
-                        {
-                            "schema": "@kisev/skills/runtime-pin/v1",
-                            "version": version,
-                            "source_revision": source_revision,
-                        }
-                    )
-                }
-                if skill.name == "code-review"
-                else None
+                {"references/requirements.json": requirements} if requirements is not None else None
             )
             content = archive(skill, extra_files)
             digest = hashlib.sha256(content).hexdigest()
@@ -214,9 +377,11 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
         }
         (agent_skills / "index.json").write_bytes(canonical(agent_index))
         (staged / ".nojekyll").write_bytes(b"")
+        verdict = channel_verdict(version, source_revision, manifest_pins)
         if check:
             if not output.is_dir():
                 print("validated distribution in isolated staging area")
+                print(verdict)
                 return 0
             for source in staged.rglob("*"):
                 if source.is_file() and (
@@ -233,6 +398,7 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
                         f"unexpected distribution artifact: {target.relative_to(output)}"
                     )
             print(f"checked {len(entries)} skill archives")
+            print(verdict)
             return 0
         if output.exists():
             import shutil
@@ -242,6 +408,7 @@ def build(output: Path, check: bool, version_override: str | None = None) -> int
 
         shutil.move(str(staged), output)
     print(f"built {len(entries)} skill archives at {output}")
+    print(verdict)
     return 0
 
 
