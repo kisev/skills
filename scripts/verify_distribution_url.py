@@ -56,17 +56,26 @@ def verify_manifest_files(base: str, manifest_path: Path) -> int:
     if not isinstance(files, dict) or not files:
         raise VerificationError("release manifest has no Pages file inventory")
     for path, expected in sorted(files.items()):
+        digest = expected.get("sha256") if isinstance(expected, dict) else None
+        declared = expected.get("bytes") if isinstance(expected, dict) else None
         candidate = Path(path) if isinstance(path, str) else Path("/")
         if (
             not isinstance(path, str)
             or candidate.is_absolute()
             or ".." in candidate.parts
-            or not isinstance(expected, str)
-            or re.fullmatch(r"[0-9a-f]{64}", expected) is None
+            or not isinstance(digest, str)
+            or re.fullmatch(r"[0-9a-f]{64}", digest) is None
         ):
             raise VerificationError("release manifest contains an unsafe Pages entry")
         content = fetch(urllib.parse.urljoin(base, urllib.parse.quote(path, safe="/")))
-        if hashlib.sha256(content).hexdigest() != expected:
+        if hashlib.sha256(content).hexdigest() != digest or (
+            declared is not None
+            and (
+                isinstance(declared, bool)
+                or not isinstance(declared, int)
+                or declared != len(content)
+            )
+        ):
             raise VerificationError(f"deployed Pages file differs from release artifact: {path}")
     return len(files)
 

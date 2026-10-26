@@ -24,7 +24,7 @@ from scripts import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
@@ -468,19 +468,16 @@ def test_pages_manifest_verifies_every_exact_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     files = {"index.json": b"index\n", ".well-known/skills/lock.json": b"lock\n"}
-    manifest = tmp_path / "release.json"
-    manifest.write_text(
-        json.dumps(
-            {
-                "pages": {
-                    "files": {
-                        path: hashlib.sha256(content).hexdigest() for path, content in files.items()
-                    }
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
+    manifest_path = tmp_path / "release.json"
+
+    def manifest_for(entries: Mapping[str, object]) -> Path:
+        manifest_path.write_text(json.dumps({"pages": {"files": entries}}), encoding="utf-8")
+        return manifest_path
+
+    def entry(content: bytes) -> dict[str, object]:
+        return {"bytes": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+
+    manifest = manifest_for({path: entry(content) for path, content in files.items()})
     monkeypatch.setattr(
         verify_distribution_url,
         "fetch",
@@ -490,6 +487,20 @@ def test_pages_manifest_verifies_every_exact_file(
     files["index.json"] = b"changed\n"
     with pytest.raises(verify_distribution_url.VerificationError, match="differs"):
         verify_distribution_url.verify_manifest_files("https://pages.example/", manifest)
+    files["index.json"] = b"index\n"
+    wrong_size = {"index.json": {"bytes": 99, "sha256": entry(files["index.json"])["sha256"]}}
+    with pytest.raises(verify_distribution_url.VerificationError, match="differs"):
+        verify_distribution_url.verify_manifest_files(
+            "https://pages.example/", manifest_for(wrong_size)
+        )
+    flat = {"index.json": entry(files["index.json"])["sha256"]}
+    with pytest.raises(verify_distribution_url.VerificationError, match="unsafe"):
+        verify_distribution_url.verify_manifest_files("https://pages.example/", manifest_for(flat))
+    escape = {"../escape": entry(files["index.json"])}
+    with pytest.raises(verify_distribution_url.VerificationError, match="unsafe"):
+        verify_distribution_url.verify_manifest_files(
+            "https://pages.example/", manifest_for(escape)
+        )
 
 
 def test_github_release_creation_binds_tag_revision_and_notes(
