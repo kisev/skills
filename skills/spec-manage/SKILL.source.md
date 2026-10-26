@@ -14,4 +14,31 @@ Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` to conversation and reports, not to the independently declared language of canonical `specs/` prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
 
+Apply `references/interaction-contract.md` for evidence and mutation rules.
+
+Apply `references/validation.md` as the linking reference directs.
+
+Apply `references/consolidation.md` as the linking reference directs.
+
+Apply `references/architecture.md` as the linking reference directs.
+
+Apply `references/requirements.md` as the linking reference directs.
+
+Apply `references/onboarding.md` as the linking reference directs.
+
+Apply `references/canonical-contract.md` as the linking reference directs.
+
+Apply `references/content-states.md` as the linking reference directs.
+
+Apply `references/minimal-example.md` as the linking reference directs.
+
+Apply `references/documentation-review.md` for documentation impact review.
+
 When the target project contains `openspec/`, read `references/openspec.md` for the OpenSpec coexistence map before acting on `openspec/` artifacts; it bounds what this skill writes there.
+
+Apply `references/auditing.md` as the linking reference directs.
+
+Apply `references/adr.md` as the linking reference directs.
+
+Apply `references/interviewing.md` for spec-init and spec-onboard
+interviews.

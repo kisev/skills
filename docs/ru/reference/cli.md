@@ -1,21 +1,21 @@
 ---
 audience: user
-review: {"components": ["agentomatic", "memomatic", "taskmatic"], "sources": ["shared/references/cli_runtime.ts", "shared/manifest.json", "scripts/materialize_cli_runtime.mjs", "apps/memomatic/src/cli.ts", "apps/taskmatic/src/cli.ts", "packages/agentomatic/src/cli.ts"], "contracts": ["specs/requirements/interfaces/README.md"]}
+review: {"components": ["skillmate", "memomatic", "taskmatic"], "sources": ["apps/skillmate/src/skillmate/cli.py", "apps/memomatic/src/cli.ts", "apps/taskmatic/src/cli.ts"], "contracts": ["specs/requirements/interfaces/README.md"]}
 ---
 
 # Соглашения командной строки
 
 [English](../../reference/cli.md)
 
-Agentomatic, memomatic и taskmatic требуют Node.js 22.13+. Все три используют
-Commander для разбора параметров и общие CLI-утилиты, включаемые при сборке;
-отдельный npm-пакет устанавливать не нужно. В agentomatic сохранены существующий
-интерактивный мастер настройки и подробные инструкции команд.
+`skillmate` — Python 3.12+ только со стандартной библиотекой; memomatic и
+taskmatic требуют Node.js 22.13+. Все три используют одну грамматику команд:
+подкоманды с длинными параметрами, `--help` у каждой команды и явный `--json`
+для машинного вывода.
 
 ## Справка и настройки
 
 ```shell
-agentomatic install --help
+skillmate install --help
 memomatic sessions --help
 memomatic dream --help
 taskmatic claim --help
@@ -24,28 +24,31 @@ taskmatic claim --help
 Справка и запрос версии не создают состояние приложения и не вызывают модель.
 Справка перечисляет параметры, env-переменные, допустимые значения и примеры.
 Неизвестные параметры вызывают ошибку, а не становятся поисковым текстом и не
-запускают работу незаметно. `memomatic status` только читает состояние и
-показывает очередь (ожидающие файлы inbox, бэклог сессий, кандидатов на
-продвижение, последние проходы) без вызова модели; индексация выполняется
-явной командой `index`.
+запускают работу незаметно. `skillmate doctor` и `skillmate status` только
+читают состояние и ничего не пишут; `memomatic status` показывает очередь
+(ожидающие файлы inbox, бэклог сессий, кандидатов на продвижение, последние
+проходы) без вызова модели; индексация выполняется явной командой `index`.
 
 Приоритет: **аргументы CLI > env > JSON-конфигурация > значения по умолчанию**.
-`--config FILE` выбирает JSON-файл; также доступны `AGENTOMATIC_CONFIG`,
-`MEMOMATIC_CONFIG` и `TASKMATIC_CONFIG`. Общие ключи файла записываются в camelCase:
-`logLevel`, `logFormat`, `progress`, `color`, `json`. Taskmatic также принимает
-поля команд: `home`, `board`, `host`, `port`. Memomatic сохраняет секции
-`sessions`, `dream`, `embedding`, `reranker`, `search`, `archive`. Параметры запуска вроде
-`--model` имеют приоритет над соответствующей настройкой `sessions.model`/
-`dream.model`; прежнее значение извлечения из `dream` мигрирует в `sessions`,
-пока новая секция его не переопределит. Эти переопределения не записываются в
-файл автоматически.
+`--config FILE` выбирает JSON-файл; также доступны `SKILLMATE_CONFIG`,
+`MEMOMATIC_CONFIG` и `TASKMATIC_CONFIG`. Общие ключи файлов memomatic и
+taskmatic записываются в camelCase: `logLevel`, `logFormat`, `progress`,
+`color`, `json`; skillmate принимает свои имена параметров в snake\_case
+(`hosts`, `scope`, `version`, `skills`, `index_url`, `json`). Taskmatic также
+принимает поля команд: `home`, `board`, `host`, `port`. Memomatic сохраняет
+секции `sessions`, `dream`, `embedding`, `reranker`, `search`, `archive`.
+Параметры запуска вроде `--model` имеют приоритет над соответствующей настройкой
+`sessions.model`/`dream.model`; прежнее значение извлечения из `dream` мигрирует
+в `sessions`, пока новая секция его не переопределит. Эти переопределения не
+записываются в файл автоматически.
 
 Имена env для параметров приложений указаны в справке: например,
-`MEMOMATIC_MODEL`, `MEMOMATIC_TIMEOUT`, `TASKMATIC_AGENT`, `TASKMATIC_TTL`,
-`TASKMATIC_HOST`, `AGENTOMATIC_MODEL`. `MEMOMATIC_HOME`/`--state-dir` и
-`TASKMATIC_HOME`/`--home` задают абсолютные каталоги состояния. Стандартные XDG-пути
-сохранены. Подтверждение `--yes` в agentomatic принимается только из CLI:
-конфигурационный файл и `AGENTOMATIC_YES` не разрешают изменения.
+`MEMOMATIC_MODEL`, `MEMOMATIC_TIMEOUT`, `TASKMATIC_AGENT`, `TASKMATIC_TTL` и
+`TASKMATIC_HOST`; `SKILLMATE_CONFIG` выбирает файл конфигурации skillmate.
+`MEMOMATIC_HOME`/`--state-dir` и `TASKMATIC_HOME`/`--home` задают абсолютные
+каталоги состояния. Стандартные XDG-пути сохранены. Подтверждение `--yes` в
+каждом приложении принимается только из CLI: конфигурационный файл и
+переменные окружения не разрешают изменения.
 
 ## Результаты, логи и прогресс
 
@@ -57,18 +60,21 @@ taskmatic claim --help
 | `--progress` | `auto`, `always`, `never` | `_PROGRESS` |
 | `--color` | `auto`, `always`, `never` | `_COLOR` |
 
-К суффиксу добавляется `AGENTOMATIC`, `MEMOMATIC` или `TASKMATIC`. По умолчанию
-диагностика текстовая, уровня info; debug добавляет сообщения выполнения команд.
+Таблица описывает memomatic и taskmatic; к суффиксу добавляется `MEMOMATIC`
+или `TASKMATIC`. skillmate по умолчанию печатает человекочитаемые планы, а
+`--json` выбирает версионируемые плановые документы. По умолчанию диагностика
+текстовая, уровня info; debug добавляет сообщения выполнения команд.
 `NO_COLOR` отключает цвет. Автоматический прогресс рисуется только в терминале
 через stderr; перенаправление и systemd получают последовательные строки.
-JSON-логи не содержат анимации. Мастер agentomatic сохраняет управление терминалом;
-дополнительная диагностика имеет уровень debug, а анимация без явного запроса отключена.
+JSON-логи не содержат анимации. Интерактивные подтверждения сохраняют
+управление терминалом; дополнительная диагностика имеет уровень debug, а
+анимация без явного запроса отключена.
 
 Результаты идут в stdout, диагностика — в stderr. В stdout MCP находятся только
 сообщения протокола. Для обработки памяти memomatic сохраняет JSON-отчёты без TTY
 и показывает краткий итог в терминале; `--json` выбирает JSON явно. Поиск и списки
-задач сохраняют человекочитаемый вывод без `--json`. Существующие JSON-ошибки
-agentomatic остаются в stdout ради совместимости.
+задач сохраняют человекочитаемый вывод без `--json`. Планы и состояние skillmate
+остаются в stdout, поэтому конвейер может показать план до подтверждения.
 
 Прогресс Sessions и Dream показывает этап, прошедшее время и известное число
 фрагментов. Для запроса модели процент не выдумывается: сообщение об ожидании
@@ -78,9 +84,12 @@ agentomatic остаются в stdout ради совместимости.
 ## Коды завершения
 
 Для memomatic и taskmatic: `0` — успех/справка, `2` — ошибка парсера, `1` — ошибка
-операции или конфигурации, `124` — таймаут, `130` — прерывание. Agentomatic сохраняет
-код ошибок `2` и специальные коды doctor. Отменённый Dream сохраняет завершённую
-работу, но не считается успешно законченным проходом.
+операции или конфигурации, `124` — таймаут, `130` — прерывание. skillmate
+использует `0` — успех, `2` — ошибка использования или конфигурации, `1` —
+ошибка операции; отказ от подтверждения — обычный исход с кодом `0`, ничего
+не записывается. Отменённый Dream сохраняет завершённую работу, но не считается
+успешно законченным проходом.
 
-См. [управление Dream и восстановление](../how-to/memomatic.md) и
+См. [установку и управление навыками](../how-to/install-skills.md),
+[управление Dream и восстановление](../how-to/memomatic.md) и
 [команды Taskmatic](../how-to/taskmatic.md).

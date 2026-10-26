@@ -57,19 +57,18 @@ def test_missed_defect_registry_exists_in_both_locales_and_lists_all_classes() -
         "## Реестр пропущенных дефектов",
     )
 
-    commits = ("b5cf464", "184327d", "204714f")
+    commits = ("b5cf464", "204714f")
     for commit in commits:
         assert commit in english, commit
         assert commit in russian, commit
     for path in (
         "tests/test_application_workflows.py",
-        "packages/agentomatic/test/command-cli.test.mjs",
         "apps/reviewmatic/tests/test_context_package_records.py",
         "apps/reviewmatic/tests/test_local_review_scenarios.py",
     ):
         assert path in english, path
         assert path in russian, path
-    for guard in ("streamed_glab_trace", "modelSelection", "_shared_context_inputs"):
+    for guard in ("streamed_glab_trace", "_shared_context_inputs"):
         assert guard in english, guard
         assert guard in russian, guard
     for locale, covered, closed, mutation_check in (
@@ -112,7 +111,7 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
     assert len(english_root.splitlines()) < 150
     assert len(russian_root.splitlines()) < 150
     for document in (english_root, russian_root):
-        assert "agentomatic" in document
+        assert "skillmate" in document
         assert "docs/" in document
     assert all(
         heading in english_index
@@ -130,57 +129,26 @@ def test_documentation_has_a_diataxis_index_and_compact_project_entrypoint() -> 
 
 
 def test_integration_documentation_covers_the_same_scenario_cli_flow() -> None:
-    english = (ROOT / "docs/how-to/opencode-integration.md").read_text(encoding="utf-8")
-    russian = (ROOT / "docs/ru/how-to/opencode-integration.md").read_text(encoding="utf-8")
+    english = (ROOT / "docs/how-to/install-skills.md").read_text(encoding="utf-8")
+    russian = (ROOT / "docs/ru/how-to/install-skills.md").read_text(encoding="utf-8")
     for document in (english, russian):
-        assert "npx --yes skills@latest" in document
-        assert "install --dry-run" in document
-        assert "maintenance cleanup" in document
-        assert "maintenance repair" in document
-        assert "maintenance recover" in document
-        assert "configure agent" in document
-        assert "configure critics" in document
-        assert "configure integration" in document
-        assert "status --global" in document
-        assert "catalog --json" in document
-        assert "--remove-dependency" in document
-        assert "--no-disconnect" in document
-        assert "not-installed" in document
-        assert "plugin" in document
-        assert "restart" in document or "перезапуск" in document
-        assert "Skill command adapters" in document
-        assert "npm install --save-exact @kisev/agentomatic" in document
-        assert "npx --yes @kisev/agentomatic@latest" in document
-        assert "npx --yes @kisev/agentomatic@dev" in document
-        assert "npm exec -- agentomatic" not in document
-        assert "maintenance cleanup --yes" in document
-        assert "uninstall --yes" in document
-        assert "Apply the displayed changes?" in document
-        assert "--confirm" not in document
-        assert "plan_digest" not in document
-        assert "confirmation_digest" not in document
-    # Prose pins: wrapping-independent through the shared pin standard.
-    assert_pin(english, "Manage portable skills separately", "english")
-    assert_pin(russian, "Переносимыми навыками управляйте отдельно", "russian")
-    assert_pin(english, "lock files do not affect the cleanup plan", "english")
-    assert_pin(russian, "lock-файлы не влияют на план", "russian")
-
-    package_english = (ROOT / "packages/agentomatic/README.md").read_text(encoding="utf-8")
-    package_russian = (ROOT / "packages/agentomatic/README.ru.md").read_text(encoding="utf-8")
-    assert "/docs/how-to/opencode-integration.md" in package_english
-    assert "/docs/ru/how-to/opencode-integration.md" in package_russian
-    for document in (package_english, package_russian):
-        assert "npm install --save-exact @kisev/agentomatic" in document
-        assert "npx --yes @kisev/agentomatic@latest" in document
-        assert "@kisev/agentomatic@dev" in document
-        assert "npm exec -- agentomatic" not in document
-        assert "--confirm" not in document
-
-    for path in (ROOT / "README.md", ROOT / "README.ru.md"):
-        text = path.read_text(encoding="utf-8")
-        assert "npx --yes @kisev/agentomatic@latest" in text, path
-        assert "@kisev/agentomatic@dev" in text, path
-        assert "--confirm" not in text, path
+        assert "uvx skillmate install" in document
+        assert "--hosts claude,opencode" in document
+        assert "--scope global" in document
+        assert "--skill commit-msg" in document
+        assert "uvx skillmate update --version" in document
+        assert "uvx skillmate remove --yes" in document
+        assert "--confirm-drift" in document
+        assert "uvx skillmate doctor" in document
+        assert "uvx skillmate status" in document
+        assert "--from-checkout /path/to/skills --yes" in document
+        assert ".agents/skills/" in document
+        assert "~/.claude/skills/" in document
+        assert "~/.config/opencode/skills/" in document
+        assert "duplicate" in document or "дубликат" in document or "дублирующуюся" in document
+        assert "uvx skillmate install --yes" in document
+    assert_pin(english, "never falls back to a guessed source", "english")
+    assert_pin(russian, "не подменяет источник догадкой", "russian")
 
 
 def test_current_user_documentation_uses_stable_cli_channels() -> None:
@@ -189,13 +157,11 @@ def test_current_user_documentation_uses_stable_cli_channels() -> None:
         ROOT / "README.ru.md",
         ROOT / "CONTRIBUTING.md",
         ROOT / "CONTRIBUTING.ru.md",
-        ROOT / "packages/agentomatic/README.md",
-        ROOT / "packages/agentomatic/README.ru.md",
         ROOT / "packages/skills/README.md",
         ROOT / "packages/skills/README.ru.md",
         *sorted((ROOT / "docs").rglob("*.md")),
     ]
-    numeric_pin = re.compile(r"(?:\bskills|@kisev/agentomatic)@\d+\.\d+\.\d+")
+    numeric_pin = re.compile(r"\bskills@\d+\.\d+\.\d+|@kisev/agentomatic")
     for path in documents:
         text = path.read_text(encoding="utf-8")
         assert not numeric_pin.search(text), path
@@ -211,28 +177,6 @@ def test_current_user_documentation_uses_stable_cli_channels() -> None:
         ROOT / "docs/ru/verification.md",
     ):
         assert "npx --yes skills@latest" in path.read_text(encoding="utf-8"), path
-
-
-def test_portable_cleanup_docs_cover_every_retired_skill_name() -> None:
-    inventory = json.loads(
-        (ROOT / "packages/agentomatic/assets/migration-inventory.json").read_text(encoding="utf-8")
-    )
-    retired = {
-        *inventory["removed"],
-        *inventory["renamed"],
-        *inventory["replacements"],
-    }
-    assert len(retired) == 13
-
-    for relative in (
-        "docs/migration-inventory.md",
-        "docs/ru/migration-inventory.md",
-        "docs/how-to/portable-skills.md",
-        "docs/ru/how-to/portable-skills.md",
-    ):
-        text = (ROOT / relative).read_text(encoding="utf-8")
-        for name in retired:
-            assert name in text, f"{relative} omits retired skill {name}"
 
 
 def test_locale_checker_rejects_duplicate_neutral_path(tmp_path: Path) -> None:

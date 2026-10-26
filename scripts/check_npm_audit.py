@@ -18,15 +18,7 @@ ADVISORY_URL = re.compile(r"^https://github\.com/advisories/(?P<identifier>GHSA-
 # Documented compatibility reasons for advisories the gate cannot fix today.
 # Every entry must state why the advisory is accepted and when to remove it;
 # any advisory missing from this mapping still fails the audit.
-ADVISORY_ACKNOWLEDGEMENTS: dict[str, str] = {
-    "GHSA-ch52-4w7c-c8xp": (
-        "CVE-2026-93748 http-cache-semantics <=4.2.0 can disclose cross-user "
-        "cached responses via max-stale; no patched version exists upstream "
-        "(reviewed 2026-10-02) and the package is only reachable through "
-        "dev-time npm registry fetches of @opencode/plugin tooling; remove "
-        "this acknowledgement once a patched release exists"
-    ),
-}
+ADVISORY_ACKNOWLEDGEMENTS: dict[str, str] = {}
 
 
 class AuditError(Exception):

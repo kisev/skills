@@ -3,12 +3,8 @@
 
 from __future__ import annotations
 
-import json
 import os
-import re
-import shutil
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -18,80 +14,11 @@ if str(ROOT) not in sys.path:
 
 from scripts import build_distribution, build_release_artifacts  # noqa: E402
 
-MEMOMATIC = ROOT / "apps" / "memomatic"
-TASKMATIC = ROOT / "apps" / "taskmatic"
-SAFE_FS = ROOT / "packages" / "safe-fs"
-PACKAGE = ROOT / "packages" / "agentomatic"
 OUTPUT = ROOT / ".build" / "release"
 
 
 class DevArtifactError(Exception):
     pass
-
-
-def pack(
-    source: Path,
-    version: str,
-    prefixes: tuple[str, ...],
-    pins: dict[str, str],
-) -> tuple[bytes, dict[str, Any]]:
-    with tempfile.TemporaryDirectory(prefix="skills-dev-pack-") as temporary:
-        staged = Path(temporary) / "package"
-        staged.mkdir()
-        for name in ("README.md", "README.ru.md", "package.json"):
-            shutil.copyfile(source / name, staged / name)
-        shutil.copytree(source / "dist", staged / "dist")
-        if "assets/" in prefixes:
-            shutil.copytree(source / "assets", staged / "assets")
-        package = json.loads((staged / "package.json").read_text(encoding="utf-8"))
-        package["version"] = version
-        dependencies = package.get("dependencies", {})
-        if not isinstance(dependencies, dict):
-            raise DevArtifactError("npm package dependencies are invalid")
-        for dependency in dependencies:
-            if dependency in pins:
-                dependencies[dependency] = pins[dependency]
-        (staged / "package.json").write_text(
-            json.dumps(package, ensure_ascii=True, indent=2) + "\n", encoding="utf-8"
-        )
-        output = build_release_artifacts.command(
-            "npm",
-            "pack",
-            "--ignore-scripts",
-            "--json",
-            "--pack-destination",
-            temporary,
-            cwd=staged,
-        )
-        records = json.loads(output)
-        if not isinstance(records, list) or len(records) != 1 or not isinstance(records[0], dict):
-            raise DevArtifactError("npm pack returned an invalid record")
-        record = records[0]
-        files = record.get("files")
-        if not isinstance(files, list):
-            raise DevArtifactError("npm pack did not report its files")
-        paths = [item.get("path") if isinstance(item, dict) else None for item in files]
-        if not all(isinstance(path, str) for path in paths):
-            raise DevArtifactError("npm pack returned an invalid file record")
-        normalized_paths = sorted(str(path) for path in paths)
-        if not all(
-            path in build_release_artifacts.PACKAGE_MEMBERS[0].allowed or path.startswith(prefixes)
-            for path in normalized_paths
-        ):
-            raise DevArtifactError("npm package contains an unexpected file")
-        if record.get("version") != version:
-            raise DevArtifactError("npm pack version differs from the development version")
-        filename = record.get("filename")
-        if not isinstance(filename, str):
-            raise DevArtifactError("npm pack filename is missing")
-        return (Path(temporary) / filename).read_bytes(), record
-
-
-def member_dev_version(base: str, version: str) -> str:
-    match = re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+-dev\.([0-9]+)\.g([0-9a-f]+)", version)
-    if not match:
-        raise DevArtifactError("development version is invalid")
-    return f"{base}-dev.{match.group(1)}.g{match.group(2)}"
 
 
 def build(version: str, revision: str) -> dict[str, Any]:
@@ -102,64 +29,13 @@ def build(version: str, revision: str) -> dict[str, Any]:
         raise DevArtifactError("development revision does not match HEAD")
 
     if OUTPUT.exists():
-        shutil.rmtree(OUTPUT)
-    OUTPUT.mkdir(parents=True)
-    members = (
-        (SAFE_FS, "safe-fs.tgz", ("dist/",)),
-        (MEMOMATIC, "memomatic.tgz", ("dist/", "assets/")),
-        (TASKMATIC, "taskmatic.tgz", ("dist/", "assets/")),
-        (PACKAGE, "package.tgz", ("dist/",)),
-    )
-    pins: dict[str, str] = {}
-    for source, _filename, _prefixes in members:
-        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
-        name, base = package.get("name"), package.get("version")
-        if not isinstance(name, str) or not isinstance(base, str) or not base:
-            raise DevArtifactError("npm package name or version is invalid")
-        pins[name] = version if source == PACKAGE else member_dev_version(base, version)
-    npm_entries: list[dict[str, Any]] = []
-    tarballs: dict[str, Path] = {}
-    for source, filename, prefixes in members:
-        package = json.loads((source / "package.json").read_text(encoding="utf-8"))
-        name = package["name"]
-        member_version = pins[name]
-        content, record = pack(source, member_version, prefixes, pins)
-        digest = build_release_artifacts.hashes(content)
-        if record.get("integrity") != digest["integrity"] or record.get("shasum") != digest["sha1"]:
-            raise DevArtifactError("npm pack digests do not match the exact tarball")
-        tarball = OUTPUT / filename
-        tarball.write_bytes(content)
-        tarballs[name] = tarball
-        npm_entries.append(
-            {
-                "name": name,
-                "version": member_version,
-                "filename": filename,
-                "size": len(content),
-                **digest,
-            }
-        )
-
-    smoke_env = {
-        **os.environ,
-        "AGENTOMATIC_TARBALL": str(tarballs["@kisev/agentomatic"]),
-        "MEMOMATIC_TARBALL": str(tarballs["@kisev/memomatic"]),
-        "TASKMATIC_TARBALL": str(tarballs["@kisev/taskmatic"]),
-        "SAFE_FS_TARBALL": str(tarballs["@kisev/safe-fs"]),
-    }
-    build_release_artifacts.command(
-        "python3",
-        str(ROOT / "scripts/check_opencode_compatibility.py"),
-        cwd=PACKAGE,
-        env=smoke_env,
-    )
+        OUTPUT.mkdir(parents=True, exist_ok=True)
 
     manifest = {
-        "schema": "@kisev/skills-dev/v2",
+        "schema": "@kisev/skills-dev/v3",
         "channel": "dev",
         "version": version,
         "revision": revision,
-        "npm": npm_entries,
         "pages": {"files": build_release_artifacts.page_hashes()},
     }
     (OUTPUT / "release.json").write_bytes(build_release_artifacts.canonical(manifest))

@@ -4,8 +4,8 @@
 
 The maintained catalog contains 44 portable Agent Skills. Its release
 metadata and archive digests identify the distribution; individual skills carry
-no version. Their workflows are self-contained and can be installed independently
-of `@kisev/agentomatic`.
+no version. Their workflows are self-contained and install with `skillmate` or
+the compatible `skills` CLI.
 
 Declared companions are listed in each skill's built `SKILL.md` "Related skills"
 section: `requires` marks a shared credential or workflow, `uses` marks a
@@ -37,7 +37,7 @@ are not included.
 
 | Skill | Purpose |
 | - | - |
-| `agents-md` | Create or review repository-scoped `AGENTS.md` instructions. |
+| `agents-md` | Create or review repository-scoped `AGENTS.md` instructions; keeps a `CLAUDE.md` mirror (symlink, or an equal copy where symlinks are unavailable) beside every managed file. |
 | `asd-ste100` | Check and rewrite technical text in the task's language using Simplified Technical English principles, preserving conditions, exceptions, and obligations. |
 | `askme` | Clarify a task or design through a bounded interview; every call returns all current agreements, including those made before the first interview. |
 | `ast-grep` | Run structural search or a safe direct AST rewrite through ast-grep. |
@@ -81,9 +81,6 @@ are not included.
 | `team-sprint-close` | Close one sprint cycle from a private profile or explicit context. |
 | `team-sprint-start` | Start one sprint cycle from a private profile or explicit context. |
 | `verification` | Gate completion claims behind fresh verification evidence; inside a repository, its own verification contracts take precedence. |
-
-Exact active and retired names are recorded in the
-[Migration Inventory](../migration-inventory.md).
 
 ## Specification Modes
 
@@ -154,6 +151,7 @@ do not put credentials or personal notes in them.
 - Skills with external tools ship `references/requirements.json` and
   `scripts/check_environment.py`; the check prints repair commands and installs
   nothing.
-- Portable skills work without `@kisev/agentomatic`.
+- Portable skills are host-neutral and work in any host that reads their
+  skill directory.
 - Skills do not replace repository policy, review, secret scanning, access
   control, or the user's final judgment.

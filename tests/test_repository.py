@@ -411,18 +411,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                     self.assertEqual(extra, [])
 
     def test_command_label_matches_command_ownership(self) -> None:
-        registry = (ROOT / "packages/agentomatic/src/registry.ts").read_text(encoding="utf-8")
-        names_block = re.search(r"const SKILL_NAMES = \[(.*?)\]", registry, re.DOTALL)
-        commandless_block = re.search(
-            r"export const COMMANDLESS_SKILLS = \[(.*?)\] as const;", registry, re.DOTALL
-        )
-        if names_block is None or commandless_block is None:
-            self.fail("command adapter registry blocks are missing")
-        owners = set(re.findall(r'"([a-z0-9-]+)"', names_block.group(1)))
-        commandless = set(re.findall(r'"([a-z0-9-]+)"', commandless_block.group(1)))
-        authored = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.source.md")}
+        """The commandless opt-out is exactly the inspired-by set, and both
+        match the frontmatter labels across authored skills."""
         labeled: set[str] = set()
         inspired: set[str] = set()
+        authored = {path.parent.name for path in (ROOT / "skills").glob("*/SKILL.source.md")}
         for path in sorted((ROOT / "skills").glob("*/SKILL.source.md")):
             lines = path.read_text(encoding="utf-8").splitlines()
             frontmatter = lines[1 : lines.index("---", 1)]
@@ -430,14 +423,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                 labeled.add(path.parent.name)
             if any(line.startswith("  inspired-by: ") for line in frontmatter):
                 inspired.add(path.parent.name)
-        self.assertEqual(commandless, labeled)
         self.assertTrue(labeled <= inspired, "every commandless skill names its inspiration")
         self.assertEqual(inspired, set(INSPIRED_BY_LABELS))
-        self.assertFalse(labeled & owners)
-        self.assertEqual(labeled | owners, authored)
-        # The check_documentation command derivation unions SKILL_NAMES with
-        # `name: "..."` literals; the three must never appear in such literals.
-        self.assertEqual(set(re.findall(r'name: "([a-z0-9-]+)"', registry)) - owners, {"rtk-stats"})
+        from scripts.check_documentation import authored_commands
+
+        self.assertEqual(labeled, authored - authored_commands(ROOT))
 
     def test_portable_workflows_preserve_source_contracts(self) -> None:
         for name, contracts in WORKFLOW_CONTRACTS.items():

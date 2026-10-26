@@ -1,6 +1,6 @@
 ---
 audience: user
-review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*", "packages/agentomatic/src/installer.ts", "packages/agentomatic/test/stage19.test.mjs"], "contracts": ["specs/capabilities/applications/memomatic.md"]}
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "apps/memomatic/assets/systemd/*"], "contracts": ["specs/capabilities/applications/memomatic.md"]}
 ---
 
 # Set Up and Use Memomatic
@@ -9,37 +9,27 @@ review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/
 
 ## Install and Connect
 
-Use Node.js 22.13+ and npm. For a CLI available outside an npm project:
+Use Node.js 22.13+ and npm. The application ships from a checkout of this
+repository: build the workspace once, then install the package globally from
+the checkout.
 
 ```shell
-# Registry version
-npm view --prefer-online @kisev/memomatic@latest version
+git clone https://github.com/kisev/skills && cd skills
+mise install
+task generate
 
-# Install
-npm install --global @kisev/memomatic
+# Install from the checkout
+npm install --global ./apps/memomatic
 
 # Installed package and active CLI
 npm list --global @kisev/memomatic --depth=0
 memomatic --version
 ```
 
-Tags can move between preview and installation. `npm list` checks the package;
-`--version` checks the CLI resolved from PATH. For a project-local installation:
-
-```shell
-# Registry version
-npm view --prefer-online @kisev/memomatic@latest version
-
-# Install in this npm project
-npm install @kisev/memomatic
-
-# Installed dependency and local CLI (no npx download)
-npm list @kisev/memomatic --depth=0
-./node_modules/.bin/memomatic --version
-```
-
-Invoke the project CLI as `npx memomatic`. The systemd example below expects a
-global binary. npx itself does not install a global CLI.
+Rerun `git pull`, `task generate`, and the global install to update. For a
+project-local installation, run `npm install <path-to-checkout>/apps/memomatic`
+inside the project and invoke the CLI as `npx memomatic`. The systemd example
+below expects a global binary.
 
 Connect `memomatic mcp-serve` as a local stdio MCP server in each host. OpenCode,
 Kilo, and MiMo use this fragment in their respective JSON configuration:
@@ -62,40 +52,12 @@ binary, use absolute executable paths. Restart the host and check that
 MCP server (the host may prefix tool names). Models decide when to search; ask
 explicitly when recall is required. There is no automatic memory injection.
 
-Memomatic and agentomatic are separate installations; agentomatic does not install
-or depend on memomatic.
-`@dev` selects the latest successful publication from `dev` for all workspace
-packages: `@kisev/agentomatic`, `@kisev/memomatic`, `@kisev/taskmatic`, and `@kisev/safe-fs`.
-`@latest` is the stable release channel; before a package's first stable release,
-its initial registry tag can still point to a prerelease. Use explicit `@dev`
-for development installations:
+## Update
 
-```shell
-# Registry versions
-npm view --prefer-online @kisev/memomatic@dev version
-npm view --prefer-online @kisev/agentomatic@dev version
-
-# Install and confirm the OpenCode setup
-npm install --global @kisev/memomatic@dev
-npx --yes @kisev/agentomatic@dev install --global
-
-# Installed packages and active memory CLI
-npm list --global @kisev/memomatic --depth=0
-npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-memomatic --version
-```
-
-Updating agentomatic alone does not update the memomatic CLI or MCP server.
-
-## Migrate from the OpenCode Plugin
-
-Rerun the [agentomatic installer](opencode-integration.md) with your existing
-selections except `memomatic`, which is no longer a plugin option. Review the
-preview: unchanged manifest-owned `plugins/memomatic.js` is archived and removed.
-An edited wrapper is a conflict; preserve your edits and resolve it before retrying.
-If you manually configured an import of `@kisev/agentomatic/plugins/memomatic`,
-remove that entry yourself. Then connect the MCP server as above and restart
-OpenCode. Installing only the newer npm dependency does not remove an old wrapper.
+Rerun the checkout install from the previous section after pulling the
+repository. Updating the package does not touch memory files, the inbox,
+embeddings, rules, or existing sweep scheduling; they live in private state
+and survive updates. Restart the MCP host afterwards.
 
 Memory files, the inbox, embeddings, rules, and existing sweep scheduling are
 preserved.
@@ -422,7 +384,7 @@ private and outside Git.
 
 ## Schedule the Sweeps
 
-The units belong to `@kisev/memomatic`, not agentomatic. Locate them with
+The units ship with the package. Locate them with
 `npm root --global`, then copy the four units from
 `<npm-root>/@kisev/memomatic/assets/systemd/` to `~/.config/systemd/user/`.
 Ensure the user service can resolve both `memomatic` and `opencode`; use absolute

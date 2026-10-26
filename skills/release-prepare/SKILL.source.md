@@ -21,4 +21,19 @@ Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
 
+Apply `references/manual-publication.md` for manual publication rules.
+
+Apply `references/release-examples.md` as the linking reference directs.
+
+Apply `references/changelog-register.md` as the linking reference directs.
+
+Apply `references/label-semantics.md` as the linking reference directs.
+
+Apply `references/gitlab-workflow.md` for the GitLab workflow.
+
+Apply `references/portable-gitlab-contracts-v2.md` for the portable GitLab
+contracts.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.
+
 The one-page map of the release chain — every stage from the release MR evidence through finalize, rebind, and the post-merge refresh — is the repository page `docs/reference/release-prepare.md`.

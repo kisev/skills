@@ -1,0 +1,18 @@
+{
+  "package": "@kisev/skills",
+  "schema": "@kisev/skills/index/v1",
+  "version": "11.1.0",
+  "source_revision": "1111111111111111111111111111111111111111",
+  "skills": [
+    {
+      "name": "alpha",
+      "archive": "archives/sha256/53c34d3a6777d0399e4c2e5cb5d561be8a1f2ae9a203cfda0b268153bebcfb68.tar.gz",
+      "sha256": "53c34d3a6777d0399e4c2e5cb5d561be8a1f2ae9a203cfda0b268153bebcfb68"
+    },
+    {
+      "name": "beta",
+      "archive": "archives/sha256/921092b17288dafa6d707f3a2d3435a988878cb242d26bef5e287fde45c6db7f.tar.gz",
+      "sha256": "921092b17288dafa6d707f3a2d3435a988878cb242d26bef5e287fde45c6db7f"
+    }
+  ]
+}

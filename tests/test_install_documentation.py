@@ -1,4 +1,4 @@
-"""Keep installation examples transparent about registry and local versions."""
+"""Keep installation examples transparent about the source they install from."""
 
 import re
 from pathlib import Path
@@ -10,10 +10,9 @@ PAIRS = (
     ("README.md", "README.ru.md"),
     ("apps/memomatic/README.md", "apps/memomatic/README.ru.md"),
     ("apps/taskmatic/README.md", "apps/taskmatic/README.ru.md"),
-    ("packages/agentomatic/README.md", "packages/agentomatic/README.ru.md"),
     ("packages/safe-fs/README.md", "packages/safe-fs/README.ru.md"),
+    ("docs/how-to/install-skills.md", "docs/ru/how-to/install-skills.md"),
     ("docs/how-to/memomatic.md", "docs/ru/how-to/memomatic.md"),
-    ("docs/how-to/opencode-integration.md", "docs/ru/how-to/opencode-integration.md"),
     ("docs/how-to/portable-skills.md", "docs/ru/how-to/portable-skills.md"),
     ("docs/how-to/taskmatic.md", "docs/ru/how-to/taskmatic.md"),
     ("docs/tutorials/getting-started.md", "docs/ru/tutorials/getting-started.md"),
@@ -25,7 +24,7 @@ def installation_blocks(path: str) -> list[str]:
     return [
         block
         for block in re.findall(r"```(?:shell|bash)\n(.*?)```", (ROOT / path).read_text(), re.S)
-        if "npm view --prefer-online" in block
+        if "npm install" in block or "skills@latest add" in block
     ]
 
 
@@ -35,36 +34,29 @@ def test_installation_examples_preview_run_and_verify_in_both_locales(
     russian: str,
 ) -> None:
     blocks = installation_blocks(english)
-    assert blocks, english
-    assert blocks == installation_blocks(russian)
+    assert blocks == installation_blocks(russian), english
     for block in blocks:
-        stages = re.split(r"\n\n(?=#)", block.strip())
-        assert len(stages) == 3, (english, block)
-        preview, install, verify = stages
-        assert "npm view --prefer-online" in preview
-        assert re.search(r"^(?:npm install|npx .* (?:add|install)) ", install, re.M)
-        assert "npm list " in verify or "skills@latest list" in verify
-        assert not re.search(r"^npx .*--version", verify, re.M)
-        if "@kisev/agentomatic" in install:
-            assert "npm list " in verify
-            assert "npm list --global @kisev/agentomatic" not in verify
-        if "skills@latest add" in install:
-            assert "skills@latest list" in verify
-            assert "skills@dev" not in preview + install + verify
-            assert (" list --global" in verify) == (" add " in install and "--global" in install)
+        # A checkout build precedes every install from a checkout; the skills
+        # CLI channel names the Pages source it reads.
+        if "npm install --global ./apps/" in block:
+            assert "task generate" in block
+            assert "npm view" not in block
+        if "skills@latest add" in block:
+            assert "https://kisev.github.io/skills" in block
+            assert "skills@dev" not in block
+        # Every install in this repository is non-interactive only through an
+        # explicit flag; plain commands preview instead of writing.
+        assert not re.search(r"^npm install --global @kisev/", block, re.M)
 
 
 def test_complete_setup_checks_every_installed_application() -> None:
-    for block, channel in zip(installation_blocks("README.md"), ("latest", "dev"), strict=True):
-        for name in ("agentomatic", "memomatic", "taskmatic"):
-            assert f"npm view --prefer-online @kisev/{name}@{channel} version" in block
-        for name in ("memomatic", "taskmatic"):
-            assert f"{name} --version" in block
-        assert "uvx --from" in block
-        assert "#subdirectory=apps/reviewmatic" in block
-        assert "npm view --prefer-online @kisev/reviewmatic" not in block
-        assert 'npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0' in block
-        assert "npm list --global @kisev/memomatic @kisev/taskmatic --depth=0" in block
+    text = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "uvx skillmate install --yes" in text
+    assert "skills@latest add https://kisev.github.io/skills --global" in text
+    assert "--from-checkout /path/to/skills --yes" in text
+    assert "uvx --from" in text
+    assert "#subdirectory=apps/reviewmatic" in text
+    assert "npm view --prefer-online @kisev/" not in text
 
 
 def test_reviewmatic_git_install_is_mirrored_and_documents_ref_and_cache() -> None:

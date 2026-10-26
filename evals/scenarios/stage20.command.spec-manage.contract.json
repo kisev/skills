@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "ab0f3dd397a777d19e1302f8ab20052041e3761d92c3a59095244ba533789e9e",
+  "digest": "0b45febbf1ece31714ee7305542f5c33e33abfc6ab167f7f4e22f6473868fc2d",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.spec-manage.contract.source",
-      "path": "packages/agentomatic/src/registry.ts"
+      "path": "apps/skillmate/src/skillmate/adapters.py"
     }
   ],
   "kind": "deterministic",

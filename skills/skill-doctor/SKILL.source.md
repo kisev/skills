@@ -18,3 +18,5 @@ metadata:
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+Apply `references/writing-for-agents.md` for wording rules and pointers.

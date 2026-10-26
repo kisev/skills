@@ -42,6 +42,9 @@
 [tool.ruff]
   target-version = "py312"
   line-length = 100
+  # Live-run fixtures are frozen scenario data staged verbatim into isolated
+  # workdirs; they are inputs, not maintained source.
+  extend-exclude = ["evals/live/*/fixture"]
 
   [tool.ruff.lint]
     select = ["E4", "E7", "E9", "F"]
@@ -94,6 +97,10 @@
       "scripts/build_distribution.py" = [
         "PLC0415",                                                          # Lazy imports avoid loading build-only modules for metadata checks.
         "S607",                                                             # Git is a required PATH-resolved build dependency.
+      ]
+      "scripts/live_runner.py" = [
+        "S603",                                                             # The command vector is fixed by the pinned profile and versioned scenarios.
+        "S607",                                                             # ccr/git are required PATH-resolved toolchain dependencies.
       ]
       "scripts/fresh_command.py" = [
         "S603",                                                             # The command vector is fixed by the taskfile, not user input.

@@ -24,12 +24,6 @@ SCHEMA_PATHS = {
     "apps/reviewmatic/src/reviewmatic/portable/portable_gitlab/artifact-contracts-v2.schema.json",
     "evals/schemas/result-v1.schema.json",
     "evals/schemas/scenario-v1.schema.json",
-    "packages/agentomatic/contracts/critic-report-v1.schema.json",
-    "packages/agentomatic/contracts/execution-card-v1.schema.json",
-    "packages/agentomatic/contracts/mapper-report-v1.schema.json",
-    "packages/agentomatic/contracts/review-report-v1.schema.json",
-    "packages/agentomatic/contracts/routing-receipt-v1.schema.json",
-    "packages/agentomatic/contracts/worker-report-v1.schema.json",
     "shared/references/portable_gitlab/artifact-contracts-v2.schema.json",
     "shared/references/post-success-marker.schema.json",
     "shared/references/team_runtime/team-context.schema.json",
@@ -575,12 +569,12 @@ def test_every_committed_json_schema_uses_a_valid_meta_schema() -> None:
 def validate_eval_contract_instances() -> None:
     scenario_validator = validator("evals/schemas/scenario-v1.schema.json")
     scenarios = sorted((ROOT / "evals/scenarios").glob("*.json"))
-    assert len(scenarios) == 312
+    assert len(scenarios) == 288
     for path in scenarios:
         scenario_validator.validate(load(path.relative_to(ROOT)))
 
     scenario = load("evals/scenarios/golden-goal.en.json")
-    args = argparse.Namespace(offline=True, host="offline", model=None)
+    args = argparse.Namespace(offline=True)
     result = eval_runner.result_for(scenario, args, ROOT)
     validator("evals/schemas/result-v1.schema.json").validate(result)
 
@@ -720,14 +714,6 @@ def validate_shared_contract_instances() -> None:
         artifact_validator.validate({**local_review, "payload": bad_answer})
 
 
-def validate_opencode_contract_instances() -> None:
-    instances = load("packages/agentomatic/contracts/instances-v1.json")
-    schema_names = {path.rsplit("/", 1)[-1] for path in SCHEMA_PATHS if "/contracts/" in path}
-    assert set(instances) == schema_names
-    for name, instance in instances.items():
-        validator(f"packages/agentomatic/contracts/{name}").validate(instance)
-
-
 def taskmatic_snapshot_instance() -> dict[str, Any]:
     return cast("dict[str, Any]", load("skills/taskmatic/references/snapshot.example.json"))
 
@@ -838,32 +824,8 @@ def validate_taskmatic_contract_instances() -> None:
 def test_every_committed_json_schema_has_a_concrete_contract() -> None:
     validate_eval_contract_instances()
     validate_shared_contract_instances()
-    validate_opencode_contract_instances()
     validate_skill_doctor_contract_instances()
     validate_taskmatic_contract_instances()
-    validate_schema_runtime_rejections()
-
-
-def validate_schema_runtime_rejections() -> None:
-    opencode = load("packages/agentomatic/contracts/instances-v1.json")
-    routing_validator = validator("packages/agentomatic/contracts/routing-receipt-v1.schema.json")
-    lowercase_date = copy.deepcopy(opencode["routing-receipt-v1.schema.json"])
-    lowercase_date["expires_at"] = "2099-01-01t00:00:00z"
-    routing_validator.validate(lowercase_date)
-    for change in (
-        {"host_inventory_revision": "not-a-digest"},
-        {"task_digest": "not-a-digest"},
-        {"requirements_digest": "not-a-digest"},
-        {"card_digest": "not-a-digest"},
-        {"nonce": "too-short"},
-        {"expires_at": "January 1, 2099"},
-        {"expires_at": "2099-02-30T00:00:00Z"},
-        {"unexpected": True},
-    ):
-        routing = copy.deepcopy(opencode["routing-receipt-v1.schema.json"])
-        routing.update(change)
-        with pytest.raises(ValidationError):
-            routing_validator.validate(routing)
 
     artifacts = {instance["kind"]: instance for instance in artifact_instances()}
     artifact_validator = validator(

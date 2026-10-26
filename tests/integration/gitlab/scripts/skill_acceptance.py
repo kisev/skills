@@ -12,7 +12,7 @@ the GitLab host is the fake-glab fixture rather than a real server, and
 publication stays unexecuted. The critic is required to be an independent
 subagent session (opencode's subagent tool provides one; the runtime rejects a
 primary-session receipt), so the panel independence contract holds. The task
-is explicitly optional (like ``eval:live``): it needs provider credentials and
+is explicitly optional (like ``live:run``): it needs provider credentials and
 never runs inside ``task check``, ``check:core``, Lefthook hooks, or CI.
 """
 

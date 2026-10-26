@@ -26,9 +26,7 @@ jobs:
       RELEASE_TAG: ${{ github.ref_name }}
       RELEASE_REVISION: ${{ github.sha }}
     outputs:
-      npm-artifact: ${{ steps.artifact-names.outputs.npm }}
       pages-artifact: ${{ steps.artifact-names.outputs.pages }}
-      dist-tag: ${{ steps.channel.outputs.dist-tag }}
       deploys-pages: ${{ steps.channel.outputs.deploys-pages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -41,11 +39,8 @@ jobs:
       - name: Bind artifact names to the producing attempt
         id: artifact-names
         run: |
-          echo "npm=npm-release-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "pages=github-pages-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Run full preflight and build exact artifacts
-        env:
-          RELEASE_DIST_TAG: ${{ steps.channel.outputs.dist-tag }}
         run: task release:prepare
       - name: Compose stable and current dev Pages channels
         if: steps.channel.outputs.deploys-pages == 'true'
@@ -58,15 +53,6 @@ jobs:
           path: .build/pages
           include-hidden-files: true
           retention-days: 14
-      - name: Upload exact npm artifact and release manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        with:
-          name: ${{ steps.artifact-names.outputs.npm }}
-          path: .build/release
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 14
-
   stable-pages:
     name: Publish and verify stable Pages
     needs: stable-preflight
@@ -86,10 +72,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
-        with:
-          name: ${{ needs.stable-preflight.outputs.npm-artifact }}
-          path: .build/release
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5
@@ -101,41 +83,47 @@ jobs:
           PAGES_URL: ${{ steps.deployment.outputs.page_url }}
         run: task release:pages:verify
 
-  stable-npm:
-    name: Publish and verify stable npm
+  pypi-publish:
+    name: Publish skillmate to PyPI
     needs: stable-preflight
+    if: needs.stable-preflight.outputs.deploys-pages == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 15
     permissions:
       contents: read
       id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/skillmate
     env:
-      NPM_CONFIG_PROVENANCE: "true"
-      NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
-      NPM_DIST_TAG: ${{ needs.stable-preflight.outputs.dist-tag }}
+      RELEASE_TAG: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7
-        with:
-          node-version: "24"
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
-        with:
-          name: ${{ needs.stable-preflight.outputs.npm-artifact }}
-          path: .build/release
-      - name: Publish once and wait for verified registry propagation
-        run: task release:npm
+      - name: Build the skillmate distribution for the tagged version
+        run: |
+          cd apps/skillmate
+          mise exec -- uv build
+          prefix="dist/skillmate-${RELEASE_TAG#v}-"
+          found="$(ls "$prefix"* 2>/dev/null || true)"
+          test -n "$found" || {
+            echo "built skillmate version does not match $RELEASE_TAG" >&2
+            exit 1
+          }
+      - name: Publish to PyPI through trusted publishing
+        run: |
+          cd apps/skillmate
+          mise exec -- uv publish --trusted-publishing always
 
   github-release:
     name: Create GitHub Release
     needs:
       - stable-pages
-      - stable-npm
+      - pypi-publish
     if: >-
-      !cancelled() && needs.stable-npm.result == 'success' &&
-      (needs.stable-pages.result == 'success' || needs.stable-pages.result == 'skipped')
+      !cancelled() &&
+      (needs.stable-pages.result == 'success' || needs.stable-pages.result == 'skipped') &&
+      (needs.pypi-publish.result == 'success' || needs.pypi-publish.result == 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -162,7 +150,6 @@ jobs:
     outputs:
       version: ${{ steps.identity.outputs.version }}
       revision: ${{ steps.identity.outputs.revision }}
-      npm-artifact: ${{ steps.artifact-names.outputs.npm }}
       pages-artifact: ${{ steps.artifact-names.outputs.pages }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
@@ -184,7 +171,6 @@ jobs:
       - name: Bind artifact names to the producing attempt
         id: artifact-names
         run: |
-          echo "npm=npm-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
           echo "pages=github-pages-dev-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
       - name: Build exact dev artifacts and both Pages channels
         run: task dev:prepare
@@ -195,15 +181,6 @@ jobs:
           path: .build/pages
           include-hidden-files: true
           retention-days: 3
-      - name: Upload exact dev npm artifact and manifest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7
-        with:
-          name: ${{ steps.artifact-names.outputs.npm }}
-          path: .build/release
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
-
   dev-pages:
     name: Publish and verify dev Pages
     needs: dev-preflight
@@ -224,10 +201,6 @@ jobs:
         with:
           ref: ${{ needs.dev-preflight.outputs.revision }}
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
-        with:
-          name: ${{ needs.dev-preflight.outputs.npm-artifact }}
-          path: .build/release
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346  # v5
@@ -238,32 +211,3 @@ jobs:
         env:
           PAGES_URL: ${{ steps.deployment.outputs.page_url }}
         run: task dev:pages:verify
-
-  dev-npm:
-    name: Publish and verify dev npm
-    needs: dev-preflight
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write
-    env:
-      NPM_CONFIG_PROVENANCE: "true"
-      NPM_CONFIG_REGISTRY: https://registry.npmjs.org/
-      NPM_DIST_TAG: dev
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
-        with:
-          ref: ${{ needs.dev-preflight.outputs.revision }}
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7
-        with:
-          node-version: "24"
-          registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8
-        with:
-          name: ${{ needs.dev-preflight.outputs.npm-artifact }}
-          path: .build/release
-      - name: Publish once under the dev dist-tag and verify registry bytes
-        run: task dev:npm

@@ -47,14 +47,29 @@ cannot confess, and state the positive rule instead of steering by prohibition.
     assess conflicts with parent and nested files.
 14. Write the bounded project file directly with atomic replacement, then show
     the resulting diff.
-15. Validate content, nesting, and scope after writing: the file exists when
-    required, contains only applicable rules, has no stale or inherited
-    duplicates, and does not conflict with nested files. If reconciliation
-    produces no diff, report that the file is current.
+15. Maintain a CLAUDE.md mirror beside every AGENTS.md this workflow manages,
+    at the worktree root and in nested scopes: attempt a symlink to the
+    sibling AGENTS.md first (for example `ln -s AGENTS.md CLAUDE.md`); write
+    a full copy only when that attempt actually fails or symlinks are
+    unavailable. Keep an existing mirror that is already valid.
+16. Never modify a CLAUDE.md that differs from the sibling AGENTS.md silently.
+    Show the divergence, ask the user how to synchronize, and recommend
+    synchronizing: consolidate the unique CLAUDE.md content into AGENTS.md,
+    then restore the mirror form (symlink, or copy where symlinks are
+    unavailable). Write only after the user's choice.
+17. Validate content, nesting, scope, and mirrors after writing: the file
+    exists when required, contains only applicable rules, has no stale or
+    inherited duplicates, and does not conflict with nested files; every
+    managed AGENTS.md has a valid CLAUDE.md mirror beside it — a symlink
+    resolving to the sibling AGENTS.md, or a file equal to it in content. If
+    reconciliation produces no diff, report that the file is current.
 
 ## Result
 
 - `AGENTS.md` is created or updated in the correct scope.
+- A valid CLAUDE.md mirror (symlink, or an equal copy where symlinks are
+  unavailable) stands beside every managed AGENTS.md, or the divergence was
+  surfaced to the user with a synchronization recommendation.
 - The chat briefly lists changes, sources used, retained or removed rules, and
   unconfirmed constraints.
 - Inheritance and conflicts with neighboring `AGENTS.md` have been checked.

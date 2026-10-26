@@ -1,17 +1,6 @@
 {
   "version": 1,
   "pairs": [
-    { "en": "docs/reference/cli.md", "ru": "docs/ru/reference/cli.md" },
-    { "en": "docs/reference/code-review.md", "ru": "docs/ru/reference/code-review.md" },
-    { "en": "docs/reference/release-prepare.md", "ru": "docs/ru/reference/release-prepare.md" },
-    { "en": "docs/how-to/documentation-review.md", "ru": "docs/ru/how-to/documentation-review.md" },
-    { "en": "docs/how-to/skill-acceptance.md", "ru": "docs/ru/how-to/skill-acceptance.md" },
-    { "en": "docs/how-to/memomatic.md", "ru": "docs/ru/how-to/memomatic.md" },
-    { "en": "docs/how-to/taskmatic.md", "ru": "docs/ru/how-to/taskmatic.md" },
-    {
-      "en": "README.md",
-      "ru": "README.ru.md"
-    },
     {
       "en": "CHANGELOG.md",
       "ru": "CHANGELOG.ru.md"
@@ -21,81 +10,20 @@
       "ru": "CONTRIBUTING.ru.md"
     },
     {
+      "en": "README.md",
+      "ru": "README.ru.md"
+    },
+    {
       "en": "SECURITY.md",
       "ru": "SECURITY.ru.md"
     },
     {
-      "en": "docs/README.md",
-      "ru": "docs/ru/README.md"
-    },
-    {
-      "en": "docs/tutorials/getting-started.md",
-      "ru": "docs/ru/tutorials/getting-started.md"
-    },
-    {
-      "en": "docs/how-to/portable-skills.md",
-      "ru": "docs/ru/how-to/portable-skills.md"
-    },
-    {
-      "en": "docs/how-to/opencode-integration.md",
-      "ru": "docs/ru/how-to/opencode-integration.md"
-    },
-    {
-      "en": "docs/how-to/npm-package-lifecycle.md",
-      "ru": "docs/ru/how-to/npm-package-lifecycle.md"
-    },
-    {
-      "en": "docs/how-to/ocr-critic.md",
-      "ru": "docs/ru/how-to/ocr-critic.md"
-    },
-    {
-      "en": "docs/reference/skill-catalog.md",
-      "ru": "docs/ru/reference/skill-catalog.md"
-    },
-    {
-      "en": "docs/reference/humanize-patterns.md",
-      "ru": "docs/ru/reference/humanize-patterns.md",
-      "shared_quotes": true
-    },
-    {
-      "en": "docs/architecture.md",
-      "ru": "docs/ru/architecture.md"
-    },
-    {
-      "en": "docs/migration-inventory.md",
-      "ru": "docs/ru/migration-inventory.md"
-    },
-    {
-      "en": "docs/verification.md",
-      "ru": "docs/ru/verification.md"
-    },
-    {
-      "en": "docs/reviewmatic-test-matrix.md",
-      "ru": "docs/ru/reviewmatic-test-matrix.md"
-    },
-    {
-      "en": "packages/agentomatic/README.md",
-      "ru": "packages/agentomatic/README.ru.md"
-    },
-    {
-      "en": "packages/skills/README.md",
-      "ru": "packages/skills/README.ru.md"
+      "en": "apps/docs-site/README.md",
+      "ru": "apps/docs-site/README.ru.md"
     },
     {
       "en": "apps/memomatic/README.md",
       "ru": "apps/memomatic/README.ru.md"
-    },
-    {
-      "en": "tests/integration/mattermost/README.md",
-      "ru": "tests/integration/mattermost/README.ru.md"
-    },
-    {
-      "en": "tests/integration/gitlab/README.md",
-      "ru": "tests/integration/gitlab/README.ru.md"
-    },
-    {
-      "en": "dev/README.md",
-      "ru": "dev/README.ru.md"
     },
     {
       "en": "apps/reviewmatic/README.md",
@@ -106,16 +34,105 @@
       "ru": "apps/shopmatic/README.ru.md"
     },
     {
-      "en": "packages/safe-fs/README.md",
-      "ru": "packages/safe-fs/README.ru.md"
-    },
-    {
       "en": "apps/taskmatic/README.md",
       "ru": "apps/taskmatic/README.ru.md"
     },
     {
-      "en": "apps/docs-site/README.md",
-      "ru": "apps/docs-site/README.ru.md"
+      "en": "dev/README.md",
+      "ru": "dev/README.ru.md"
+    },
+    {
+      "en": "docs/README.md",
+      "ru": "docs/ru/README.md"
+    },
+    {
+      "en": "docs/architecture.md",
+      "ru": "docs/ru/architecture.md"
+    },
+    {
+      "en": "docs/how-to/documentation-review.md",
+      "ru": "docs/ru/how-to/documentation-review.md"
+    },
+    {
+      "en": "docs/how-to/install-skills.md",
+      "ru": "docs/ru/how-to/install-skills.md"
+    },
+    {
+      "en": "docs/how-to/live-runs-ccr.md",
+      "ru": "docs/ru/how-to/live-runs-ccr.md"
+    },
+    {
+      "en": "docs/how-to/memomatic.md",
+      "ru": "docs/ru/how-to/memomatic.md"
+    },
+    {
+      "en": "docs/how-to/ocr-critic.md",
+      "ru": "docs/ru/how-to/ocr-critic.md"
+    },
+    {
+      "en": "docs/how-to/portable-skills.md",
+      "ru": "docs/ru/how-to/portable-skills.md"
+    },
+    {
+      "en": "docs/how-to/pypi-package-lifecycle.md",
+      "ru": "docs/ru/how-to/pypi-package-lifecycle.md"
+    },
+    {
+      "en": "docs/how-to/skill-acceptance.md",
+      "ru": "docs/ru/how-to/skill-acceptance.md"
+    },
+    {
+      "en": "docs/how-to/taskmatic.md",
+      "ru": "docs/ru/how-to/taskmatic.md"
+    },
+    {
+      "en": "docs/reference/cli.md",
+      "ru": "docs/ru/reference/cli.md"
+    },
+    {
+      "en": "docs/reference/code-review.md",
+      "ru": "docs/ru/reference/code-review.md"
+    },
+    {
+      "en": "docs/reference/humanize-patterns.md",
+      "ru": "docs/ru/reference/humanize-patterns.md",
+      "shared_quotes": true
+    },
+    {
+      "en": "docs/reference/release-prepare.md",
+      "ru": "docs/ru/reference/release-prepare.md"
+    },
+    {
+      "en": "docs/reference/skill-catalog.md",
+      "ru": "docs/ru/reference/skill-catalog.md"
+    },
+    {
+      "en": "docs/reviewmatic-test-matrix.md",
+      "ru": "docs/ru/reviewmatic-test-matrix.md"
+    },
+    {
+      "en": "docs/tutorials/getting-started.md",
+      "ru": "docs/ru/tutorials/getting-started.md"
+    },
+    {
+      "en": "docs/verification.md",
+      "ru": "docs/ru/verification.md"
+    },
+    {
+      "en": "packages/safe-fs/README.md",
+      "ru": "packages/safe-fs/README.ru.md"
+    },
+    {
+      "en": "packages/skills/README.md",
+      "ru": "packages/skills/README.ru.md"
+    },
+    {
+      "en": "tests/integration/gitlab/README.md",
+      "ru": "tests/integration/gitlab/README.ru.md"
+    },
+    {
+      "en": "tests/integration/mattermost/README.md",
+      "ru": "tests/integration/mattermost/README.ru.md"
     }
   ],
   "application_content": [

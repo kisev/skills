@@ -1,47 +1,38 @@
 // Site-rendered installation commands. The root README install blocks are the
 // canon for these commands; test/install-commands.test.mjs enforces parity.
-const STANDALONE_COMPONENTS = ["memomatic", "taskmatic"];
+const PAGES = "https://kisev.github.io/skills";
+const REVIEWMATIC_SOURCE =
+  '"git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic"';
 
 export function integrationInstallCommands(channel) {
-  const source = `https://kisev.github.io/skills${channel === "dev" ? "/dev" : ""}`;
-  const componentPackages = STANDALONE_COMPONENTS.map((name) => `@kisev/${name}`);
-  const reviewmaticSource =
-    '"git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic"';
-  const reviewmaticRef =
-    channel === "dev"
-      ? "dev # moving development branch, matching the dev skills channel"
-      : "'<ref>' # use the exact release tag for the stable skills channel";
-  const reviewmaticInstallCommand =
-    channel === "dev" ? "uvx --refresh-package reviewmatic --from" : "uvx --from";
-  const reviewmaticRuntimeInfo = `\nuvx --refresh-package reviewmatic --from ${reviewmaticSource} reviewmatic runtime-info # release version plus resolved Git commit`;
-  const reviewmaticInstall = `REVIEWMATIC_REF=${reviewmaticRef}\n${reviewmaticInstallCommand} ${reviewmaticSource} reviewmatic --version${
-    channel === "dev" ? reviewmaticRuntimeInfo : ""
-  }`;
-  const reviewmaticVerify = `uvx --from ${reviewmaticSource} reviewmatic --version`;
+  if (channel === "dev") {
+    return [
+      "# Unpublished content installs from a checkout; no registry is involved",
+      "skillmate install --from-checkout /path/to/skills --yes   # unpublished working-tree content",
+      "",
+      "# Reviewmatic from the moving dev branch",
+      "REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel",
+      `uvx --refresh-package reviewmatic --from ${REVIEWMATIC_SOURCE} reviewmatic --version`,
+    ].join("\n");
+  }
   return [
-    "# Registry versions",
+    "# Distribution version",
+    "uvx skillmate status",
+    "",
+    "# Install into the project for all three hosts",
+    "uvx skillmate install --yes",
+    "",
+    "# Or globally, or for selected hosts and skills",
+    "uvx skillmate install --scope global --hosts claude,opencode --yes",
+    "uvx skillmate doctor",
+    "",
     "npm view --prefer-online skills@latest version",
-    `npm view --prefer-online @kisev/agentomatic@${channel} version`,
-    ...STANDALONE_COMPONENTS.map(
-      (name) => `npm view --prefer-online @kisev/${name}@${channel} version`,
-    ),
-    "",
-    "# Install and configure",
-    `npx --yes skills@latest add ${source} --global`,
+    `npx --yes skills@latest add ${PAGES} --global`,
     "npx --yes skills@latest update --global",
-    `npx --yes @kisev/agentomatic@${channel} install --global`,
-    `npx --yes @kisev/agentomatic@${channel} configure integration --global`,
-    ...componentPackages.map(
-      (name) => `npm install --global ${name}${channel === "dev" ? "@dev" : ""}`,
-    ),
-    reviewmaticInstall,
-    "",
-    "# Local installation and active CLIs",
-    'npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0',
-    `npm list --global ${componentPackages.join(" ")} --depth=0`,
-    ...STANDALONE_COMPONENTS.map((name) => `${name} --version`),
-    reviewmaticVerify,
     "npx --yes skills@latest list --global",
+    "",
+    "REVIEWMATIC_REF='<ref>' # use the exact release tag for the stable skills channel",
+    `uvx --from ${REVIEWMATIC_SOURCE} reviewmatic --version`,
   ].join("\n");
 }
 
@@ -51,7 +42,7 @@ export function skillInstallCommands(name) {
     "npm view --prefer-online skills@latest version",
     "",
     "# Install this skill in the current project",
-    `npx --yes skills@latest add https://kisev.github.io/skills --skill ${name}`,
+    `npx --yes skills@latest add ${PAGES} --skill ${name}`,
     "",
     "# Installed skills in this project",
     "npx --yes skills@latest list",

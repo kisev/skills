@@ -1,6 +1,7 @@
 {
   "name": "@kisev/memomatic",
   "version": "12.0.1",
+  "private": true,
   "description": "Personal learning memory for agents: tiered Markdown corpus, rebuildable index, dream sweep.",
   "homepage": "https://github.com/kisev/skills#readme",
   "bugs": {

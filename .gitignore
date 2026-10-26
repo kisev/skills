@@ -9,7 +9,8 @@ node_modules/
 *.tgz
 /RESEARCH*.md
 /TODO*.md
-/evals/live/
+/.opencode/
+/.claude/
 /.build/
 /apps/docs-site/dist/
 /apps/docs-site/.astro/

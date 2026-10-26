@@ -19,3 +19,15 @@ Before any other work in the first session, run `python3 scripts/check_environme
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+Apply `references/manual-publication.md` for manual publication rules.
+
+Apply `references/gitlab-publication.md` as the linking reference directs.
+
+Apply `references/publication-input.md` as the linking reference directs.
+
+Apply `references/clarity-rules.md` for the rewrite-preservation rules.
+
+Apply `references/work-item-contract.md` for the work-item contract.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.

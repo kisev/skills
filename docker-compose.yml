@@ -122,15 +122,15 @@ services:
 networks:
   frontend:
     labels:
-      dev.agentomatic.checkout: ${DEV_CHECKOUT:-unprepared}
+      dev.skills.checkout: ${DEV_CHECKOUT:-unprepared}
   gitlab-backend:
     internal: true
     labels:
-      dev.agentomatic.checkout: ${DEV_CHECKOUT:-unprepared}
+      dev.skills.checkout: ${DEV_CHECKOUT:-unprepared}
   mattermost-backend:
     internal: true
     labels:
-      dev.agentomatic.checkout: ${DEV_CHECKOUT:-unprepared}
+      dev.skills.checkout: ${DEV_CHECKOUT:-unprepared}
 
 # External names retain existing data when adopting the former per-service stacks.
 # env:up creates missing volumes; env:clean explicitly removes only its service's volumes.

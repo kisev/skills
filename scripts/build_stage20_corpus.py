@@ -414,27 +414,9 @@ def main() -> None:
     surfaces = {
         "command": (
             json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["commands"],
-            "packages/agentomatic/src/registry.ts",
+            "apps/skillmate/src/skillmate/adapters.py",
             "adapter-only",
         ),
-        "agent": (
-            json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["agents"],
-            "packages/agentomatic/assets/agents/{name}.md",
-            "host-owned-or-card-bound",
-        ),
-        "plugin": (
-            json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())["plugins"],
-            "packages/agentomatic/src/plugins/{name}.ts",
-            "enabled-option-only",
-        ),
-        "package-tool": (
-            json.loads((ROOT / "evals/contracts/public-surfaces.json").read_text())[
-                "package_tools"
-            ],
-            "packages/agentomatic/src/index.ts",
-            "phase-and-confirmation-bound",
-        ),
-        "infrastructure": (["core"], "packages/agentomatic/src/index.ts", "host-owned-runtime"),
     }
     for surface, (names, path, boundary) in surfaces.items():
         for name in names:

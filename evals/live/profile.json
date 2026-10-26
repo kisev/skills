@@ -1,0 +1,7 @@
+{
+  "engine": "ccr",
+  "ccr_profile": "skills-tests-claude",
+  "budgets": {
+    "timeout_seconds": 480
+  }
+}

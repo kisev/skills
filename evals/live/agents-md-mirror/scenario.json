@@ -1,0 +1,15 @@
+{
+  "schema": "live-scenario/v1",
+  "skill": "agents-md",
+  "prompt": "prompt.txt",
+  "allowed_tools": ["Bash(ln:*)", "Bash(cmp:*)", "Bash(readlink:*)", "Bash(ls:*)"],
+  "variants": {
+    "default": {
+      "assertions": "assertions.json"
+    },
+    "no-symlink": {
+      "assertions": "assertions-no-symlink.json",
+      "block_commands": ["ln"]
+    }
+  }
+}

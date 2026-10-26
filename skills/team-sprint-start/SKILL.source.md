@@ -15,3 +15,7 @@ metadata:
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+Apply `references/team-profile-workflow.md` for team profile discovery.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.

@@ -103,14 +103,11 @@ def test_distribution_materializes_requirements_per_dependency_archive(
     assert lock["version"] == index["version"]
 
 
-def test_channel_pins_agree_without_network() -> None:
-    portable = json.loads(
-        (ROOT / "packages" / "skills" / "package.json").read_text(encoding="utf-8")
-    )
+def test_retired_npm_package_is_absent_from_the_workspace_lock() -> None:
     lockfile = json.loads((ROOT / "package-lock.json").read_text(encoding="utf-8"))
-    npm_pin = lockfile["packages"]["packages/agentomatic"]["version"]
-    assert npm_pin == portable["version"]
-    assert build_distribution.installed_npm_pin() == portable["version"]
+    packages = lockfile["packages"]
+    assert "packages/agentomatic" not in packages
+    assert not any(name.startswith("node_modules/@kisev/agentomatic") for name in packages)
 
 
 def test_runner_reports_ok_fail_and_repair(tmp_path: Path) -> None:

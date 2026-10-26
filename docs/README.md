@@ -3,11 +3,12 @@
 [Русский](ru/README.md)
 
 Choose a section by what you need to accomplish. Portable Agent Skills and
-`agentomatic` have separate installation and update lifecycles; the guides
-make that boundary explicit.
+`skillmate` have separate version lifecycles; the guides make that boundary
+explicit.
 
 ## Tutorials
 
+- [Run synthetic live checks](how-to/live-runs-ccr.md) - install ccr, pin the test profile, and run a scenario.
 - [Get started with portable skills](tutorials/getting-started.md) - install the
   stable distribution for Codex and OpenCode and verify the result.
 
@@ -25,13 +26,12 @@ make that boundary explicit.
 - [Manage portable skills](how-to/portable-skills.md) - install by scope or host,
   update, rebind an older source, clean up retired names, and troubleshoot.
 
-- [Install and manage agentomatic](how-to/opencode-integration.md) - install
-  the package, select assets, activate the plugin, configure user configs,
-  update, reconcile, diagnose, configure agents, and uninstall safely.
+- [Install and manage skills](how-to/install-skills.md) - hosts, scopes,
+  command surfaces, updates, removal, diagnostics, and the dev checkout mode
+  with `skillmate`.
 
-- [Add or rename an npm workspace package](how-to/npm-package-lifecycle.md) -
-  rewire the publication graph, bootstrap a new package name on npm, and
-  deprecate a retired name.
+- [Publish the `skillmate` package](how-to/pypi-package-lifecycle.md) - the
+  PyPI publication channel, trusted publishing, and the release gates.
 
 - [Contribute to the repository](../CONTRIBUTING.md) - change authored sources and
   run the required checks.
@@ -45,9 +45,6 @@ make that boundary explicit.
 
 - [humanize editing patterns](reference/humanize-patterns.md) - bilingual
   before/after examples for all 26 editing categories of the `humanize` skill.
-
-- [Migration inventory](migration-inventory.md) - active and retired names,
-  replacements, package surfaces, and ownership records.
 
 - [Verification](verification.md) - release contracts covered by tests and quality gates.
 

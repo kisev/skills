@@ -5,10 +5,8 @@
 ## Current Release
 
 The supported portable source is the GitHub Pages stable channel at
-`https://kisev.github.io/skills`; the optional package is
-`@kisev/agentomatic`. Portable installation follows
-`npx --yes skills@latest`. The package requires Node.js 22.13+ and declares OpenCode
-`>=2.0.0 <2.1.0`.
+`https://kisev.github.io/skills`. Portable installation follows `uvx skillmate`
+or `npx --yes skills@latest`.
 
 ## Portable Installation
 
@@ -36,49 +34,9 @@ the authored repository is not an installation source.
 The Pages URL is a moving stable-release channel. `update` verifies the current
 well-known digest, downloads changed archives, and offers to remove tracked names
 deleted upstream. Existing Git-based installations must repeat `add` with the
-Pages URL and the same scope to rebind their source. Explicit cleanup
-is limited to the retired names in the current [Migration Inventory](migration-inventory.md).
-
-## OpenCode Integration
-
-Portable skills do not depend on the npm package, and the npm package does not
-install portable skills. Project integration persists in project `node_modules`;
-global integration persists in the npm project at `~/.config/opencode`.
-
-Scope-aware direct commands default to the current directory and accept one
-`--global` flag for global state; `--scope` is unsupported. The installer
-requires preview/confirmation. It writes only selected managed assets after
-confirmation and stages optional models/critics. It can connect or disconnect
-the core plugin and apply presets. `configure integration`
-command is the confirmed path for user configuration: it merges selected
-fragments into `opencode.json(c)` with native V2 `plugins`/`permissions` and
-global `cli.json`, plus `kilo.json(c)` and `mimocode.json(c)` for those hosts,
-behind a preview/confirmation receipt, preserving comments, unrelated entries,
-and user rule order, migrating only the touched legacy sections and reporting
-ambiguities as conflicts; Kilo/MiMo widen scalar permission maps while keeping
-the scalar as the `"*"` entry. Update is
-an exact npm install followed by install preview, exact confirmation, and
-OpenCode restart.
-
-Uninstall previews owned assets, plugin disconnection, retained models, and
-opt-in npm removal; completed local stages remain if npm fails. Cleanup and
-uninstall archive exact-owned package assets. Reconcile ignores portable skill
-trees and installer lock files; `skills update/remove` owns that lifecycle.
-Conflicts, worktrees, and runtime state are preserved; no archive restore or
-purge command is exposed.
-
-## Current Surface
-
-The current inventory covers 44 portable skills, 41 command adapters, the
-`rtk-stats` package command, 6 fixed agents, 4 selectable plugin wrappers,
-1 package tool, and the core plugin. The
-package tool `route` has no slash command.
-
-The catalog descriptions are checked against the current skill contracts:
-`goal` returns read-only structured Markdown of at most 4000 characters; task
-workflows are storage-neutral; and
-`code-explain` accepts current WIP, an exact range, a branch, or an exact HTTPS MR
-link and presents history without a review verdict.
+Pages URL and the same scope to rebind their source. The upstream index
+decides which names count as retired; `update` offers exactly those for
+removal.
 
 ## Reviewmatic Python Application
 
@@ -148,32 +106,21 @@ Marketplace selectors decay with storefront redesigns; a failing adapter
 answers an explicit error, and the spike stop conditions in the ADR govern
 whether support is paused, not bypassed.
 
-## Consumer Smoke
+## skillmate
 
-The npm gates verify that the packages build and pack, but only a real consumer
-proves that a published tarball installs and typechecks. The consumer smoke
-gate derives the publishable set programmatically from the root `package.json`
-workspaces with `private != true`, packs it after `package:build`, and installs
-the fresh tarballs into one throwaway consumer project: the dependency-free
-foundation package first, then every dependent in a single install, so they
-typecheck against the tested copy instead of a healthy registry duplicate. The
-generated `consumer.ts` imports every declared typed entry of each package and
-must pass strict `tsc --noEmit` with `nodenext` resolution; a generated module
-import also proves each package loads under Node. npm does not install optional
-peer dependencies, so `@opencode/plugin` and `@types/node` are installed
-explicitly at their pinned versions, following the registry smoke precedent.
-The npm cache persists under `.build/`, so a warm run takes seconds; the first
-run pays the registry download cost.
+The skillmate application in `apps/skillmate` is a standard-library-only
+Python 3.12+ installer-configurator, delivered on PyPI. Its gate is fully
+offline: committed fixtures back the distribution index and archive parsing,
+so no test or gate talks to the network:
 
 ```shell
-task package:smoke
+task skillmate:check
 ```
 
-A broken tarball fails the gate even while the same version stays healthy in
-the public registry, which is the "broken package shipped" class that only a
-live consumer catches. The gate layer is registered in `gate-registry.json`,
-so the CI matrix and the scoped pre-push job run it when the npm surface
-changes.
+The gate runs `uv lock --check`, the offline test suite, application-local
+strict mypy and ruff, the uv build, and the CLI version contract. The
+application layer is registered in `gate-registry.json`, so scoped CI matrix
+entries and pre-push globs cover the `apps/skillmate` delta.
 
 ## Deterministic Coverage
 
@@ -204,7 +151,7 @@ budgets, and secret leakage.
 For `spec-manage`, coverage has one primary deterministic owner per area. Hostless
 eval validates corpus contracts but does not observe model behavior:
 
-| Area | Deterministic owner | Hostless eval contract | Trusted-live behavior |
+| Area | Deterministic owner | Hostless eval contract | Declared live cases |
 | - | - | - | - |
 | Language, authority, extensions | `tests/test_spec_manage_contract.py` | bilingual case inventory and digests | language-before-write, preservation, conflicts, accepted/rejected extensions |
 | Snapshot and lifecycle validator | `tests/test_spec_validate.py` | runner and invariant safety only | not required |
@@ -215,19 +162,20 @@ eval validates corpus contracts but does not observe model behavior:
 `tests/test_evals.py` owns the generic eval protocol and its negative cases.
 Stage 20 `spec-manage` scenarios prove routing declarations only. Legacy scenarios
 without `expected.case_outcomes` remain selection-only and do not prove mode or
-audit outcomes. Offline results use `observation_mode: hostless-contract`; only
-trusted-live results use `observation_mode: trusted-live` and may satisfy case
-outcome assertions.
+audit outcomes. Offline results always use `observation_mode: hostless-contract`;
+the corpus case contracts are declared forward declarations — this runner reports
+the case layer as `not_observed`, and real-model observation belongs to the
+live-runs system.
 
-Compatibility checks exercise the OpenCode version pinned in `mise.toml`
-(see `evals/contracts/opencode-compatibility.json`) inside
-`>=2.0.0 <2.1.0` without credentials: installed-tarball package smoke, native
-server permission evaluation, and the memomatic V2 HTTP and read-only database
-contract.
+The catalog descriptions are checked against the current skill contracts:
+`goal` returns read-only structured Markdown of at most 4000 characters; task
+workflows are storage-neutral; and
+`code-explain` accepts current WIP, an exact range, a branch, or an exact HTTPS MR
+link and presents history without a review verdict.
 
 ## Missed-defect Registry
 
-The testing audit found three defect classes that reached `dev` past every
+The testing audit found two defect classes that reached `dev` past every
 gate. Each fix landed with tests, but nothing proved those tests fail on the
 pre-fix behavior, and the decisions not to model some conditions stayed
 implicit. This registry makes both explicit: every class records the symptom,
@@ -280,33 +228,6 @@ failed
 on the pipeline completeness assertion; removing it again turned the test
 green.
 
-### Unavailable model catalog in the wizard, fix `184327d` — covered
-
-Symptom: `install` aborted agent model setup with a fatal
-`catalog_unavailable` error whenever the OpenCode V2 model catalog could not
-be read, instead of accepting an explicitly typed provider/model.
-
-Why the gates missed it: unmodelable unavailability. TTY wizard tests drove
-only the healthy-catalog path backed by a working OpenCode runtime, and no
-offline harness simulated a failing runtime until the fix introduced a fake
-`opencode` executable that exits non-zero.
-
-Guard: `modelSelection` catches `catalog_unavailable`, warns on stderr, and
-prompts for an explicit model and an optional variant instead of failing.
-
-Covering tests in `packages/agentomatic/test/command-cli.test.mjs`:
-
-- `TTY install falls back to an explicit model entry when the catalog is unavailable` —
-  with a failing `opencode` executable the wizard completes and applies the
-  explicitly typed model;
-- `TTY install stages a critic model from the catalog and applies it with one confirmation` —
-  the healthy catalog path keeps its catalog pick flow.
-
-Proof on 2026-10-05: rethrowing `catalog_unavailable` from `modelSelection`
-aborted the wizard with `Error [catalog_unavailable]` before the
-explicit-model prompt and failed the fallback test; restoring the catch turned
-the test green.
-
 ### `prior_decisions` outside the context version, fix `204714f` — closed by PORT-3
 
 Symptom: a significant agreed-decision change kept the question context
@@ -348,38 +269,27 @@ Status: closed by PORT-3. These invariants remain covered:
 
 ### Not modeled offline
 
-Two aspects stay unmodeled offline on purpose, with the risk owned by the
+One aspect stays unmodeled offline on purpose, with the risk owned by the
 repository owner:
 
 - the exact wire behavior of range-ignoring GitLab versions (header and
   chunking variety) is modeled only synthetically; live behavior belongs to
-  the manual GitLab integration stand, not to a gate;
-- the real OpenCode V2 catalog and terminal rendering inside the wizard are
-  modeled by a fake executable and a forced TTY, so real runtime and terminal
-  diversity stay outside the gates.
+  the manual GitLab integration stand, not to a gate.
 
 Weakening the covering tests to pass on unmodeled behavior is not allowed;
 new knowledge about these aspects lands as new guards with their own
 prove-by-removing evidence.
 
-## Live Evaluation and Clean Checkout
+## Real-Model Runs and Clean Checkout
 
-Live evaluation is not part of `task check`. It requires explicit trusted-live
-mode, host, model, timeout, token and cost budgets, and an output path. No model
-or baseline is selected by default, and untrusted CI does not receive
-credentials.
-
-Scenarios with `expected.case_outcomes` require one observed result for every
-case. Missing, extra, malformed, or incorrect outcomes fail the evaluation.
-Fixture cases that declare a `verify` contract, such as the `humanize`
-edit-contract pair, additionally require the returned `outcome` to carry the
-complete edited text: the harness checks that rewrite itself for byte-identical
-protected fragments, absence of forbidden punctuation outside preserved exact
-quotations, surviving declared claims, and absent declared inventions. A
-missing or defective rewrite fails those assertions even when the host reports
-success. Read-only boundaries are checked from the project sandbox diff; `specs-only`
-scenarios fail when a changed path is outside sandbox `specs/`. Live output is
-private run evidence and is not committed.
+Real-model evaluation is not part of `task check`. It lives in the live-runs
+system: `task live:run` (`scripts/live_runner.py`) executes one versioned
+scenario through the pinned engine profile, stages the fixture into an isolated
+empty workdir, runs the engine subprocess under a positive environment
+allowlist, and writes a verdict with a redacted transcript under `.build/`
+(setup in `docs/how-to/live-runs-ccr.md`). Corpus case contracts
+(`expected.case_outcomes`) are forward declarations for future live scenarios;
+the offline runner reports them as `not_observed`.
 
 Shared runtime copies exist only in ignored build outputs and are checked for
 parity. In a clean temporary checkout, build and check must leave `git status`

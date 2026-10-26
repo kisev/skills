@@ -11,7 +11,7 @@ line-by-line progress (skill, family, stage, model, elapsed). The exit code
 aggregates the family verdicts; a skip is an honest non-run with a printed
 reason, never a green check.
 
-The umbrella is explicitly optional (same class as ``eval:live``): it needs
+The umbrella is explicitly optional (same class as ``live:run``): it needs
 provider credentials and never runs inside ``task check``, ``check:core``,
 Lefthook hooks, CI, or the gate registry. It is user-run; the report is meant
 to be pasted back into the master session.

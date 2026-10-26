@@ -1,5 +1,5 @@
 ---
-review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*", "packages/agentomatic/src/installer.ts", "packages/agentomatic/test/stage19.test.mjs"], "contracts": ["specs/architecture/08-crosscutting-concepts/security-trust-mutations.md"]}
+review: {"components": ["memomatic"], "sources": ["apps/memomatic/src/*", "apps/memomatic/test/*"], "contracts": ["specs/architecture/08-crosscutting-concepts/security-trust-mutations.md"]}
 ---
 
 # Application `memomatic`

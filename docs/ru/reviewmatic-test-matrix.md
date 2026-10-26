@@ -123,7 +123,7 @@ Comments в скелетах ответов доживают до тела пу�
 через переменные `EVAL_MODEL`, `EVAL_TIMEOUT`, `EVAL_MAX_TOKENS` и
 `EVAL_MAX_COST`; учётные данные провайдера всегда явные. Она
 намеренно вне `task check`, `check:core`, гейта Lefthook pre-push, CI-матрицы
-и `gate-registry.json` (того же класса, что `eval:live`).
+и `gate-registry.json` (того же класса, что `live:run`).
 
 Агентный слой запускайте на каждой волне, трогающей тексты code-review, и
 перед релизом. Детерминированный слой работает при любом изменении в

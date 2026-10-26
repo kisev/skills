@@ -17,3 +17,10 @@ metadata:
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+Apply `references/release-planning-contract.md` as the linking reference
+directs.
+
+Apply `references/work-item-contract.md` for the work-item contract.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.

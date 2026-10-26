@@ -4,7 +4,7 @@
     "max_tokens": 4000,
     "timeout_seconds": 30
   },
-  "digest": "b925ad5ed179f338dddbe4ae212b8b526a1178ecd160ba3384c56fd0bd93827d",
+  "digest": "5d9d8b747f07d3bb7be2be1327e9d90835b88273f44123e5267c520286c0260b",
   "expected": {
     "case_outcomes": [
       {
@@ -118,17 +118,12 @@
       "contains": "the weak-alone set is 6, 7, 9, 10, 11, 12, 15, 18, 19, 20, 24, and 25",
       "id": "humanize-weak-alone-set",
       "path": "shared/references/humanize-patterns.md"
-    },
-    {
-      "contains": "rewrite_case_assertions",
-      "id": "eval-rewrite-verification",
-      "path": "scripts/eval_runner.py"
     }
   ],
   "kind": "golden",
   "locale": "ru",
   "pair_id": "skill.humanize.edit-contract",
-  "revision": 4,
+  "revision": 5,
   "sandbox": {
     "network": false,
     "user_config": false,

@@ -20,6 +20,12 @@ The environment contract is the installed tree's `references/requirements.json`,
 
 Drive a remote-MR review through the one-process `reviewmatic run` path. At its start the run asks one poll — the critic composition and the engine of every critic (a subagent on the current session's model or the mechanical `ocr` CLI): present the printed fenced poll block verbatim, collect the user's choice with the host's native interactive question tool (recommended composition / single model subagent / subagent+OCR / custom), fill the selection template from that answer yourself, and run the printed command — the user never writes JSON. Ground the critic pool in the host's agent inventory (`agents/*.md` in the harness-global and project config directories, and the `agent` key of the global and project `opencode.json`; only agents the user configured — never the bundled agent assets of installed packages or plugins under `node_modules/`, which deploy only through `configure agent`), propose multi-critic options only when candidate agents carry distinct models or engines, and never propose two critics on the same single model — that is not independent review. The step-by-step `start-review`/`record-*` flow remains supported as the explicitly marked repair path. `references/local-review.md` owns the separate local-WIP mode.
 
+Apply `references/simplification-criteria.md` for the optional
+simplification criteria.
+
+Apply `references/context-package.md` for the context-package template and
+verification rules.
+
 The normal tail is decision → shared render → edit the generated prose file →
 `reviewmatic record-prose` → resume and finalize. Head drift retains authorship
 and asks for a fresh `reviewmatic record-delta` verification of changes and
@@ -30,6 +36,45 @@ The orchestrator reads artifacts by path and passes them by path: contracts
 come from runtime responses, never from reading runtime sources or complete
 JSON schemas, and the whole context package is never read into the main
 window (the reading discipline in `references/workflow.md` pins the budget).
+
+Apply `references/necessity-doctrine.md` for shared necessity and completion
+doctrine.
+
+Apply `references/documentation-review.md` for documentation impact review.
+
+Apply `references/portable-gitlab-contracts-v2.md` for the portable GitLab
+contracts.
+
+Apply `references/gitlab-workflow.md` for the GitLab workflow.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.
+
+Apply `references/inverted-tail.md` as the linking reference directs.
+
+Apply `references/finding-examples.md` as the linking reference directs.
+
+Apply `references/remote-review-stages.md` as the linking reference directs.
+
+Apply `references/semver.md` as the linking reference directs.
+
+Apply `references/architecture-checklist.md` as the linking reference
+directs.
+
+Apply `references/review-state-machine.md` as the linking reference directs.
+
+Apply `references/review-panel.md` as the linking reference directs.
+
+Apply `references/incremental-review.md` as the linking reference directs.
+
+Apply `references/run-path.md` for the primary remote-MR review run path.
+
+Apply `references/output-format.md` as the linking reference directs.
+
+Apply `references/publication.md` as the linking reference directs.
+
+Apply `references/repair.md` as the linking reference directs.
+
+Apply `references/poll-glossary.md` for the polling vocabulary.
 
 Each runbook stands on the current snapshot. `history_context` is advisory:
 past findings, reasons, and decisions inform critics and arbitration but never

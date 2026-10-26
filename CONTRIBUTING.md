@@ -7,8 +7,9 @@
 Each directory under `skills/` is an authored definition, not an installation
 artifact. The build must turn every definition into a portable, self-contained
 skill without depending on a checkout, user home, particular provider,
-credentials, or one team's configuration. OpenCode-specific agents, commands,
-and plugins belong only in `packages/agentomatic/`.
+credentials, or one team's configuration. Host-specific placement, dialects,
+and command formats belong only in the `skillmate` adapter registry under
+`apps/skillmate/`.
 
 Agree on a material behavior, compatibility, or security-boundary change before
 implementing it. A new runner needs an observable contract: JSON on `stdout`,
@@ -63,15 +64,12 @@ documented exception. The main public tasks divide the checks as follows:
 `task format` may change tracked files, while `task generate` writes only
 ignored artifacts. Portable authored entrypoints are named `SKILL.source.md`;
 `scripts/build_skills.py` writes `SKILL.md` and injects files declared by
-`shared/manifest.json` only under `.build/skills`. OpenCode commands and the
-copied LSP catalog are generated only into `packages/agentomatic/dist/assets/`
-before packing; their sources are `packages/agentomatic/src/registry.ts` and
-`shared/references/`.
+`shared/manifest.json` only under `.build/skills`.
 
-`package:check` installs locked npm dependencies, builds the package once, runs
-Node.js tests, performs a smoke test through pinned OpenCode, and checks the npm
-pack allowlist. Root lint and type-check tasks own the corresponding source
-checks, so the package lifecycle does not repeat them.
+`package:check` installs locked npm dependencies, builds the workspace once,
+runs the Node.js tests, and checks the npm pack allowlists. Root lint and
+type-check tasks own the corresponding source checks, so the package lifecycle
+does not repeat them.
 
 `dependency:audit` checks the locked Python and npm dependency graphs and
 belongs to `check:core`, so every full local gate and the CI matrix run it.
@@ -151,8 +149,8 @@ gate for manual diagnosis and releases. Hooks do not apply fixes or run
 
 Portable skills carry no version. Release identity belongs to the GitHub Pages
 distribution metadata and each content-addressed archive digest. The GitHub
-Pages distribution, `@kisev/agentomatic` version, tag, and GitHub Release
-must refer to one commit. Do not change a published version; publish a new patch
+Pages distribution, portable version manifest, tag, and GitHub Release must
+refer to one commit. Do not change a published version; publish a new patch
 release instead.
 
 Use `dev` as the integration trunk. Commit to `dev` directly by default and
@@ -178,22 +176,16 @@ into `main`, creating the annotated `vX.Y.Z` tag, and pushing that tag. The tag
 must reference the resulting merge commit.
 
 The tag starts `.github/workflows/publish.yml`. It revalidates the published tag
-and revision, resolves the publication channel from the tagged commit, builds
-exact npm tarballs for every workspace publication member and a cross-channel
-digest manifest, then publishes and verifies npm `latest` with the stable GitHub
-Pages root for a commit on `main`, or the npm `vX.Y` dist-tag without touching
-Pages for a commit on `release/vX.Y`, and only then creates the GitHub Release.
-npm publishing uses trusted publishing through OIDC and verifies the registry
-tarball, imports, CLI, signatures, and provenance.
-
-The manifest records `@kisev/safe-fs`, `@kisev/memomatic`, and `@kisev/agentomatic`
-with their own versions and exact dependency pins. Every member must finish
-publication and verification before the workflow declares success.
+and revision, resolves the publication channel from the tagged commit, and
+builds the provenance manifest. For a commit on `main` it deploys the stable
+GitHub Pages root; for a commit on `release/vX.Y` it skips Pages, and either
+way it then creates the GitHub Release with the exact changelog section. The
+`skillmate` PyPI package publishes through trusted publishing (OIDC) from
+`main` tags.
 
 For every push to `dev`, CI runs the complete gate on the pushed revision, and
 the publication workflow waits for its terminal `success` conclusion for the
-same revision before it rebuilds the exact artifacts, replaces only the Pages
-`/dev` channel, and publishes a unique npm prerelease under dist-tag `dev`. If
-that run failed, was cancelled by a newer push, or is missing, the publication
-stops. Development snapshots do not choose a stable SemVer and create no GitHub
-Release.
+same revision before it rebuilds the exact artifacts and replaces only the
+Pages `/dev` channel. If that run failed, was cancelled by a newer push, or is
+missing, the publication stops. Development snapshots do not choose a stable
+SemVer and create no GitHub Release.

@@ -15,6 +15,7 @@
     "docs-review",
     "eli5",
     "goal",
+    "handoff",
     "humanize",
     "mattermost",
     "mattermost-triage",
@@ -25,7 +26,6 @@
     "skill-doctor",
     "slides-prompts-prepare",
     "spec-manage",
-    "handoff",
     "task-prepare",
     "task-review",
     "task-triage",
@@ -60,6 +60,7 @@
     "docs-review",
     "eli5",
     "goal",
+    "handoff",
     "humanize",
     "mattermost",
     "mattermost-triage",
@@ -67,11 +68,9 @@
     "release-prepare",
     "release-review",
     "rtk",
-    "rtk-stats",
     "skill-doctor",
     "slides-prompts-prepare",
     "spec-manage",
-    "handoff",
     "task-prepare",
     "task-review",
     "task-triage",
@@ -89,9 +88,5 @@
     "team-roadmap",
     "team-sprint-close",
     "team-sprint-start"
-  ],
-  "agents": ["manager", "architect", "mapper", "worker", "review", "critic"],
-  "plugins": ["code-simplify", "rules-injector", "rtk", "zed-bell"],
-  "package_tools": ["route"],
-  "infrastructure": ["core"]
+  ]
 }

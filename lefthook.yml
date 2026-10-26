@@ -69,9 +69,13 @@ pre-commit:
         jobs:
           - name: python
             glob: "**/*.py"
+            # evals/live fixtures are standalone sample projects: the live
+            # runner stages them into their own workdir and environment, so
+            # repository mypy does not check their internals.
             exclude:
               - ".agents/skills/openspec-*/**"
               - "apps/**"
+              - "evals/live/**"
             run: mise exec -- uv run --locked mypy {files}
 
           - name: safe-fs
@@ -86,10 +90,6 @@ pre-commit:
             glob: "apps/taskmatic/**/*.{ts,tsx,mts,cts}"
             run: mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
 
-          - name: agentomatic
-            glob: "packages/agentomatic/**/*.{ts,tsx,mts,cts}"
-            run: mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
-
     - name: tests
       group:
         parallel: true
@@ -99,9 +99,12 @@ pre-commit:
           # same way the pre-push core job does before its full gate.
           - name: python
             glob: "**/{test_*.py,*_test.py}"
+            # Same live-fixture boundary as the types job: fixture tests run
+            # in the scenario's own environment via the live runner.
             exclude:
               - ".agents/skills/openspec-*/**"
               - "apps/**"
+              - "evals/live/**"
             # Changed test files run directly; a staged module with no
             # collected tests (exit code 5) is not a failure, the full
             # suites stay owned by pre-push and CI.
@@ -128,15 +131,6 @@ pre-commit:
                 unset "$variable"
               done
               mise exec -- uv run --locked pytest {files}
-
-          - name: agentomatic
-            glob: "packages/agentomatic/**"
-            # Emit without clean-dist: parallel pre-commit jobs read the
-            # workspace dist type declarations, so nothing may delete them.
-            run: |
-              mise exec -- tsc --project packages/agentomatic/tsconfig.json
-              mise exec -- node packages/agentomatic/dist/generate-assets.js
-              mise exec -- npm --prefix packages/agentomatic test
 
           - name: memomatic
             glob: "apps/memomatic/**"
@@ -288,6 +282,22 @@ pre-push:
           unset "$variable"
         done
         task shopmatic:check
+      fail_text: "The local push gate failed"
+
+    - name: skillmate-check
+      glob:
+        # @gates:begin glob:skillmate-check
+        - "apps/skillmate/**"
+        - "gate-registry.json"
+        - "lefthook.yml"
+        - "mise.toml"
+        - "taskfile.yml"
+        # @gates:end
+      run: |
+        for variable in $(git rev-parse --local-env-vars); do
+          unset "$variable"
+        done
+        task skillmate:check
       fail_text: "The local push gate failed"
 
     - name: package-check

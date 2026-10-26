@@ -1,0 +1,8 @@
+[
+  { "type": "file_exists", "path": "AGENTS.md" },
+  { "type": "is_symlink", "path": "CLAUDE.md", "target": "AGENTS.md" },
+  { "type": "file_exists", "path": "packages/go-tool/AGENTS.md" },
+  { "type": "is_symlink", "path": "packages/go-tool/CLAUDE.md", "target": "AGENTS.md" },
+  { "type": "hash_unchanged", "path": "packages/ts-widget/CLAUDE.md" },
+  { "type": "output_mentions", "pattern": "CLAUDE", "flags": "i" }
+]

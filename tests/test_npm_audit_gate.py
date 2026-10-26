@@ -12,11 +12,16 @@ def _report(vulnerabilities: dict[str, Any]) -> dict[str, Any]:
     return {"vulnerabilities": vulnerabilities, "metadata": {"vulnerabilities": {}}}
 
 
-ACKNOWLEDGED = "https://github.com/advisories/GHSA-ch52-4w7c-c8xp"
+ACKNOWLEDGED = "https://github.com/advisories/GHSA-cccccccccccc"
 UNKNOWN = "https://github.com/advisories/GHSA-aaaaaaaaaaaa"
 
+FAKE_ACKNOWLEDGEMENTS = {"GHSA-cccccccccccc": "synthetic acknowledged advisory for the gate tests"}
 
-def test_cascade_references_do_not_create_advisories() -> None:
+
+def test_cascade_references_do_not_create_advisories(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(check_npm_audit, "ADVISORY_ACKNOWLEDGEMENTS", FAKE_ACKNOWLEDGEMENTS)
     report = _report(
         {
             "http-cache-semantics": {
@@ -28,7 +33,7 @@ def test_cascade_references_do_not_create_advisories() -> None:
     )
     acknowledged, unknown = check_npm_audit.evaluate(report)
     assert unknown == []
-    assert acknowledged == {"GHSA-ch52-4w7c-c8xp": ["http-cache-semantics"]}
+    assert acknowledged == {"GHSA-cccccccccccc": ["http-cache-semantics"]}
 
 
 def test_unknown_advisory_is_reported_as_failure() -> None:
@@ -70,8 +75,10 @@ def test_main_accepts_acknowledged_advisory(
         "run_npm_audit",
         lambda prefix: _report({"http-cache-semantics": {"via": [{"url": ACKNOWLEDGED}]}}),
     )
+    monkeypatch.setattr(check_npm_audit, "ADVISORY_ACKNOWLEDGEMENTS", FAKE_ACKNOWLEDGEMENTS)
+    monkeypatch.setattr(check_npm_audit, "ADVISORY_ACKNOWLEDGEMENTS", FAKE_ACKNOWLEDGEMENTS)
     exit_code = check_npm_audit.main(["--prefix", "apps/docs-site"])
     assert exit_code == 0
     captured = capsys.readouterr()
-    assert "acknowledged GHSA-ch52-4w7c-c8xp" in captured.out
-    assert "no patched version exists upstream" in captured.out
+    assert "acknowledged GHSA-cccccccccccc" in captured.out
+    assert "synthetic acknowledged advisory" in captured.out

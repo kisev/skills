@@ -1,0 +1,7 @@
+{
+  "name": "ts-widget",
+  "scripts": {
+    "build": "tsc -p .",
+    "test": "vitest run"
+  }
+}

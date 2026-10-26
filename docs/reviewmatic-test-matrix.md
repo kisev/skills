@@ -124,7 +124,7 @@ configurable through the `EVAL_MODEL`, `EVAL_TIMEOUT`, `EVAL_MAX_TOKENS`, and
 `EVAL_MAX_COST` environment variables; provider credentials are always
 explicit. It is
 deliberately outside `task check`, `check:core`, the Lefthook pre-push gate,
-the CI matrix, and `gate-registry.json` (same class as `eval:live`).
+the CI matrix, and `gate-registry.json` (same class as `live:run`).
 
 Run the agent layer on every wave that touches the code-review skill texts,
 and before a release. Run the deterministic layer whenever anything in the

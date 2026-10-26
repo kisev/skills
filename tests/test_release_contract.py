@@ -1,33 +1,23 @@
 from __future__ import annotations
 
-import base64
 import hashlib
-import io
 import json
-import os
-import signal
 import subprocess
-import tarfile
-import time
-import urllib.error
-import urllib.request
-from contextlib import suppress
 from email.message import Message
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+from urllib.error import HTTPError
 
 import pytest
 
 from scripts import (
     await_ci_success,
-    build_dev_artifacts,
     build_distribution,
     build_release_artifacts,
     check_release,
     compose_pages_site,
     create_github_release,
     dev_version,
-    publish_npm_release,
     release_channel,
     verify_distribution_url,
 )
@@ -37,10 +27,9 @@ if TYPE_CHECKING:
 
 ROOT = Path(__file__).resolve().parents[1]
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
-PACKAGE_METADATA = json.loads(
-    (ROOT / "packages" / "agentomatic" / "package.json").read_text(encoding="utf-8")
-)
-RELEASE_VERSION = PACKAGE_METADATA["version"]
+RELEASE_VERSION = json.loads(
+    (ROOT / "packages" / "skills" / "package.json").read_text(encoding="utf-8")
+)["version"]
 
 # Several tests validate the shared `.build/packages/skills` state built by
 # `tests/test_distribution.py`; the shared xdist group keeps them serialized.
@@ -78,14 +67,14 @@ def test_dev_version_rejects_ambiguous_identity(run_number: str, revision: str) 
         dev_version.derive("10.0.0", run_number, revision)
 
 
-def test_release_check_rejects_package_version_drift(
+def test_release_check_rejects_a_missing_portable_version(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     manifest = tmp_path / "package.json"
-    manifest.write_text(json.dumps({"version": "9.9.9"}), encoding="utf-8")
+    manifest.write_text(json.dumps({}), encoding="utf-8")
     monkeypatch.setattr(check_release, "PORTABLE_PACKAGE", manifest)
 
-    with pytest.raises(check_release.ReleaseError, match="versions differ"):
+    with pytest.raises(check_release.ReleaseError, match="must be a string"):
         check_release.validate()
 
 
@@ -146,143 +135,6 @@ def test_pre_tag_check_rejects_existing_tag(monkeypatch: pytest.MonkeyPatch, loc
         check_release.validate(tag)
 
 
-def test_network_git_timeout_is_bounded_and_controlled(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    executable = tmp_path / "git"
-    executable.write_text("#!/bin/sh\nsleep 10\n", encoding="utf-8")
-    executable.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-    monkeypatch.setattr(check_release, "NETWORK_GIT_TIMEOUT_SECONDS", 0.05)
-
-    with pytest.raises(check_release.ReleaseError, match=r"ls-remote.*timed out"):
-        check_release.git("ls-remote", "--tags", "origin")
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups are required")
-def test_git_timeout_kills_real_descendant_process(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    pid_path = tmp_path / "descendant-pid"
-    executable = tmp_path / "git"
-    executable.write_text(
-        "#!/usr/bin/env python3\n"
-        "import os, pathlib, signal, time\n"
-        "pid = os.fork()\n"
-        f"path = pathlib.Path({str(pid_path)!r})\n"
-        "if pid == 0:\n"
-        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
-        "    path.write_text(str(os.getpid()))\n"
-        "    time.sleep(10)\n"
-        "while not path.exists():\n"
-        "    time.sleep(0.01)\n"
-        "time.sleep(10)\n",
-        encoding="utf-8",
-    )
-    executable.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-    monkeypatch.setattr(check_release, "LOCAL_GIT_TIMEOUT_SECONDS", 0.1)
-    monkeypatch.setattr(check_release, "GIT_TERMINATION_GRACE_SECONDS", 0.05)
-
-    with pytest.raises(check_release.ReleaseError, match="timed out"):
-        check_release.git("status")
-
-    descendant_pid = int(pid_path.read_text(encoding="utf-8"))
-    deadline = time.monotonic() + 2
-    try:
-        while time.monotonic() < deadline:
-            try:
-                os.kill(descendant_pid, 0)
-            except ProcessLookupError:
-                break
-            status_path = Path(f"/proc/{descendant_pid}/stat")
-            # Reaping may remove /proc state after the liveness check.
-            with suppress(FileNotFoundError, ProcessLookupError):
-                if status_path.read_text().split()[2] == "Z":
-                    break
-            time.sleep(0.01)
-        else:
-            pytest.fail("git descendant remained alive after timeout cleanup")
-    finally:
-        with suppress(ProcessLookupError):
-            os.kill(descendant_pid, signal.SIGKILL)
-
-
-@pytest.mark.skipif(os.name != "posix", reason="POSIX process groups are required")
-def test_successful_git_cleans_real_descendant_and_keeps_result(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    pid_path = tmp_path / "descendant-pid"
-    executable = tmp_path / "git"
-    executable.write_text(
-        "#!/usr/bin/env python3\n"
-        "import os, pathlib, signal, sys, time\n"
-        "pid = os.fork()\n"
-        f"path = pathlib.Path({str(pid_path)!r})\n"
-        "if pid == 0:\n"
-        "    signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
-        "    path.write_text(str(os.getpid()))\n"
-        "    time.sleep(10)\n"
-        "while not path.exists():\n"
-        "    time.sleep(0.01)\n"
-        "sys.stdout.write('completed stdout')\n"
-        "sys.stderr.write('completed stderr')\n",
-        encoding="utf-8",
-    )
-    executable.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-    monkeypatch.setattr(check_release, "GIT_TERMINATION_GRACE_SECONDS", 0.05)
-
-    result = check_release.run_git(("status",), 1)
-
-    assert result.returncode == 0
-    assert result.stdout == "completed stdout"
-    assert result.stderr == "completed stderr"
-    descendant_pid = int(pid_path.read_text(encoding="utf-8"))
-    try:
-        deadline = time.monotonic() + 2
-        while time.monotonic() < deadline:
-            try:
-                os.kill(descendant_pid, 0)
-            except ProcessLookupError:
-                break
-            status_path = Path(f"/proc/{descendant_pid}/stat")
-            with suppress(FileNotFoundError, ProcessLookupError):
-                if status_path.read_text().split()[2] == "Z":
-                    break
-            time.sleep(0.01)
-        else:
-            pytest.fail("git descendant remained alive after successful cleanup")
-    finally:
-        with suppress(ProcessLookupError):
-            os.kill(descendant_pid, signal.SIGKILL)
-
-
-def test_git_reports_unsupported_process_group_capability(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr("scripts.check_release.os.name", "nt")
-    with pytest.raises(check_release.ReleaseError, match="requires POSIX"):
-        check_release.git("status")
-
-
-@pytest.mark.parametrize("descriptor", [1, 2])
-def test_git_bounds_stdout_and_stderr(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, descriptor: int
-) -> None:
-    executable = tmp_path / "git"
-    executable.write_text(
-        f"#!/usr/bin/env python3\nimport os\nos.write({descriptor}, b'x' * 17)\n",
-        encoding="utf-8",
-    )
-    executable.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path}:{os.environ['PATH']}")
-    monkeypatch.setattr(check_release, "MAX_GIT_OUTPUT_BYTES", 16)
-
-    with pytest.raises(check_release.ReleaseError, match="size limit"):
-        check_release.git("status")
-
-
 def test_published_release_check_requires_tag(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -303,7 +155,7 @@ def test_release_check_can_require_a_clean_tree(monkeypatch: pytest.MonkeyPatch)
 
     def dirty_git(*arguments: str) -> str:
         if arguments == ("status", "--porcelain"):
-            return " M package.json"
+            return " M packages/skills/package.json"
         return real_git(*arguments)
 
     monkeypatch.setattr(check_release, "git", dirty_git)
@@ -317,7 +169,6 @@ def test_release_channel_resolves_latest_from_main(monkeypatch: pytest.MonkeyPat
     )
     assert release_channel.resolve("v11.0.0", "a" * 40) == {
         "channel": "latest",
-        "dist_tag": "latest",
         "deploys_pages": "true",
     }
 
@@ -332,7 +183,6 @@ def test_release_channel_resolves_maintenance_from_its_release_line(
     )
     assert release_channel.resolve("v11.0.4", "a" * 40) == {
         "channel": "maintenance",
-        "dist_tag": "v11.0",
         "deploys_pages": "false",
     }
 
@@ -350,8 +200,8 @@ def test_release_channel_fails_closed_outside_release_refs(
 @pytest.mark.parametrize(
     ("on_main", "expected"),
     [
-        (True, "channel=latest\ndist-tag=latest\ndeploys-pages=true\n"),
-        (False, "channel=maintenance\ndist-tag=v11.0\ndeploys-pages=false\n"),
+        (True, "channel=latest\ndeploys-pages=true\n"),
+        (False, "channel=maintenance\ndeploys-pages=false\n"),
     ],
 )
 def test_release_channel_github_output_names_match_the_workflow(
@@ -378,28 +228,9 @@ def test_release_channel_rejects_malformed_stable_tags(tag: str) -> None:
         release_channel.maintenance_line(tag)
 
 
-def test_release_channel_dist_tag_defaults_to_latest_and_accepts_its_line() -> None:
-    assert release_channel.dist_tag("v11.0.4") == "latest"
-    assert release_channel.dist_tag("v11.0.4", "latest") == "latest"
-    assert release_channel.dist_tag("v11.0.4", "v11.0") == "v11.0"
-
-
-@pytest.mark.parametrize("requested", ["v11.1", "dev", "v11", "v11.0.4"])
-def test_release_channel_dist_tag_rejects_foreign_channels(requested: str) -> None:
-    with pytest.raises(release_channel.ChannelError, match="does not match"):
-        release_channel.dist_tag("v11.0.4", requested)
-
-
-def _maintenance_release_environment(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: str
-) -> str:
+def _release_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, version: str) -> str:
     revision = "a" * 40
     (tmp_path / "portable.json").write_text(json.dumps({"version": version}), encoding="utf-8")
-    (tmp_path / "opencode.json").write_text(json.dumps({"version": version}), encoding="utf-8")
-    (tmp_path / "package-lock.json").write_text(
-        json.dumps({"packages": {"": {}, "packages/agentomatic": {"version": version}}}),
-        encoding="utf-8",
-    )
     (tmp_path / "CHANGELOG.md").write_text(f"## \\[{version}] - 2026-09-30\n", encoding="utf-8")
     distribution = tmp_path / "distribution"
     distribution.mkdir()
@@ -407,8 +238,6 @@ def _maintenance_release_environment(
         json.dumps({"version": version, "source_revision": revision}), encoding="utf-8"
     )
     monkeypatch.setattr(check_release, "PORTABLE_PACKAGE", tmp_path / "portable.json")
-    monkeypatch.setattr(check_release, "OPENCODE_PACKAGE", tmp_path / "opencode.json")
-    monkeypatch.setattr(check_release, "OPENCODE_LOCK", tmp_path / "package-lock.json")
     monkeypatch.setattr(check_release, "CHANGELOG", tmp_path / "CHANGELOG.md")
     monkeypatch.setattr(check_release, "DISTRIBUTION", distribution)
     # The stable publication preflight exports RELEASE_REVISION; pin it to the
@@ -436,22 +265,17 @@ def test_published_check_accepts_a_maintenance_tag_below_the_latest_stable(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     version, tag = "10.1.1", "v10.1.1"
-    revision = _maintenance_release_environment(tmp_path, monkeypatch, version)
+    revision = _release_environment(tmp_path, monkeypatch, version)
     monkeypatch.setattr(check_release, "git", _published_git(tag, revision, "v11.0.0\nv10.1.1"))
     monkeypatch.setattr(
         release_channel,
         "resolve",
-        lambda _tag, _revision: {
-            "channel": "maintenance",
-            "dist_tag": "v10.1",
-            "deploys_pages": "false",
-        },
+        lambda _tag, _revision: {"channel": "maintenance", "deploys_pages": "false"},
     )
     assert check_release.validate(tag, published=True) == {
         "version": version,
         "revision": revision,
         "channel": "maintenance",
-        "dist_tag": "v10.1",
     }
 
 
@@ -459,16 +283,12 @@ def test_published_check_keeps_the_latest_channel_newest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     version, tag = "10.1.1", "v10.1.1"
-    revision = _maintenance_release_environment(tmp_path, monkeypatch, version)
+    revision = _release_environment(tmp_path, monkeypatch, version)
     monkeypatch.setattr(check_release, "git", _published_git(tag, revision, "v11.0.0\nv10.1.1"))
     monkeypatch.setattr(
         release_channel,
         "resolve",
-        lambda _tag, _revision: {
-            "channel": "latest",
-            "dist_tag": "latest",
-            "deploys_pages": "true",
-        },
+        lambda _tag, _revision: {"channel": "latest", "deploys_pages": "true"},
     )
     with pytest.raises(check_release.ReleaseError, match="older than the latest stable tag"):
         check_release.validate(tag, published=True)
@@ -478,7 +298,7 @@ def test_published_check_fails_closed_outside_release_refs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     version, tag = "10.1.1", "v10.1.1"
-    revision = _maintenance_release_environment(tmp_path, monkeypatch, version)
+    revision = _release_environment(tmp_path, monkeypatch, version)
     monkeypatch.setattr(check_release, "git", _published_git(tag, revision, "v10.1.1"))
 
     def unreachable(_tag: str, _revision: str) -> dict[str, str]:
@@ -491,23 +311,36 @@ def test_published_check_fails_closed_outside_release_refs(
         check_release.validate(tag, published=True)
 
 
-def test_release_artifact_hashes_use_registry_integrity_format() -> None:
-    content = b"exact npm artifact"
-    result = build_release_artifacts.hashes(content)
-    assert result == {
-        "integrity": "sha512-9cADN2L/vB2zEFdBHq66/d4Ci/RXK+ncTZhxohgxH1L+4d4ikt8KFcx6DeKr2I9+WiUkgEosZ5y9BzACKIdy5A==",
-        "sha1": "b4c0edb8f3c4b04bada4dd57d6bf69f3601c7b5f",
-        "sha512": "f5c0033762ffbc1db31057411eaebafdde028bf4572be9dc4d9871a218311f52fee1de2292df0a15cc7a0de2abd88f7e5a2524804a2c679cbd073002288772e4",
-    }
-
-
-def test_release_artifact_build_rejects_a_dist_tag_outside_the_release_line(
-    monkeypatch: pytest.MonkeyPatch,
+def test_release_provenance_binds_tag_version_channel_and_pages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("RELEASE_DIST_TAG", "v11.1")
+    pages = tmp_path / "pages"
+    (pages / "deep").mkdir(parents=True)
+    (pages / "index.json").write_bytes(b"index\n")
+    (pages / "deep/lock.json").write_bytes(b"lock\n")
+    output = tmp_path / "release"
+    monkeypatch.setattr(build_release_artifacts, "OUTPUT", output)
+    monkeypatch.setattr(build_release_artifacts, "page_hashes", lambda: {"files": {"x": 1}})
+    version = json.loads((ROOT / "packages/skills/package.json").read_text(encoding="utf-8"))[
+        "version"
+    ]
     revision = build_release_artifacts.command("git", "rev-parse", "HEAD").strip()
-    with pytest.raises(build_release_artifacts.ArtifactError, match="does not match"):
-        build_release_artifacts.build(f"v{RELEASE_VERSION}", revision)
+    monkeypatch.setattr(
+        release_channel,
+        "resolve",
+        lambda _tag, _revision: {"channel": "latest", "deploys_pages": "true"},
+    )
+    manifest = build_release_artifacts.build(f"v{version}", revision)
+    assert manifest["schema"] == "@kisev/skills-release/v3"
+    assert manifest["version"] == version
+    assert manifest["revision"] == revision
+    assert manifest["channel"] == "latest"
+    assert manifest["pages"] == {"files": {"x": 1}}
+    stored = json.loads((output / "release.json").read_text(encoding="utf-8"))
+    assert stored["tag"] == f"v{version}"
+
+    with pytest.raises(build_release_artifacts.ArtifactError, match="differ"):
+        build_release_artifacts.build("v0.0.1", revision)
 
 
 def test_release_notes_are_taken_from_the_exact_changelog_section(
@@ -521,421 +354,6 @@ def test_release_notes_are_taken_from_the_exact_changelog_section(
     )
     monkeypatch.setattr(create_github_release, "ROOT", tmp_path)
     assert create_github_release.changelog("9.9.9") == "### Added\n\n- Current release.\n"
-
-
-def test_npm_provenance_binds_artifact_workflow_and_revision(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    revision = "a" * 40
-    sha512 = "b" * 128
-    statement = {
-        "subject": [{"digest": {"sha512": sha512}}],
-        "predicate": {
-            "buildDefinition": {
-                "externalParameters": {
-                    "workflow": {
-                        "path": ".github/workflows/publish.yml",
-                        "repository": "https://github.com/kisev/skills",
-                    }
-                },
-                "resolvedDependencies": [{"digest": {"gitCommit": revision}}],
-            }
-        },
-    }
-    encoded = base64.b64encode(json.dumps(statement).encode()).decode()
-    metadata = {
-        "dist": {
-            "attestations": {
-                "url": "https://registry.example/attestations",
-                "provenance": {"predicateType": publish_npm_release.SLSA_PREDICATE},
-            }
-        }
-    }
-    document = {
-        "attestations": [
-            {
-                "predicateType": publish_npm_release.SLSA_PREDICATE,
-                "bundle": {"dsseEnvelope": {"payload": encoded}},
-            }
-        ]
-    }
-    responses = iter([None, document])
-    sleeps: list[float] = []
-    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: next(responses))
-    monkeypatch.setattr("scripts.publish_npm_release.time.sleep", sleeps.append)
-    publish_npm_release.verify_provenance(metadata, sha512, revision, attempts=2, delay=0.01)
-    assert sleeps == [0.01]
-    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: document)
-    monkeypatch.setattr(
-        time,
-        "sleep",
-        lambda _: pytest.fail("must not retry mismatched provenance"),
-    )
-    with pytest.raises(publish_npm_release.PublicationError, match="does not bind"):
-        publish_npm_release.verify_provenance(metadata, sha512, "c" * 40, attempts=3)
-
-    refreshed_responses = iter([metadata, None, document])
-    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: next(refreshed_responses))
-    monkeypatch.setattr(time, "sleep", sleeps.append)
-    publish_npm_release.verify_provenance(
-        {"dist": {}},
-        sha512,
-        revision,
-        attempts=3,
-        delay=0.01,
-        metadata_url="https://registry.example/version",
-    )
-
-
-def test_trusted_publishing_rejects_an_old_npm(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(publish_npm_release, "command", lambda *_args: "11.5.0\n")
-    with pytest.raises(publish_npm_release.PublicationError, match=r"11\.5\.1"):
-        publish_npm_release.require_trusted_publishing_npm()
-
-
-def test_registry_tarball_download_retries_propagation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    url = "https://registry.example/package.tgz"
-    responses: list[object] = [
-        urllib.error.HTTPError(url, 404, "Not Found", Message(), None),
-        type(
-            "Response",
-            (),
-            {
-                "__enter__": lambda self: self,
-                "__exit__": lambda self, *_args: None,
-                "geturl": lambda self: url,
-                "read": lambda self: b"tarball",
-            },
-        )(),
-    ]
-    sleeps: list[float] = []
-
-    def urlopen(_request: object, timeout: int) -> object:
-        assert timeout == 30
-        response = responses.pop(0)
-        if isinstance(response, Exception):
-            raise response
-        return response
-
-    monkeypatch.setattr("scripts.publish_npm_release.urllib.request.urlopen", urlopen)
-    monkeypatch.setattr("scripts.publish_npm_release.time.sleep", sleeps.append)
-
-    assert publish_npm_release.download_registry_tarball(url, attempts=2, delay=0.01) == b"tarball"
-    assert sleeps == [0.01]
-
-
-@pytest.mark.parametrize(
-    "registry",
-    ["https://registry.example/base?token=value", "https://registry.example/base#fragment"],
-)
-def test_registry_base_rejects_query_and_fragment(
-    monkeypatch: pytest.MonkeyPatch, registry: str
-) -> None:
-    monkeypatch.setenv("NPM_CONFIG_REGISTRY", registry)
-    with pytest.raises(publish_npm_release.PublicationError, match="credential-free HTTPS"):
-        publish_npm_release.registry_url("@example/package", "1.0.0")
-
-
-def test_registry_response_rejects_https_downgrade(monkeypatch: pytest.MonkeyPatch) -> None:
-    response = type(
-        "Response",
-        (),
-        {
-            "__enter__": lambda self: self,
-            "__exit__": lambda self, *_args: None,
-            "geturl": lambda self: "http://registry.example/package",
-            "read": lambda self: b"{}",
-        },
-    )()
-    monkeypatch.setattr(
-        "scripts.publish_npm_release.urllib.request.urlopen", lambda *_args, **_kwargs: response
-    )
-
-    with pytest.raises(publish_npm_release.PublicationError, match="credential-free HTTPS"):
-        publish_npm_release.request_json("https://registry.example/package")
-
-
-def test_distribution_fetch_rejects_https_downgrade(monkeypatch: pytest.MonkeyPatch) -> None:
-    response = type(
-        "Response",
-        (),
-        {
-            "__enter__": lambda self: self,
-            "__exit__": lambda self, *_args: None,
-            "geturl": lambda self: "http://pages.example/index.json",
-            "read": lambda self: b"{}",
-            "status": 200,
-        },
-    )()
-    monkeypatch.setattr(
-        "scripts.verify_distribution_url.urllib.request.urlopen",
-        lambda *_args, **_kwargs: response,
-    )
-
-    with pytest.raises(verify_distribution_url.VerificationError, match="credential-free HTTPS"):
-        verify_distribution_url.fetch("https://pages.example/index.json")
-
-
-def test_registry_smoke_installs_each_independent_package_and_runtime_peer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[str, ...]] = []
-
-    def command(*arguments: str, **_kwargs: object) -> str:
-        calls.append(arguments)
-        if arguments[-1:] == ("--version",):
-            return f"{RELEASE_VERSION}\n"
-        if arguments[-2:] == ("catalog", "--json"):
-            return json.dumps({"status": "ok", "version": RELEASE_VERSION}) + "\n"
-        return ""
-
-    monkeypatch.setattr(publish_npm_release, "command", command)
-    publish_npm_release.registry_smoke(
-        [
-            {"name": "@kisev/safe-fs", "version": RELEASE_VERSION},
-            {"name": "@kisev/memomatic", "version": RELEASE_VERSION},
-            {"name": "@kisev/taskmatic", "version": RELEASE_VERSION},
-            {"name": "@kisev/agentomatic", "version": RELEASE_VERSION},
-        ]
-    )
-    install = next(arguments for arguments in calls if arguments[:2] == ("npm", "install"))
-    for name in publish_npm_release.NPM_PUBLISH_ORDER:
-        assert f"{name}@{RELEASE_VERSION}" in install
-    assert f"@opencode/plugin@{publish_npm_release.verification_peer_version()}" in install
-    catalog_calls = [arguments for arguments in calls if arguments[-2:] == ("catalog", "--json")]
-    assert len(catalog_calls) == 1
-    assert Path(catalog_calls[0][0]).name == "agentomatic"
-    assert not any("capabilities" in arguments for arguments in calls)
-    assert ("npm", "audit", "signatures", "--json") in calls
-
-
-def test_registry_wait_survives_four_minute_propagation(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    clock = [0.0]
-    pauses: list[float] = []
-
-    def sleep(seconds: float) -> None:
-        pauses.append(seconds)
-        clock[0] += seconds
-
-    def read() -> bytes:
-        if clock[0] < 240:
-            raise publish_npm_release.RegistryPending("HTTP 404")
-        return b"exact artifact"
-
-    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(time, "sleep", sleep)
-    assert publish_npm_release.wait_for_registry("tarball", read, 60, 5) == b"exact artifact"
-    assert pauses[:4] == [5, 10, 20, 30]
-    assert max(pauses) == 30
-    assert "waiting for registry propagation" in capsys.readouterr().err
-
-
-def test_registry_stages_share_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
-    clock = [590.0]
-    monkeypatch.setattr(time, "monotonic", lambda: clock[0])
-    monkeypatch.setattr(time, "sleep", lambda delay: clock.__setitem__(0, clock[0] + delay))
-    assert publish_npm_release.wait_for_registry("provenance", lambda: None, 60, 5, 600) is None
-    assert clock[0] == 600
-
-
-@pytest.mark.parametrize("status", [408, 429, 500, 503])
-def test_registry_metadata_transient_errors_are_retryable(
-    monkeypatch: pytest.MonkeyPatch, status: int
-) -> None:
-    def unavailable(*_args: object, **_kwargs: object) -> None:
-        raise urllib.error.HTTPError(
-            "https://registry.example/", status, "unavailable", Message(), None
-        )
-
-    monkeypatch.setattr("scripts.publish_npm_release.urllib.request.urlopen", unavailable)
-    with pytest.raises(publish_npm_release.RegistryPending):
-        publish_npm_release.request_json("https://registry.example/")
-
-
-def test_registry_authorization_failure_does_not_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    def forbidden(*_args: object, **_kwargs: object) -> None:
-        raise urllib.error.HTTPError("https://registry.example/", 403, "forbidden", Message(), None)
-
-    monkeypatch.setattr("scripts.publish_npm_release.urllib.request.urlopen", forbidden)
-    monkeypatch.setattr(time, "sleep", lambda _: pytest.fail("must not retry 403"))
-    with pytest.raises(publish_npm_release.PublicationError, match="HTTP 403"):
-        publish_npm_release.download_registry_tarball("https://registry.example/archive")
-
-
-def test_existing_registry_version_is_verified_without_republication(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    content = b"exact artifact"
-    npm = {
-        "name": "@example/package",
-        "version": "1.0.0",
-        **build_release_artifacts.hashes(content),
-    }
-    release = {
-        "schema": "@kisev/skills-release/v2",
-        "npm": [npm],
-        "version": "1.0.0",
-        "revision": "a" * 40,
-        "dist_tag": "latest",
-    }
-    metadata: dict[str, Any] = {
-        "dist": {"integrity": npm["integrity"], "tarball": "https://registry.example/archive"},
-        "dist-tags": {"latest": "1.0.0"},
-        "versions": {"1.0.0": {}},
-    }
-    monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
-    monkeypatch.setattr(
-        publish_npm_release,
-        "manifest",
-        lambda: (release, [{"path": tmp_path / "package.tgz", **npm}]),
-    )
-    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: metadata)
-    monkeypatch.setattr(
-        publish_npm_release, "download_registry_tarball", lambda *_args, **_kwargs: content
-    )
-    monkeypatch.setattr(publish_npm_release, "verify_provenance", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(publish_npm_release, "verify_dist_tag", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(publish_npm_release, "registry_smoke", lambda *_args: None)
-    monkeypatch.setattr(
-        publish_npm_release, "command", lambda *_args: pytest.fail("must not republish")
-    )
-    assert publish_npm_release.publish() == [metadata]
-    metadata["dist"]["integrity"] = "wrong"
-    with pytest.raises(publish_npm_release.PublicationError, match="differs"):
-        publish_npm_release.publish()
-
-
-def test_dev_manifest_requires_dev_dist_tag(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    release = {
-        "schema": "@kisev/skills-dev/v2",
-        "npm": [
-            {
-                "name": "@example/package",
-                "version": "1.0.0-dev.1.gabcdef0",
-                "filename": "package.tgz",
-            }
-        ],
-        "version": "1.0.0-dev.1.gabcdef0",
-        "revision": "a" * 40,
-    }
-    monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
-    entries: list[dict[str, object]] = [
-        {
-            "path": tmp_path / "package.tgz",
-            "name": "@example/package",
-            "version": "1.0.0-dev.1.gabcdef0",
-            "filename": "package.tgz",
-        },
-    ]
-    monkeypatch.setattr(publish_npm_release, "manifest", lambda: (release, entries))
-    monkeypatch.setenv("NPM_DIST_TAG", "latest")
-    with pytest.raises(publish_npm_release.PublicationError, match="requires npm dist-tag 'dev'"):
-        publish_npm_release.publish()
-
-
-def _stable_publish_stack(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, release: dict[str, Any], content: bytes
-) -> dict[str, Any]:
-    npm = {
-        "name": release["npm"][0]["name"],
-        "version": release["version"],
-        **build_release_artifacts.hashes(content),
-    }
-    metadata: dict[str, Any] = {
-        "dist": {"integrity": npm["integrity"], "tarball": "https://registry.example/archive"},
-        "dist-tags": {"latest": "11.1.0", release.get("dist_tag", "latest"): release["version"]},
-        "versions": {"11.1.0": {}, release["version"]: {}},
-    }
-    monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
-    monkeypatch.setattr(
-        publish_npm_release,
-        "manifest",
-        lambda: (release, [{"path": tmp_path / "package.tgz", **npm}]),
-    )
-    monkeypatch.setattr(publish_npm_release, "request_json", lambda _url: metadata)
-    monkeypatch.setattr(
-        publish_npm_release, "download_registry_tarball", lambda *_args, **_kwargs: content
-    )
-    monkeypatch.setattr(publish_npm_release, "verify_provenance", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(publish_npm_release, "verify_dist_tag", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(publish_npm_release, "verify_latest_tag_stable", lambda *_a, **_k: None)
-    monkeypatch.setattr(publish_npm_release, "registry_smoke", lambda *_args: None)
-    monkeypatch.setattr(
-        publish_npm_release, "command", lambda *_args, **_kwargs: pytest.fail("must not publish")
-    )
-    return metadata
-
-
-def test_stable_manifest_requires_a_channel_dist_tag(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    release = {
-        "schema": "@kisev/skills-release/v2",
-        "npm": [{"name": "@example/package", "version": "11.0.4", "filename": "package.tgz"}],
-        "version": "11.0.4",
-        "revision": "a" * 40,
-    }
-    monkeypatch.setattr(publish_npm_release, "require_trusted_publishing_npm", lambda: None)
-    monkeypatch.setattr(
-        publish_npm_release,
-        "manifest",
-        lambda: (
-            release,
-            [
-                {
-                    "path": tmp_path / "package.tgz",
-                    "name": "@example/package",
-                    "version": "11.0.4",
-                    "filename": "package.tgz",
-                }
-            ],
-        ),
-    )
-    monkeypatch.delenv("NPM_DIST_TAG", raising=False)
-    with pytest.raises(publish_npm_release.PublicationError, match="missing the npm dist_tag"):
-        publish_npm_release.publish()
-
-
-def test_stable_manifest_dist_tag_must_match_its_release_line(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    release = {
-        "schema": "@kisev/skills-release/v2",
-        "npm": [{"name": "@example/package", "version": "11.1.0", "filename": "package.tgz"}],
-        "version": "11.1.0",
-        "revision": "a" * 40,
-        "dist_tag": "v11.0",
-    }
-    _stable_publish_stack(monkeypatch, tmp_path, release, b"exact artifact")
-    monkeypatch.delenv("NPM_DIST_TAG", raising=False)
-    with pytest.raises(publish_npm_release.PublicationError, match="does not match"):
-        publish_npm_release.publish()
-
-
-def test_maintenance_manifest_publishes_under_its_line_dist_tag(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
-    release = {
-        "schema": "@kisev/skills-release/v2",
-        "npm": [{"name": "@example/package", "version": "11.0.4", "filename": "package.tgz"}],
-        "version": "11.0.4",
-        "revision": "a" * 40,
-        "dist_tag": "v11.0",
-    }
-    metadata = _stable_publish_stack(monkeypatch, tmp_path, release, b"exact artifact")
-    monkeypatch.setenv("NPM_DIST_TAG", "v11.0")
-    assert publish_npm_release.publish() == [metadata]
-    monkeypatch.setenv("NPM_DIST_TAG", "latest")
-    with pytest.raises(
-        publish_npm_release.PublicationError, match=r"requires npm dist-tag 'v11\.0'"
-    ):
-        publish_npm_release.publish()
 
 
 def test_pages_composition_keeps_stable_root_and_dev_subpath(tmp_path: Path) -> None:
@@ -994,7 +412,7 @@ def test_remote_pages_copy_rejects_lock_drift(
 def test_remote_pages_copy_fails_closed_when_channel_is_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    missing = urllib.error.HTTPError(
+    missing = HTTPError(
         "https://pages.example/skills/dev/index.json", 404, "Not Found", Message(), None
     )
 
@@ -1002,7 +420,7 @@ def test_remote_pages_copy_fails_closed_when_channel_is_missing(
         raise missing
 
     monkeypatch.setattr(compose_pages_site, "fetch", fetch_missing)
-    with pytest.raises(urllib.error.HTTPError):
+    with pytest.raises(HTTPError):
         compose_pages_site.copy_remote("https://pages.example/skills/dev", tmp_path / "dev")
 
 
@@ -1019,90 +437,10 @@ def test_project_release_skill_keeps_manual_publication_gates() -> None:
         "pushing the tag",
     ):
         assert action in normalized
-    assert "npm `latest`" in normalized
-    assert "`vX.Y` dist-tag" in normalized
+    assert "it deploys the Pages root" in normalized
     assert "release/vX.Y" in normalized
     assert "run `.github/workflows/publish.yml` from the tagged commit" in normalized
-
-
-def test_dev_pack_pins_workspace_dependencies_to_exact_dev_versions(tmp_path: Path) -> None:
-    source = tmp_path / "member"
-    (source / "dist").mkdir(parents=True)
-    (source / "dist" / "index.js").write_text("export {}\n", encoding="utf-8")
-    for name in ("README.md", "README.ru.md"):
-        (source / name).write_text("readme\n", encoding="utf-8")
-    (source / "package.json").write_text(
-        json.dumps(
-            {
-                "name": "@kisev/example",
-                "version": "1.2.0",
-                "dependencies": {
-                    "@kisev/safe-fs": "^1.0.0",
-                    "@kisev/memomatic": "^1.0.0",
-                    "external-package": "^2.0.0",
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    pins = {
-        "@kisev/safe-fs": "1.0.0-dev.7.g1a2b3c4",
-        "@kisev/memomatic": "1.0.0-dev.7.g1a2b3c4",
-    }
-    content, record = build_dev_artifacts.pack(source, "1.2.0-dev.7.g1a2b3c4", ("dist/",), pins)
-    with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as archive:
-        handle = archive.extractfile("package/package.json")
-        assert handle is not None
-        packed = json.loads(handle.read().decode("utf-8"))
-    assert packed["version"] == "1.2.0-dev.7.g1a2b3c4"
-    assert packed["dependencies"]["@kisev/safe-fs"] == pins["@kisev/safe-fs"]
-    assert packed["dependencies"]["@kisev/memomatic"] == pins["@kisev/memomatic"]
-    assert packed["dependencies"]["external-package"] == "^2.0.0"
-    assert record["version"] == "1.2.0-dev.7.g1a2b3c4"
-
-
-def test_release_manifest_rejects_tampered_tarball(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    content = b"validated tarball"
-
-    def entry(name: str, filename: str) -> dict[str, object]:
-        return {
-            "filename": filename,
-            "name": name,
-            "size": len(content),
-            "version": "1.0.0",
-            **build_release_artifacts.hashes(content),
-        }
-
-    release = tmp_path / "release"
-    release.mkdir()
-    for filename in (
-        "safe-fs.tgz",
-        "memomatic.tgz",
-        "taskmatic.tgz",
-        "package.tgz",
-    ):
-        (release / filename).write_bytes(content)
-    (release / "release.json").write_text(
-        json.dumps(
-            {
-                "schema": "@kisev/skills-release/v2",
-                "npm": [
-                    entry("@kisev/safe-fs", "safe-fs.tgz"),
-                    entry("@kisev/memomatic", "memomatic.tgz"),
-                    entry("@kisev/taskmatic", "taskmatic.tgz"),
-                    entry("@kisev/agentomatic", "package.tgz"),
-                ],
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(publish_npm_release, "RELEASE", release)
-    assert publish_npm_release.manifest()[1][2]["path"].read_bytes() == content
-    (release / "package.tgz").write_bytes(content + b"tampered")
-    with pytest.raises(publish_npm_release.PublicationError, match="does not match"):
-        publish_npm_release.manifest()
+    assert "npm" not in normalized
 
 
 def test_pages_manifest_verifies_every_exact_file(
@@ -1389,9 +727,18 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert (
         workflow.index("stable-preflight:")
         < workflow.index("stable-pages:")
+        < workflow.index("pypi-publish:")
         < workflow.index("github-release:")
     )
-    assert workflow.count("needs: stable-preflight") == 2
+    assert "needs:\n      - stable-pages\n" in workflow
+    # PyPI trusted publishing runs only for a latest-channel tag; the untagged
+    # dev push and maintenance-channel tags never reach a package registry.
+    assert "needs.stable-preflight.outputs.deploys-pages == 'true'" in workflow
+    assert "id-token: write" in workflow
+    assert "uv publish --trusted-publishing always" in workflow
+    assert "built skillmate version does not match" in workflow
+    assert "environment:\n      name: pypi" in workflow
+    assert "stable-npm" not in workflow and "dev-npm" not in workflow
     assert "task release:prepare" in workflow
     assert "branches:\n      - dev" in workflow
     # The dev publication trusts the terminal CI success of the same revision
@@ -1405,36 +752,28 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert "cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}" in workflow
     assert "github.event.deleted != true" in workflow
     assert "task dev:prepare" in workflow
-    assert "task dev:npm" in workflow
     assert "task dev:pages:verify" in workflow
     assert "task release:pages:verify" in workflow
-    assert "task release:npm" in workflow
     assert "task release:github" in workflow
-    assert "      - stable-pages\n      - stable-npm" in workflow
-    assert "needs.stable-preflight.outputs.npm-artifact" in workflow
     assert "needs.stable-preflight.outputs.pages-artifact" in workflow
     assert "task release:channel" in workflow
-    assert "RELEASE_DIST_TAG: ${{ steps.channel.outputs.dist-tag }}" in workflow
-    assert "NPM_DIST_TAG: ${{ needs.stable-preflight.outputs.dist-tag }}" in workflow
+    assert "deploys-pages" in workflow
     assert "steps.channel.outputs.deploys-pages == 'true'" in workflow
-    assert "needs.stable-preflight.outputs.deploys-pages == 'true'" in workflow
     assert (
         "needs.stable-pages.result == 'success' || needs.stable-pages.result == 'skipped'"
         in workflow
     )
+    assert (
+        "needs.pypi-publish.result == 'success' || needs.pypi-publish.result == 'skipped'"
+        in workflow
+    )
+    assert "npm" not in workflow
+    assert "dist-tag" not in workflow
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "dev|release/*|fix/*)" in ci
     assert 'test "$HEAD_REPOSITORY" = "$REPOSITORY"' in ci
     assert 'test "$(git rev-list --parents -n 1 HEAD | wc -w)" -eq 3' in ci
     builder = (ROOT / "scripts/build_release_artifacts.py").read_text(encoding="utf-8")
-    publisher = (ROOT / "scripts/publish_npm_release.py").read_text(encoding="utf-8")
     pages = (ROOT / "scripts/verify_distribution_url.py").read_text(encoding="utf-8")
-    assert "npm pack" not in workflow and '"npm",\n            "pack"' in builder
-    for contract in (
-        "registry_smoke",
-        "verify_provenance",
-        "npm 11.5.1 or newer",
-        "registry npm artifact differs",
-    ):
-        assert contract in publisher
+    assert "release.json" in builder and "npm pack" not in builder
     assert "deployed Pages file differs from release artifact" in pages

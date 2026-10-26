@@ -27,81 +27,55 @@ consumes current scoped triage instead of duplicating SemVer policy.
 
 The authored repository is not a portable installation source and does not ship
 a portable-skills CLI. Portable skills are installed from the GitHub Pages
-distribution with the separately versioned `skills` CLI. The optional npm
-package `@kisev/agentomatic` provides the `agentomatic` CLI for OpenCode
-integration. It does not install, update, inspect, or remove portable skills;
-their lifecycle belongs to the separate `skills` CLI.
+distribution with `skillmate`, the installer-configurator delivered on PyPI, or
+with the compatible `skills` CLI (`npx --yes skills@latest`). `skillmate` places
+each selected skill per host, lays out command surfaces, and owns the
+preview-confirm safety model; the `skills` channel installs portable skills
+into `.agents/skills` and is kept compatible.
 
 `packages/skills/package.json` is the private version authority for the portable
 distribution. `scripts/build_distribution.py` creates the Pages payload under
 `.build/packages/skills`: well-known indexes, release metadata and locks, and
 one content-addressed SHA-256 archive with root `SKILL.md` per skill. A release
-manifest binds every Pages file and the exact npm tarball to the tag and source
-revision. The tag workflow runs the full gate, publishes and verifies Pages and
-npm, then creates the GitHub Release.
+manifest binds every Pages file to the tag, version, channel, and source
+revision. The tag workflow runs the full gate, publishes and verifies Pages,
+uploads `skillmate` to PyPI from `main` tags through trusted publishing, then
+creates the GitHub Release.
 
 A push to `dev` invokes the same publication workflow without a stable tag and
-runs the complete gate. It then derives a technical prerelease version, replaces
-only Pages `/dev`, and moves only npm dist-tag `dev`. Each Pages deployment
-composes the stable root and `/dev` so either channel preserves the other.
+runs the complete gate. It then derives a technical prerelease version and
+replaces only Pages `/dev`; the dev channel never reaches a package registry.
+Each Pages deployment composes the stable root and `/dev` so either channel
+preserves the other.
 
 ## Host Integration
 
 Portable skills are host-neutral and every published archive is self-contained.
-`packages/agentomatic/` is an optional OpenCode adapter and contains no copied
-skills. Before `npm pack`, skill commands, the LSP catalog, and authored agent
-and plugin assets are materialized under `packages/agentomatic/dist/assets/`.
+`apps/skillmate/` is the installer-configurator and adapter registry. It
+materializes each selected skill per host: Codex reads `.agents/skills/` and
+spells skill references `$name`, Claude reads `.claude/skills/` with command
+surfaces under `.claude/commands/`, and OpenCode reads `.opencode/skills/`
+(with `~/.config/opencode/` as the global root) with command surfaces under
+`.opencode/commands/`. Adapters are declarative; adding a host adds no runtime
+dependency for portable skills.
 
-The installer changes only the selected command, agent, and plugin assets after
-a preview and matching `confirmation_digest`. Ownership manifests detect
-collisions and preserve user drift. Canonical agent assets define prompts and
-permissions; separate profile configuration defines models, variants, and
-additional critics, while a semantic manifest records rendered hashes and the
-package version. Selectable plugins are opt-in.
+Every write path goes through one plan: a preview of all changes, explicit
+confirmation, and ownership manifests under `.skillmate/` that detect
+collisions with foreign files and preserve user drift. A file modified after
+installation is never silently overwritten, and removing it requires an
+explicit `--confirm-drift`.
 
-## OpenCode Runtime
+## skillmate Runtime
 
-The package exports one core infrastructure plugin and exactly three selectable
-plugin modules: `rules-injector`, `rtk`, and `zed-bell`. The core plugin registers
-only the `route` package tool. This package surface does not become a runtime
-dependency of portable skills.
-
-The direct CLI exposes the versioned, read-only `doctor` facts API. It inspects
-configuration, LSP, ownership, and lifecycle state without
-loading plugin factories, repairing state, or starting LSP servers. Missing host
-facts are reported as `unavailable` or `incomplete`. The canonical
-`shared/references/lsp-catalog.json` is materialized into the OpenCode package.
-
-Package writes use bounded global or project roots, private locks and
-confirmation receipts, final revalidation, atomic file replacement, and a
-journaled rollback path. Stale, expired, superseded, or replayed confirmations
-fail before mutation; user-owned files and unrelated durable state remain
-outside package ownership. Scope-aware direct commands default to the current
-directory; one `--global` flag selects global state. Direct CLI administration
-uses the same project default. Portable cleanup belongs to the external `skills`
-CLI and has no package-managed snapshots or rollback. Global archive state is shared globally; project archives are
-isolated by project-root digest.
-
-## Routing Contracts
-
-The OpenCode `manager` owns the evidence -> plan -> authorization -> execution ->
-checks -> report lifecycle for routed work. The `route` tool has four categories: `exploration` to
-`mapper`, `architecture` to `architect`, `implementation` to `worker`, and
-`review` to `review` or one selected `critic`. The manager delegates all substantive
-work, including read-only quick requests, and routes write-capable documentation as implementation.
-The `review` agent is available directly and as a subagent; it performs the primary
-review and delegates independent passes to critics according to the selected skill.
-It may fix project files only after an explicit user request and a visible transition
-out of the read-only review phase.
-
-Routing inventory comes from resolved host configuration; callers cannot inject
-agents, capabilities, tools, models, or availability. A routing decision records
-matrix and host-inventory revisions. Its one-use, TTL-bound receipt binds the
-task, requirements, destination, agent, execution card, and expiry. Native Task
-dispatch and result hooks validate the receipt, execution card, and structured
-mapper, worker, review, or critic report. Execution cards bind writable and
-forbidden paths, checks, explicit VCS operations, and separate execution,
-publication, and history-rewrite confirmations.
+`skillmate` is a standard-library-only Python 3.12+ application. The
+distribution module resolves the versioned Pages index, verifies each archive
+digest, and extracts without fallbacks; `--from-checkout` runs the checkout's
+own distribution build and stamps the installation as dev. The CLI offers
+`install`, `update`, `remove`, `doctor`, and `status`; every mutating command
+previews a versioned plan document and writes only after explicit
+confirmation, while `doctor` and `status` are read-only. OpenCode
+configuration fragments are edited with comment-preserving splices that stay
+byte-identical when repeated, and conflicts are reported, never merged.
 
 ## Build Invariants
 
@@ -119,9 +93,9 @@ publication, and history-rewrite confirmations.
 - Source remains unchanged, and build output is replaced only after complete
   staging and validation.
 - Release checks bind the Pages version and source revision to the exact tag;
-  publication promotes only preflighted artifacts and verifies both remote
-  channels before creating the GitHub Release.
+  publication promotes only preflighted artifacts and verifies the deployed
+  Pages artifact before creating the GitHub Release.
 - Development publication runs the complete gate for a `dev` push, verifies its
-  exact Pages and npm artifacts, and cannot update stable Pages or npm `latest`.
+  exact Pages artifact, and cannot update the stable Pages root.
 - Work-item findings have stable ordering and reports bind item and evidence
   digests, so unchanged checks produce the same verdict.

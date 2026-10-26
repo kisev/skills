@@ -40,7 +40,7 @@
     "adapter_version": { "type": "integer" },
     "model": { "type": ["string", "null"] },
     "model_version": { "type": ["string", "null"] },
-    "observation_mode": { "enum": ["hostless-contract", "trusted-live"] },
+    "observation_mode": { "enum": ["hostless-contract"] },
     "status": { "enum": ["passed", "failed", "blocked", "skipped", "incomplete", "error"] },
     "assertions": { "type": "array" },
     "started_at": { "type": "integer", "minimum": 0 },

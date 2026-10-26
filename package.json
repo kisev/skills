@@ -3,7 +3,6 @@
   "workspaces": [
     "packages/safe-fs",
     "apps/memomatic",
-    "apps/taskmatic",
-    "packages/agentomatic"
+    "apps/taskmatic"
   ]
 }

@@ -10,23 +10,24 @@ review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/references/*
 ## Установка и создание базы
 
 Нужен Node.js 22.13+. Приложение устанавливается отдельно от скилла `taskmatic`
-(см. [инструкцию для переносимых скиллов](portable-skills.md)). Используйте
-dev-канал или выберите стабильную версию, когда появится стабильный релиз:
+(см. [инструкцию для переносимых скиллов](portable-skills.md)). Приложение
+поставляется из чекаута этого репозитория:
 
 ```shell
-# Registry version
-npm view --prefer-online @kisev/taskmatic@dev version
+git clone https://github.com/kisev/skills && cd skills
+mise install
+task generate
 
-# Install
-npm install --global @kisev/taskmatic@dev
+# Install from the checkout
+npm install --global ./apps/taskmatic
 
 # Installed package and active CLI
 npm list --global @kisev/taskmatic --depth=0
 taskmatic --version
 ```
 
-Тег может сдвинуться между просмотром и установкой. Последние команды проверяют
-установленный пакет и CLI из PATH. Затем создайте базу:
+Для обновления повторите `git pull`, `task generate` и глобальную установку.
+Затем создайте базу:
 
 ```shell
 taskmatic add "Check the first board" --board main

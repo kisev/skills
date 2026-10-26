@@ -5,20 +5,23 @@
 Локальные задачи для человека и агентов: одно TypeScript/Node.js-приложение для
 CLI, MCP, Markdown-экспорта и живой веб-доски только для чтения. Нужен Node.js 22.13+.
 
-```shell
-# Registry version
-npm view --prefer-online @kisev/taskmatic@dev version
+Приложение поставляется из чекаута этого репозитория:
 
-# Install
-npm install --global @kisev/taskmatic@dev
+```shell
+git clone https://github.com/kisev/skills && cd skills
+mise install
+task generate
+
+# Install from the checkout
+npm install --global ./apps/taskmatic
 
 # Installed package and active CLI
 npm list --global @kisev/taskmatic --depth=0
 taskmatic --version
 ```
 
-Тег может сдвинуться между просмотром и установкой. Последние команды показывают
-установленный пакет и CLI из PATH. Затем создайте и используйте доску:
+Для обновления повторите `git pull`, `task generate` и глобальную установку.
+Затем создайте и используйте доску:
 
 ```shell
 taskmatic add "Check the first board"
@@ -28,7 +31,7 @@ taskmatic serve
 ```
 
 Тег `dev` предоставляет сборку для разработки. Обновление переносимого скилла
-`taskmatic` не обновляет приложение; для этого повторите npm-установку.
+`taskmatic` не обновляет приложение; повторите установку из чекаута.
 См. [настройку и миграцию](../../docs/ru/how-to/taskmatic.md).
 
 ## Совместимость

@@ -23,8 +23,6 @@ from scripts.build_skills import DEFAULT_OUTPUT as BUILT_SKILLS  # noqa: E402
 PACKAGE = ROOT / "packages" / "skills"
 INVENTORY = ROOT / "evals" / "contracts" / "public-surfaces.json"
 REQUIREMENTS = ROOT / "shared" / "runtime-requirements.json"
-LOCKFILE = ROOT / "package-lock.json"
-NPM_MEMBER = "packages/agentomatic"
 DEFAULT_OUTPUT = ROOT / ".build" / "packages" / "skills"
 REQUIREMENTS_SCHEMA = "@kisev/skills/requirements/v1"
 
@@ -173,19 +171,6 @@ def materialized_requirements(
     )
 
 
-def installed_npm_pin() -> str | None:
-    """The portal npm pin recorded in the workspace lockfile, never the registry."""
-    payload = read_json_object(LOCKFILE, "workspace lockfile")
-    packages = payload.get("packages")
-    if not isinstance(packages, dict):
-        return None
-    member = packages.get(NPM_MEMBER)
-    if not isinstance(member, dict):
-        return None
-    version = member.get("version")
-    return version if isinstance(version, str) and version else None
-
-
 def channel_verdict(
     version: str,
     source_revision: str,
@@ -198,7 +183,6 @@ def channel_verdict(
     derived version, so only the manifest-to-index pins are compared there.
     """
     portable = read_json_object(PACKAGE / "package.json", "distribution package manifest")
-    npm_pin = installed_npm_pin()
     drift = [
         name
         for name, manifest in manifests.items()
@@ -209,14 +193,8 @@ def channel_verdict(
             f"materialized requirements drift from the channel revision: {', '.join(sorted(drift))}"
         )
     stable = portable.get("version") == version
-    if stable and npm_pin is not None and npm_pin != version:
-        raise DistributionError(
-            f"installed npm pin {npm_pin} differs from the Pages version {version}"
-        )
-    return (
-        f"channel: version={version} source_revision={source_revision[:12]} "
-        f"npm_pin={npm_pin or 'unavailable'} verdict=ok"
-    )
+    del stable
+    return f"channel: version={version} source_revision={source_revision[:12]} verdict=ok"
 
 
 def archive(skill: Path, extra_files: dict[str, bytes] | None = None) -> bytes:

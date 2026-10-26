@@ -9,6 +9,7 @@ import os
 import shutil
 import tarfile
 import threading
+import tomllib
 import urllib.request
 from functools import partial
 from pathlib import Path
@@ -24,11 +25,11 @@ pytestmark = pytest.mark.xdist_group("distribution-state")
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / ".build" / "packages" / "skills"
-PACKAGE_METADATA = json.loads(
-    (ROOT / "packages" / "agentomatic" / "package.json").read_text(encoding="utf-8")
-)
-RELEASE_VERSION = PACKAGE_METADATA["version"]
-SKILLS_INSTALLER_VERSION = PACKAGE_METADATA["skillsInstallerVersion"]
+RELEASE_VERSION = json.loads(
+    (ROOT / "packages" / "skills" / "package.json").read_text(encoding="utf-8")
+)["version"]
+with (ROOT / "mise.toml").open("rb") as stream:
+    SKILLS_INSTALLER_VERSION = tomllib.load(stream)["tools"]["npm:skills"]
 PINNED_SKILLS = ["npx", "--yes", f"skills@{SKILLS_INSTALLER_VERSION}"]
 REQUIREMENTS_SOURCE = json.loads(
     (ROOT / "shared" / "runtime-requirements.json").read_text(encoding="utf-8")

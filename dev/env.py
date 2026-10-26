@@ -147,7 +147,7 @@ class Environment:
         ).split()
         for name in networks:
             network = json.loads(self.run("docker", "network", "inspect", name))[0]
-            if (network.get("Labels") or {}).get("dev.agentomatic.checkout") != self.owner:
+            if (network.get("Labels") or {}).get("dev.skills.checkout") != self.owner:
                 raise RuntimeError("Network belongs to another checkout")
         for entry in value["volumes"][service].values():
             volume = self.inspect_volume(entry["name"])
@@ -190,7 +190,7 @@ class Environment:
                     labels = old.get("Labels") or {}
                     old_owner = hashlib.sha256(str(old_path).encode()).hexdigest()
                     owned = (
-                        labels.get("dev.agentomatic.checkout") == old_owner
+                        labels.get("dev.skills.checkout") == old_owner
                         if service == "gitlab"
                         else old_name in mounted
                     )
@@ -205,8 +205,8 @@ class Environment:
                     )
                     name = f"skills-dev_{service}-{suffix}"
                     labels = {
-                        "dev.agentomatic.checkout": self.owner,
-                        "dev.agentomatic.service": service,
+                        "dev.skills.checkout": self.owner,
+                        "dev.skills.service": service,
                     }
                     existing = self.inspect_volume(name)
                     if existing and (existing.get("Labels") or {}) != labels:

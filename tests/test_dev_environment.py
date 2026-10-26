@@ -31,7 +31,7 @@ def configuration(environment: Any, service: str = "gitlab") -> dict[str, Any]:
             service: {
                 "data" if service == "gitlab" else "mattermost-data": {
                     "name": "owned-data",
-                    "labels": {"dev.agentomatic.checkout": environment.owner},
+                    "labels": {"dev.skills.checkout": environment.owner},
                 }
             }
         },
@@ -105,7 +105,7 @@ def test_foreign_or_unowned_network_rejected(
         lambda *args: (
             "foreign-network"
             if args[1:3] == ("network", "ls")
-            else json.dumps([{"Labels": {"dev.agentomatic.checkout": owner}}])
+            else json.dumps([{"Labels": {"dev.skills.checkout": owner}}])
         ),
     )
     with pytest.raises(RuntimeError, match="Network belongs"):
@@ -150,7 +150,7 @@ def test_legacy_adoption_preserves_volumes_and_is_repeatable(
     names = [f"{DEV.LEGACY[service]}_{volume}" for volume in DEV.VOLUMES[service]]
     labels = {"com.docker.compose.project": DEV.LEGACY[service]}
     if service == "gitlab":
-        labels["dev.agentomatic.checkout"] = hashlib.sha256(str(old_path).encode()).hexdigest()
+        labels["dev.skills.checkout"] = hashlib.sha256(str(old_path).encode()).hexdigest()
     old = [
         {
             "Id": "legacy-container",

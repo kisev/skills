@@ -2,124 +2,90 @@
 
 [English](README.md)
 
-Переносимые навыки для Codex и OpenCode и независимая интеграция `agentomatic` для OpenCode. Используйте любой компонент отдельно или оба вместе.
+Переносимые навыки для Codex, Claude и OpenCode, где `skillmate` — единый установщик-конфигуратор.
 
 ## Компоненты проекта
 
-| Компонент | Назначение | Жизненный цикл |
+| Компонент | Что даёт | Жизненный цикл |
 | - | - | - |
-| Portable Agent Skills | 44 автономных сценариев для разработки, документации, выпуска и командной работы | Стабильный CLI `skills@latest` устанавливает их в `~/.agents/skills` или `.agents/skills` |
-| `@kisev/agentomatic` | Команды OpenCode, агенты с фиксированными ролями, средства маршрутизации, диагностика и необязательные обёртки плагинов | Устанавливается как зависимость npm; управляемые файлы находятся в `~/.config/opencode` или `.opencode` |
+| Переносимые навыки | 44 самодостаточных сценария для разработки, документации, поставки и командной работы | Устанавливаются через `skillmate` или стабильный CLI `skills@latest` в каталог навыков хоста |
+| `skillmate` | Одна команда для установки навыков, командных поверхностей и настройки Codex, Claude и OpenCode в проектной или глобальной области | Поставляется через PyPI: `uvx skillmate` или `pip install skillmate` |
 
-CLI `skills` управляет переносимыми навыками; npm-интеграция не содержит, не устанавливает, не обновляет, не проверяет и не удаляет их.
+CLI `skills` (канал `npx skills`) устанавливает переносимые навыки из того же дистрибутива Pages; `skillmate` добавляет размещение по хостам с диалектами, командные поверхности и модель безопасности «превью — подтверждение».
 
-## Установка всего
+## Установите всё
 
-Установите переносимые навыки, `agentomatic`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); reviewmatic запускается через `uvx` из Git, не через npm или PyPI. Проход `update` после `add` также предлагает удалить устаревшие имена навыков.
-`install` и `configure` требуют подтверждения в терминале или явного выбора компонентов с `--yes`. До первого стабильного релиза пакета `latest` может быть пререлизом.
-После обновления перезапустите OpenCode, остальные работающие MCP-хосты и веб-сервис taskmatic.
+Установите переносимые навыки, `skillmate`, [memomatic](docs/ru/how-to/memomatic.md), [reviewmatic](apps/reviewmatic/README.ru.md) и [taskmatic](docs/ru/how-to/taskmatic.md); повторный запуск команд обновляет их. Reviewmatic запускается через `uvx` из репозитория, не через npm или PyPI.
+`skillmate install` показывает полный план и пишет только после подтверждения (`--yes` пропускает вопрос). После обновлений перезапустите хосты.
 
-Всё на канале `latest`:
+Навыки через `skillmate`, стабильный канал:
 
 ```shell
-# Registry versions
-npm view --prefer-online skills@latest version
-npm view --prefer-online @kisev/agentomatic@latest version
-npm view --prefer-online @kisev/memomatic@latest version
-npm view --prefer-online @kisev/taskmatic@latest version
+# Версия дистрибутива
+uvx skillmate status
 
-# Install and configure
+# Установить в проект для всех трёх хостов
+uvx skillmate install --yes
+
+# Или глобально, или для выбранных хостов и навыков
+uvx skillmate install --scope global --hosts claude,opencode --yes
+uvx skillmate doctor
+```
+
+Навыки через CLI `skills` (тот же дистрибутив, совместимый канал):
+
+```shell
+npm view --prefer-online skills@latest version
 npx --yes skills@latest add https://kisev.github.io/skills --global
 npx --yes skills@latest update --global
-npx --yes @kisev/agentomatic@latest install --global
-npx --yes @kisev/agentomatic@latest configure integration --global
-npm install --global @kisev/memomatic
-npm install --global @kisev/taskmatic
-REVIEWMATIC_REF='<ref>' # use the exact release tag for the stable skills channel
-uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
-
-# Local installation and active CLIs
-npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
-memomatic --version
-taskmatic --version
-uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 npx --yes skills@latest list --global
 ```
 
-Всё на канале `dev` (движется после каждого успешного push в `dev`):
+Reviewmatic с точного релизного рефа:
 
 ```shell
-# Registry versions
-npm view --prefer-online skills@latest version
-npm view --prefer-online @kisev/agentomatic@dev version
-npm view --prefer-online @kisev/memomatic@dev version
-npm view --prefer-online @kisev/taskmatic@dev version
-
-# Install and configure
-npx --yes skills@latest add https://kisev.github.io/skills/dev --global
-npx --yes skills@latest update --global
-npx --yes @kisev/agentomatic@dev install --global
-npx --yes @kisev/agentomatic@dev configure integration --global
-npm install --global @kisev/memomatic@dev
-npm install --global @kisev/taskmatic@dev
-REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel
-uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
-uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic runtime-info # release version plus resolved Git commit
-
-# Local installation and active CLIs
-npm list --prefix "$HOME/.config/opencode" @kisev/agentomatic --depth=0
-npm list --global @kisev/memomatic @kisev/taskmatic --depth=0
-memomatic --version
-taskmatic --version
+REVIEWMATIC_REF='<ref>' # используйте точный релизный тег стабильного канала навыков
 uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
-npx --yes skills@latest list --global
 ```
 
-Теги могут сдвинуться между просмотром и установкой. `npm list` проверяет
-установленные npm-пакеты, `--version` показывает версию их CLI в PATH. `uvx` запускает
-reviewmatic временно из выбранного Git-ref и не устанавливает глобальный
-инструмент. `--version` печатает выровненную версию выпуска: на точном теге она
-совпадает с тегом, а на движущейся ветке `dev` остаётся равной последней
-выпущенной версии между релизами. `reviewmatic runtime-info` дополнительно
-показывает resolved Git-коммит установленного исходника; используйте его, чтобы
-подтвердить, из какой dev-ревизии собран запущенный билд.
-`skills list` показывает локальные навыки, а не версию
-npm-установщика. Прежний npm-пакет `@kisev/reviewmatic` этим изменением не
-депрецируется; для этого потребуется отдельное подтверждение.
+На dev-канале установите из чекаута репозитория — реестр не участвует:
 
-## Проверка контракта окружения
+```shell
+skillmate install --from-checkout /path/to/skills --yes   # неопубликованное содержимое рабочего дерева
+REVIEWMATIC_REF=dev # подвижная ветка разработки, совпадает с dev-каналом навыков
+uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
+```
 
-Некоторым навыкам нужны внешние инструменты: `git`, `glab`, `uv`/`uvx` или
-npm-приложение `@kisev/*` (например, `code-review`, `mr-prepare` или
-`taskmatic`). Каждый архив с такой зависимостью несёт материализованный
-`references/requirements.json`: список инструментов, команда проверки,
-copy-ready команда установки и `source_revision` канала. Запустите встроенную
-проверку на стандартной библиотеке в первой сессии и покажите её вывод; она
-ничего не устанавливает и не обращается к сети:
+`skillmate status` показывает установленные версии по хостам и областям;
+`--version` закрепляет точную версию дистрибутива. `uvx` запускает
+reviewmatic эфемерно с выбранного Git-рефа и не устанавливает глобальный
+инструмент. `--version` печатает выровненную релизную версию: на точном
+релизном теге она совпадает с тегом, на подвижной ветке `dev` остаётся на
+последней выпущенной версии между релизами. `reviewmatic runtime-info`
+дополнительно сообщает Git-коммит установленных исходников. `skills list`
+показывает установленные навыки.
+
+## Проверьте контракт окружения
+
+Некоторым навыкам нужны внешние инструменты: `git`, `glab`, `uv`/`uvx` или npm-приложение (например, `code-review`, `mr-prepare` или `taskmatic`). Каждый архив с такой зависимостью несёт материализованный `references/requirements.json` со списком инструментов, командами проверки и готовыми командами установки, а также `source_revision` дистрибутива. Запустите встроенную проверку на стандартной библиотеке в первой сессии и покажите вывод; она ничего не устанавливает и не обращается в сеть:
 
 ```shell
 python3 ~/.agents/skills/code-review/scripts/check_environment.py
 ```
 
-Каждая строка — `OK` или `FAIL`, и каждая неудача печатает точную команду
-починки. `agentomatic doctor` читает те же манифесты для глобальной и
-проектной областей и печатает контракт; без установленного манифеста он
-честно сообщает «не найдено». Тот же пин позволяет сверить
-`source_revision` манифеста с установленным npm-пином вместо разрешения ветки.
+Каждая строка — `OK` или `FAIL`, для каждого сбоя печатается точная команда починки. `skillmate doctor` читает те же манифесты для глобальной и проектной областей и сообщает отсутствующие файлы, расхождение версий, чужие файлы и команды ремонта.
 
 ## Руководства
 
-- [Переносимые навыки](docs/ru/how-to/portable-skills.md): установка в проект, обновление, очистка и диагностика. По умолчанию выбраны все среды `.agents/skills` и все навыки в списке; `--skill <name>` ограничивает выбор. Существующую глобальную установку обновляйте интерактивно командой `npx --yes skills@latest update --global`, чтобы появилось предложение удалить устаревшие имена. См. [учебное руководство](docs/ru/tutorials/getting-started.md) и [каталог](docs/ru/reference/skill-catalog.md).
-- [Интеграция OpenCode](docs/ru/how-to/opencode-integration.md): адаптеры команд, шесть ролей агентов, маршрутизация, диагностика, профили, сверка, необязательные `rules-injector`/`zed-bell` и стандартный `rtk` с `/rtk-stats`.
-  Подтверждённая глобальная установка прописывает зависимость в `~/.config/opencode`, создавая `package.json` при необходимости; для области проекта запускайте из его корня без `--global`. Перезапустите OpenCode после активации или изменения компонентов.
-- [Индекс документации](docs/ru/README.md): учебные материалы, практические инструкции, справочник и пояснения по Diataxis. [Сайт](https://kisev.github.io/skills) добавляет примеры работы скиллов и инструкции установки (`apps/docs-site`).
+- [Установка и управление навыками](docs/ru/how-to/install-skills.md): хосты, области, командные поверхности, обновления, удаление и режим dev-чекаута. См. [учебник](docs/ru/tutorials/getting-started.md) и [каталог](docs/ru/reference/skill-catalog.md).
+- [Переносимые навыки](docs/ru/how-to/portable-skills.md): проектные установки, обновления, очистка и диагностика через CLI `skills`. По умолчанию выбраны все хосты `.agents/skills`; селектор предвыбирает все навыки. Ограничьте выбор через `--skill <name>`. Обновляйте глобальную установку интерактивно через `npx --yes skills@latest update --global`, чтобы устаревшие имена предлагалось удалить.
+- [Индекс документации](docs/ru/README.md): Diataxis — учебные материалы, практические руководства, справочник, объяснения. На [сайте](https://kisev.github.io/skills) есть примеры взаимодействия с навыками и инструкции по установке (`apps/docs-site`).
 
 ## Разработка
 
-Общее [dev-окружение](dev/README.ru.md) запускает GitLab и Mattermost.
-Опциональные проверки с настоящим сервером: [GitLab](tests/integration/gitlab/README.ru.md)
-и [Mattermost](tests/integration/mattermost/README.ru.md). `task check` их не требует.
+Общая [среда разработки](dev/README.ru.md) поднимает GitLab и Mattermost.
+Необязательные проверки на реальных серверах: [GitLab](tests/integration/gitlab/README.ru.md) и
+[Mattermost](tests/integration/mattermost/README.ru.md). Для `task check` они не нужны.
 
 ```shell
 mise install
@@ -127,4 +93,4 @@ task install
 task check
 ```
 
-[Разработка](CONTRIBUTING.ru.md) · [Безопасность](SECURITY.ru.md) · [История выпусков](CHANGELOG.ru.md) · [Лицензия](LICENSE).
+[Вклад](CONTRIBUTING.ru.md) · [Безопасность](SECURITY.ru.md) · [История изменений](CHANGELOG.ru.md) · [Лицензия](LICENSE).

@@ -67,22 +67,8 @@
     },
     {
       "name": "package-check",
-      "title": "OpenCode package",
+      "title": "npm packages",
       "task": "package:check",
-      "core": false,
-      "paths": [
-        "packages/**",
-        "apps/**",
-        "shared/**",
-        "scripts/**",
-        "package.json",
-        "package-lock.json"
-      ]
-    },
-    {
-      "name": "package-smoke",
-      "title": "Consumer smoke",
-      "task": "package:smoke",
       "core": false,
       "paths": [
         "packages/**",
@@ -157,6 +143,13 @@
       "task": "shopmatic:check",
       "core": false,
       "paths": ["apps/shopmatic/**"]
+    },
+    {
+      "name": "skillmate-check",
+      "title": "Skillmate application",
+      "task": "skillmate:check",
+      "core": false,
+      "paths": ["apps/skillmate/**"]
     },
     {
       "name": "gate-registry",

@@ -30,8 +30,6 @@ def test_hooks_keep_precommit_fast_and_prepush_scoped() -> None:
     assert "uv run --locked mypy {files}" in pre_commit
     assert "uv run --locked pytest" in pre_commit
     assert 'test "$?" -eq 5' in pre_commit
-    assert "tsc --project packages/agentomatic/tsconfig.json --noEmit" in pre_commit
-    assert "npm --prefix packages/agentomatic test" in pre_commit
     assert "npm --prefix apps/memomatic test" in pre_commit
     assert "npm --prefix apps/taskmatic test" in pre_commit
     for full_gate in (
@@ -104,7 +102,6 @@ def test_prepush_git_environment_does_not_escape_into_fixture_repositories(tmp_p
 def test_workflows_delegate_quality_checks_to_task() -> None:
     ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     publish = (ROOT / ".github/workflows/publish.yml").read_text(encoding="utf-8")
-    live = (ROOT / ".github/workflows/evals-live.yml").read_text(encoding="utf-8")
     assert not (ROOT / ".github/workflows/pages.yml").exists()
     assert 'task "$CHECK_TASK"' in ci
     assert "task skills:build" in ci
@@ -139,7 +136,7 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "task: eval:check" not in quality_job
     assert "task: eval:check" in built_quality_job
     assert "task skills:build" in built_quality_job
-    for task in ("release:prepare", "release:pages:verify", "release:npm", "release:github"):
+    for task in ("release:prepare", "release:pages:verify", "release:github"):
         assert task in publish
     assert "fetch-depth: 0" in publish
     assert 'tags:\n      - "v*"' in publish
@@ -155,16 +152,10 @@ def test_workflows_delegate_quality_checks_to_task() -> None:
     assert "task dev:await-ci" in publish
     assert "CI_REVISION" in publish
     assert "task check" not in publish
-    assert "task eval:live" in live
-    live_command = re.search(
-        r"- name: Run explicitly trusted live suite\n\s+run: (?P<run>.+)", live
-    )
-    assert live_command is not None
-    assert "${{ inputs." not in live_command.group("run")
     assert "github.event.deleted != true" in ci
     assert 'test "$DELETED_REF" = true' in ci
     assert "fetch-depth: 0" in ci
-    for workflow in (ci, publish, live):
+    for workflow in (ci, publish):
         for reference in re.findall(r"uses:\s+[^@\s]+@([^\s]+)", workflow):
             assert re.fullmatch(r"[0-9a-f]{40}", reference)
     for duplicated in ("ruff ", "pytest", "npm ci", "npm test", "agentskills"):
@@ -197,7 +188,6 @@ def test_root_npm_workspace_is_private_exact_and_reviewmatic_is_python_only() ->
         "packages/safe-fs",
         "apps/memomatic",
         "apps/taskmatic",
-        "packages/agentomatic",
     ]
     assert not (ROOT / "apps/reviewmatic/package.json").exists()
     assert (ROOT / "apps/reviewmatic/pyproject.toml").is_file()
@@ -228,7 +218,7 @@ def test_package_build_materializes_once_per_invocation() -> None:
         line for line in (dry.stdout + dry.stderr).splitlines() if "task: [package:build]" in line
     ]
     assert len(build_commands) == len(set(build_commands)) == 1
-    for workspace in ("safe-fs", "memomatic", "taskmatic", "agentomatic"):
+    for workspace in ("safe-fs", "memomatic", "taskmatic"):
         assert f"npm run build --workspace @kisev/{workspace}" in build_commands[0]
 
 
@@ -350,8 +340,8 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "npm run generate-assets" not in taskfile
     for script in ("build", "pack:check"):
         assert f"mise exec -- npm run {script}" in taskfile
-    assert "scripts/check_opencode_compatibility.py" in taskfile
-    assert "mise exec -- npm test" in taskfile
+    assert "npm --prefix apps/memomatic test" in taskfile
+    assert "npm --prefix apps/taskmatic test" in taskfile
     assert "mise exec -- gitleaks" in taskfile
     assert "mise exec -- uv" in taskfile
     assert "mise exec -- editorconfig-checker" in taskfile
@@ -368,45 +358,27 @@ def test_task_graph_builds_skills_once_before_consumers() -> None:
     assert "scripts/check_release.py --published --require-clean" in taskfile
     assert "scripts/check_release.py --require-clean" in taskfile
     assert "task release:check --" not in taskfile
-    build_cmd = "mise exec -- npm run build --workspace @kisev/"
     assert (
         "  typescript:typecheck:\n    desc: Check types in typescript\n"
         "    deps: [package:build]" in taskfile
     ), "typecheck must build workspace packages so clean checkouts resolve types"
-    safe_fs_pos = taskfile.index(f"{build_cmd}safe-fs")
-    assert "mise exec -- npm --prefix ../../apps/taskmatic test" in taskfile
-    assert "mise exec -- npm --prefix ../../apps/taskmatic run pack:check" in taskfile
-    for consumer in ("memomatic", "taskmatic", "agentomatic"):
-        assert taskfile.index(f"{build_cmd}{consumer}") > safe_fs_pos, (
-            f"{consumer} must build after safe-fs"
-        )
+    assert "npm --prefix apps/memomatic test" in taskfile
+    assert "npm --prefix apps/taskmatic test" in taskfile
+    assert "npm --prefix ../../apps/taskmatic run pack:check" in taskfile
 
 
-def test_every_workspace_package_is_wired_into_the_publication_graph() -> None:
+def test_no_workspace_package_is_wired_into_an_npm_publication_graph() -> None:
+    """The npm publication line is retired: every workspace package is
+    private, and the retired package stays absent from the lock and tasks."""
     root = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
-    surfaces = {
-        "taskfile.yml": (ROOT / "taskfile.yml").read_text(encoding="utf-8"),
-        "scripts/build_dev_artifacts.py": (ROOT / "scripts/build_dev_artifacts.py").read_text(
-            encoding="utf-8"
-        ),
-        "scripts/build_release_artifacts.py": (
-            ROOT / "scripts/build_release_artifacts.py"
-        ).read_text(encoding="utf-8"),
-        "scripts/publish_npm_release.py": (ROOT / "scripts/publish_npm_release.py").read_text(
-            encoding="utf-8"
-        ),
-        "packages/agentomatic/test/smoke.mjs": (
-            ROOT / "packages/agentomatic/test/smoke.mjs"
-        ).read_text(encoding="utf-8"),
-    }
     for workspace in root["workspaces"]:
-        name = json.loads((ROOT / workspace / "package.json").read_text(encoding="utf-8"))["name"]
-        for surface, content in surfaces.items():
-            assert name in content, (
-                f"{name} from {workspace} is missing from {surface}; every workspace"
-                " package must be wired into the complete publication graph, see"
-                " docs/how-to/npm-package-lifecycle.md"
-            )
+        package = json.loads((ROOT / workspace / "package.json").read_text(encoding="utf-8"))
+        assert package.get("private") is True, workspace
+        assert "publishConfig" not in package, workspace
+    lock = (ROOT / "package-lock.json").read_text(encoding="utf-8")
+    assert "packages/agentomatic" not in lock
+    taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
+    assert "publish_npm_release" not in taskfile
     distribution = (ROOT / "scripts/build_distribution.py").read_text(encoding="utf-8")
     assert "build_skills(BUILT_SKILLS" not in distribution
 

@@ -80,16 +80,16 @@ jobs:
             task: dependency:audit
           - name: Portable distribution
             task: distribution:check
-          - name: OpenCode package
+          - name: npm packages
             task: package:check
-          - name: Consumer smoke
-            task: package:smoke
           - name: Reviewmatic Python application
             task: reviewmatic:check
           - name: Reviewmatic install smoke
             task: reviewmatic:smoke
           - name: Shopmatic application
             task: shopmatic:check
+          - name: Skillmate application
+            task: skillmate:check
           # @gates:end
     env:
       CHECK_TASK: ${{ matrix.task }}

@@ -59,3 +59,18 @@ format commands. Do not invent commands: confirm them from configuration.
   and runtime/toolchain version constraints.
 - Do not copy large documentation excerpts: retain the agent's required action
   and, where useful, a short link to the canonical file.
+
+## CLAUDE.md mirror policy
+
+- AGENTS.md is the canonical instruction file; CLAUDE.md is its mirror for
+  hosts that read a different file name.
+- Beside every AGENTS.md this skill manages (worktree root and nested scopes),
+  maintain a CLAUDE.md mirror: a symlink to the sibling AGENTS.md when the
+  environment supports symlinks, otherwise a full copy.
+- A mirror is valid when it is a symlink resolving to the sibling AGENTS.md,
+  or a regular file whose content equals it.
+- When a CLAUDE.md exists and differs from the sibling AGENTS.md, never touch
+  it silently: show the divergence, ask the user how to synchronize, and
+  recommend synchronizing — consolidate the unique content into AGENTS.md,
+  then restore the mirror form. A checkout without symlink support may show a
+  plain file containing only the link target path: treat it as a divergence.

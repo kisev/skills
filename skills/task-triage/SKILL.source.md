@@ -20,3 +20,14 @@ Before any other work in the first session, run `python3 scripts/check_environme
 Before asking the user, apply `references/question-guidelines.md`.
 
 Follow `references/workflow.md`. Apply `references/language-policy.md` for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and quotations.
+
+Apply `references/publication-protocol.md` as the linking reference directs.
+
+Apply `references/release-planning-contract.md` as the linking reference
+directs.
+
+Apply `references/analysis-contract.md` as the linking reference directs.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.
+
+Apply `references/work-item-contract.md` for the work-item contract.

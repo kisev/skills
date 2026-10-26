@@ -74,13 +74,18 @@ python3 ~/.agents/skills/code-review/scripts/check_environment.py
 The [portable skills how-to](../how-to/portable-skills.md#check-the-environment-contract)
 explains the manifest and the channel cross-check.
 
-## 3. Decide Whether You Need agentomatic
+## 3. Add Command Surfaces and Host Configuration
 
-Portable skills already work in OpenCode. Install `@kisev/agentomatic` only
-if you also want OpenCode-specific commands, fixed agents, routing tools,
-diagnostics, or optional plugin wrappers. The package has a separate lifecycle
-and does not install portable skills.
+The `skills` CLI above installs portable skills into `.agents/skills`. To also
+lay out per-host command surfaces (`.claude/commands`, `.opencode/commands`)
+and configure Codex, Claude, and OpenCode in project or global scope, use
+`skillmate`:
 
-Follow the [OpenCode integration guide](../how-to/opencode-integration.md) for
-that optional layer. For project-scoped installation, updates, or cleanup, use
-the [portable skills how-to](../how-to/portable-skills.md).
+```shell
+uvx skillmate install --yes
+```
+
+The [install how-to](../how-to/install-skills.md) covers hosts, scopes,
+updates, removal, and the dev checkout mode. For project-scoped installation,
+updates, or cleanup with the `skills` CLI, use the
+[portable skills how-to](../how-to/portable-skills.md).

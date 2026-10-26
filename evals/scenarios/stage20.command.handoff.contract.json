@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "ccfd3f9bb032e1c334ebd5ea8c3710019265ec8a008148357fbb7f07952edfef",
+  "digest": "5d6197c84b6688f750613fa0d1678e0647615d3bafbb057fe9857a8b01a7c04b",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.handoff.contract.source",
-      "path": "packages/agentomatic/src/registry.ts"
+      "path": "apps/skillmate/src/skillmate/adapters.py"
     }
   ],
   "kind": "deterministic",

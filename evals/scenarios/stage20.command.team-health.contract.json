@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "159245ec81f488d02bb994e1d84cf10b5e6fdbc9cc8d05570f53bf358bad17cf",
+  "digest": "f0e610684c824602bbe43d12435fc902f63faebbf837934991fb31c4fedebca3",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.team-health.contract.source",
-      "path": "packages/agentomatic/src/registry.ts"
+      "path": "apps/skillmate/src/skillmate/adapters.py"
     }
   ],
   "kind": "deterministic",

@@ -22,8 +22,6 @@ if str(ROOT) not in sys.path:
 from scripts import release_channel  # noqa: E402
 
 PORTABLE_PACKAGE = ROOT / "packages" / "skills" / "package.json"
-OPENCODE_PACKAGE = ROOT / "packages" / "agentomatic" / "package.json"
-OPENCODE_LOCK = ROOT / "package-lock.json"
 DISTRIBUTION = ROOT / ".build" / "packages" / "skills"
 CHANGELOG = ROOT / "CHANGELOG.md"
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
@@ -202,25 +200,9 @@ def git(*arguments: str) -> str:
 def validate(
     tag: str | None = None, *, published: bool = False, require_clean: bool = False
 ) -> dict[str, str]:
-    portable = read_json(PORTABLE_PACKAGE).get("version")
-    opencode = read_json(OPENCODE_PACKAGE).get("version")
-    lock = read_json(OPENCODE_LOCK)
-    lock_root = lock.get("packages")
-    if not isinstance(lock_root, dict) or not isinstance(lock_root.get(""), dict):
-        raise ReleaseError("OpenCode package lock root is invalid")
-    versions = {
-        "portable": portable,
-        "opencode": opencode,
-        "opencode_lock_member": lock_root.get("packages/agentomatic", {}).get("version")
-        if isinstance(lock_root.get("packages/agentomatic"), dict)
-        else None,
-    }
-    if not all(isinstance(value, str) for value in versions.values()):
-        raise ReleaseError("release versions must be strings")
-    normalized = {name: str(value) for name, value in versions.items()}
-    if len(set(normalized.values())) != 1:
-        raise ReleaseError(f"release versions differ: {normalized}")
-    version = normalized["portable"]
+    version = read_json(PORTABLE_PACKAGE).get("version")
+    if not isinstance(version, str):
+        raise ReleaseError("release version must be a string")
     if not SEMVER.fullmatch(version):
         raise ReleaseError(f"invalid release version: {version}")
     if (
@@ -278,7 +260,7 @@ def validate(
 
     result = {"version": version, "revision": revision}
     if published and tag is not None:
-        result.update({"channel": channel["channel"], "dist_tag": channel["dist_tag"]})
+        result.update({"channel": channel["channel"]})
     return result
 
 

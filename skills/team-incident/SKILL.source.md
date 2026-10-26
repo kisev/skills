@@ -20,3 +20,5 @@ Read `references/team-profile-workflow.md` and `references/people-workflow.md`,
 then follow `references/workflow.md`. Apply `references/language-policy.md`
 for user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields,
 and quotations.
+
+Apply `references/interaction-contract.md` for evidence and mutation rules.

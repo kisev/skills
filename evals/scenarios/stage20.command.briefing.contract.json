@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "376b7d48b1f509f03ddcb4aed8df28723a2df69eea8b50ed9cc82e5bf05991c1",
+  "digest": "8c139c756a2b66a3936347f89fa418d11a050f91787d5ad7e51cfa6fdb487696",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.briefing.contract.source",
-      "path": "packages/agentomatic/src/registry.ts"
+      "path": "apps/skillmate/src/skillmate/adapters.py"
     }
   ],
   "kind": "deterministic",

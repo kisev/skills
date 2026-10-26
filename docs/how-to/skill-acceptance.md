@@ -16,7 +16,7 @@ skill the harnesses do not cover. It prints line-by-line progress (skill,
 family, stage, model, elapsed seconds) and leaves machine and human reports.
 
 The umbrella is user-run and explicitly optional, the same class as
-`eval:live`: it needs provider credentials and never runs inside `task check`,
+`live:run`: it needs provider credentials and never runs inside `task check`,
 `check:core`, Lefthook hooks, CI, or the gate registry.
 
 ## Run It

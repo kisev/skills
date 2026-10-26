@@ -158,7 +158,7 @@ test("the footer is pinned to the bottom on every layout", async () => {
 test("the components table covers every project component in both locales", async () => {
   const ui = await readFile(path.join(srcDir, "i18n", "ui.ts"), "utf8");
   const [en, ru] = ui.split(/^  ru: \{/m);
-  const components = ["portable", "agentomatic", "memomatic", "reviewmatic", "taskmatic"];
+  const components = ["portable", "skillmate", "memomatic", "reviewmatic", "taskmatic"];
   for (const [locale, half] of [
     ["en", en],
     ["ru", ru],

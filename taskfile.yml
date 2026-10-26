@@ -226,8 +226,8 @@ tasks:
   toml:lint:
     desc: Lint toml
     cmds:
-      - mise exec -- fd -H -g '*.toml' -X tombi lint
-      - mise exec -- fd -H -g '*.toml' -X tombi format --check
+      - mise exec -- fd -H -g '*.toml' -E 'evals/live/*/fixture' -X tombi lint
+      - mise exec -- fd -H -g '*.toml' -E 'evals/live/*/fixture' -X tombi format --check
 
   markdown:lint:
     desc: Lint markdown
@@ -286,7 +286,7 @@ tasks:
   format:toml:
     desc: Format toml
     cmds:
-      - mise exec -- fd -H -g '*.toml' -X tombi format
+      - mise exec -- fd -H -g '*.toml' -E 'evals/live/*/fixture' -X tombi format
 
   format:shell:
     desc: Format shell
@@ -327,7 +327,6 @@ tasks:
     cmds:
       - mise exec -- tsc --project apps/memomatic/tsconfig.json --noEmit
       - mise exec -- tsc --project apps/taskmatic/tsconfig.json --noEmit
-      - mise exec -- tsc --project packages/agentomatic/tsconfig.json --noEmit
 
   python:typecheck:
     desc: Check types in python
@@ -370,11 +369,6 @@ tasks:
     cmds:
       - task: release:verify:published
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
-
-  release:npm:
-    desc: Publish or accept and verify the exact npm release artifact
-    cmds:
-      - mise exec -- uv run --locked python scripts/publish_npm_release.py
 
   release:pages:verify:
     desc: Verify the exact deployed Pages release artifact
@@ -435,11 +429,6 @@ tasks:
     desc: Wait for the terminal CI success of the current revision
     cmds:
       - mise exec -- uv run --locked python scripts/await_ci_success.py
-
-  dev:npm:
-    desc: Publish or accept and verify the exact npm dev artifact
-    cmds:
-      - mise exec -- uv run --locked python scripts/publish_npm_release.py
 
   dev:pages:verify:
     desc: Verify the exact deployed Pages dev artifact
@@ -519,10 +508,10 @@ tasks:
         -n 'eval:check' 'task eval:check'
         -n 'python:test' 'task python:test'
         -n 'package:check' 'task package:check'
-        -n 'package:smoke' 'task package:smoke'
         -n 'reviewmatic:check' 'task reviewmatic:check'
         -n 'reviewmatic:smoke' 'task reviewmatic:smoke'
         -n 'shopmatic:check' 'task shopmatic:check'
+        -n 'skillmate:check' 'task skillmate:check'
         -n 'check (composite)' 'task check'
       - mise exec -- uv run --locked python scripts/record_gate_benchmarks.py
 
@@ -589,14 +578,16 @@ tasks:
         '{schema: .schema, status: .status, results: (.results | length)}'
         .build/evals/offline.json
 
-  eval:live:
-    desc: Run an explicitly configured trusted live evaluation
+
+  live:preflight:
+    desc: Check the pinned live-run profile (engine CLI, ccr profile, scenarios)
     cmds:
-      - >-
-        mise exec -- uv run --locked python scripts/eval_runner.py --trusted-live
-        --host "$EVAL_HOST" --model "$EVAL_MODEL" --timeout "$EVAL_TIMEOUT"
-        --max-tokens "$EVAL_MAX_TOKENS" --max-cost "$EVAL_MAX_COST"
-        --output evals/live/result.json
+      - mise exec -- uv run --locked python scripts/live_runner.py preflight
+
+  live:run:
+    desc: Synthetic live run (speed 2); pass -- --scenario <name> [--variant <name>]
+    cmds:
+      - mise exec -- uv run --locked python scripts/live_runner.py run {{.CLI_ARGS}}
 
   secrets:scan:
     desc: Scan the repository for committed secrets
@@ -629,10 +620,10 @@ tasks:
       - task: check:core
       - task: python:test
       - task: package:check
-      - task: package:smoke
       - task: reviewmatic:check
       - task: reviewmatic:smoke
       - task: shopmatic:check
+      - task: skillmate:check
 
   pre-push:
     desc: Run the single complete local gate before push
@@ -683,23 +674,31 @@ tasks:
       - mise exec -- uv build
       - mise exec -- uv run --locked shopmatic --version
 
+  skillmate:check:
+    desc: "[group] Skillmate package gate"
+    dir: apps/skillmate
+    cmds:
+      - mise exec -- uv lock --check
+      - mise exec -- uv run --locked pytest
+      - mise exec -- uv run --locked mypy
+      - mise exec -- uv run --locked ruff check .
+      - mise exec -- uv build
+      - mise exec -- uv run --locked skillmate --version
+
   package:check:
     desc: Verify the complete npm package lifecycle and tarballs
     deps: [package:test]
-    dir: packages/agentomatic
+    dir: packages/safe-fs
     cmds:
-      - mise exec -- uv run --locked python ../../scripts/check_opencode_compatibility.py
       - mise exec -- npm run pack:check
       - mise exec -- npm --prefix ../../apps/taskmatic run pack:check
 
   package:test:
     internal: true
-    dir: packages/agentomatic
     deps: [package:build]
     cmds:
-      - mise exec -- npm test
-      - mise exec -- npm --prefix ../../apps/memomatic test
-      - mise exec -- npm --prefix ../../apps/taskmatic test
+      - mise exec -- npm --prefix apps/memomatic test
+      - mise exec -- npm --prefix apps/taskmatic test
 
   package:generate:
     internal: true
@@ -726,11 +725,10 @@ tasks:
         --input 'packages/safe-fs/src/**'
         --input 'apps/memomatic/src/**'
         --input 'apps/taskmatic/src/**'
-        --input 'packages/agentomatic/src/**'
         --input scripts/materialize_cli_runtime.mjs
         --input shared/references
         --
-        sh -c 'mise exec -- npm run build --workspace @kisev/safe-fs && mise exec -- node scripts/materialize_cli_runtime.mjs && mise exec -- npm run build --workspace @kisev/memomatic && mise exec -- npm run build --workspace @kisev/taskmatic && mise exec -- npm run build --workspace @kisev/agentomatic'
+        sh -c 'mise exec -- npm run build --workspace @kisev/safe-fs && mise exec -- node scripts/materialize_cli_runtime.mjs && mise exec -- npm run build --workspace @kisev/memomatic && mise exec -- npm run build --workspace @kisev/taskmatic'
 
   package:install:
     internal: true
@@ -744,12 +742,6 @@ tasks:
         --input package-lock.json
         --input package.json
         -- mise exec -- npm ci
-
-  package:smoke:
-    desc: Install the packed workspace tarballs into a throwaway consumer and typecheck them
-    deps: [package:build]
-    cmds:
-      - mise exec -- uv run --locked python scripts/check_consumer_smoke.py
 
   package:audit:
     internal: true

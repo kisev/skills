@@ -1,0 +1,5 @@
+[
+  { "type": "file_exists", "path": "AGENTS.md" },
+  { "type": "is_regular_file", "path": "CLAUDE.md" },
+  { "type": "content_equals_sibling", "path": "CLAUDE.md", "sibling": "AGENTS.md" }
+]

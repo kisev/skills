@@ -11,14 +11,10 @@ const readme = await readFile(path.join(repoRoot, "README.md"), "utf8");
 // The README install blocks are the canon for the site-rendered commands, so
 // the test parses the README from the repository root (same precedent as
 // sync.test.mjs) instead of restating the commands here.
-function readmeInstallBlock(channel) {
+function readmeBlock(fragment) {
   const blocks = [...readme.matchAll(/```shell\n(.*?)```/gs)].map((match) => match[1]);
-  const block = blocks.find((candidate) =>
-    candidate.includes(
-      `npx --yes skills@latest add https://kisev.github.io/skills${channel === "dev" ? "/dev" : ""} --global`,
-    ),
-  );
-  assert.ok(block, `README has no ${channel} install block`);
+  const block = blocks.find((candidate) => candidate.includes(fragment));
+  assert.ok(block, `README has no install block with ${fragment}`);
   return block;
 }
 
@@ -30,17 +26,22 @@ function commands(block) {
 }
 
 for (const channel of ["latest", "dev"]) {
-  test(`${channel} install commands match the README block exactly`, () => {
-    assert.deepEqual(
-      commands(integrationInstallCommands(channel)),
-      commands(readmeInstallBlock(channel)),
-    );
+  test(`${channel} install commands match the README blocks exactly`, () => {
+    const canon =
+      channel === "latest"
+        ? [
+            readmeBlock("uvx skillmate status"),
+            readmeBlock("npx --yes skills@latest add"),
+            readmeBlock("REVIEWMATIC_REF='<ref>'"),
+          ].join("\n\n")
+        : readmeBlock("--from-checkout");
+    assert.deepEqual(commands(integrationInstallCommands(channel)), commands(canon));
   });
 }
 
 test("single-skill installation projects the README commands to project scope", () => {
   const [preview, install, verify] = skillInstallCommands("code-review").split("\n\n");
-  const latest = commands(readmeInstallBlock("latest"));
+  const latest = commands(readmeBlock("npx --yes skills@latest add"));
   const add = latest.find((line) => line.startsWith("npx --yes skills@latest add"));
   assert.ok(add !== undefined);
   const source = add.split(" ")[4];

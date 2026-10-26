@@ -22,7 +22,7 @@ export const ui = {
     },
     hero: {
       title: "Portable Agent Skills",
-      lead: "Self-contained workflows for engineering, documentation, delivery, and team operations. Install them into any host that reads .agents/skills, or add @kisev/agentomatic for a first-class OpenCode integration.",
+      lead: "Self-contained workflows for engineering, documentation, delivery, and team operations. Install them into any host that reads .agents/skills with skillmate or the skills CLI.",
       browse: "Browse the catalog",
       examples: "See interaction examples",
     },
@@ -32,9 +32,9 @@ export const ui = {
       latest: "Everything on latest",
       dev: "Everything on dev",
       verificationNote:
-        "npm view previews a registry version; tags can move before installation. npx does not install a global CLI. skills@latest is the installer version, not the Pages release; skills list checks the skills actually installed.",
+        "npm view previews a registry version; tags can move before installation. npx does not install a global CLI. skills@latest is the installer version, not the Pages release; skills list checks the skills actually installed. uvx skillmate status reports the installed distribution version.",
       ownershipNote:
-        "After confirming the OpenCode setup, npm list checks agentomatic in its owning npm project, not npm's global CLI prefix. Restart OpenCode after installation or updates.",
+        "skillmate previews the complete plan and writes only after confirmation; a file you modified after installation is never silently overwritten. Restart your hosts after installation or updates.",
     },
     components: {
       title: "Project components",
@@ -45,9 +45,9 @@ export const ui = {
         portable: "Portable Agent Skills",
         portableProvides:
           "Self-contained workflows installable with the skills CLI into ~/.agents/skills or .agents/skills",
-        agentomatic: "@kisev/agentomatic",
-        agentomaticProvides:
-          "OpenCode slash-command adapters, fixed agents, capability routing, diagnostics, and optional plugin wrappers",
+        skillmate: "skillmate (PyPI)",
+        skillmateProvides:
+          "One command to install skills, lay out command surfaces, and configure Codex, Claude, and OpenCode in project or global scope",
         memomatic: "@kisev/memomatic",
         memomaticProvides:
           "Personal learning memory for agents: a tiered Markdown corpus with a rebuildable search index, exposed to hosts through a local MCP server",
@@ -112,7 +112,7 @@ export const ui = {
     },
     hero: {
       title: "Портативные Agent Skills",
-      lead: "Самодостаточные сценарии для инженерии, документации, поставки и работы с командой. Устанавливаются в любой хост, читающий .agents/skills, а @kisev/agentomatic добавляет полноценную интеграцию с OpenCode.",
+      lead: "Самодостаточные сценарии для инженерии, документации, поставки и работы с командой. Устанавливаются в любой хост, читающий .agents/skills, через skillmate или CLI skills.",
       browse: "Открыть каталог",
       examples: "Посмотреть примеры",
     },
@@ -122,9 +122,9 @@ export const ui = {
       latest: "Всё из канала latest",
       dev: "Всё из канала dev",
       verificationNote:
-        "npm view показывает версию в реестре; теги могут сдвинуться до установки. npx не устанавливает CLI глобально. skills@latest - версия установщика, а не выпуска Pages; skills list проверяет реально установленные навыки.",
+        "npm view показывает версию в реестре; теги могут сдвинуться до установки. npx не устанавливает CLI глобально. skills@latest - версия установщика, а не выпуска Pages; skills list проверяет реально установленные навыки. uvx skillmate status сообщает версию установленного дистрибутива.",
       ownershipNote:
-        "После подтверждения настройки OpenCode команда npm list проверяет agentomatic во владеющем npm-проекте, а не среди глобальных CLI npm. Перезапустите OpenCode после установки или обновления.",
+        "skillmate показывает полный план и пишет только после подтверждения; изменённый вами после установки файл никогда не перезаписывается молча. Перезапустите хосты после установки или обновления.",
     },
     components: {
       title: "Компоненты проекта",
@@ -135,9 +135,9 @@ export const ui = {
         portable: "Portable Agent Skills",
         portableProvides:
           "Самодостаточные сценарии, устанавливаемые CLI skills в ~/.agents/skills или .agents/skills",
-        agentomatic: "@kisev/agentomatic",
-        agentomaticProvides:
-          "Slash-command адаптеры OpenCode, фиксированные агенты, маршрутизация возможностей, диагностика и опциональные обёртки-плагины",
+        skillmate: "skillmate (PyPI)",
+        skillmateProvides:
+          "Одна команда для установки навыков, командных поверхностей и настройки Codex, Claude и OpenCode в проектной или глобальной области",
         memomatic: "@kisev/memomatic",
         memomaticProvides:
           "Личная обучающая память для агентов: многоуровневый Markdown-корпус с перестраиваемым поисковым индексом, доступная хостам через локальный MCP-сервер",

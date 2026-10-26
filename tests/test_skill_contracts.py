@@ -922,7 +922,7 @@ def test_humanize_eval_scenarios_define_explicit_activation_matrix() -> None:
     edit_en = json.loads((scenarios / "skill.humanize.edit-contract.en.json").read_text())
     # The RU scenario gained the strengthened whole-rewrite claim after the EN
     # pair, so its revision moved past the shared revision 3.
-    assert (edit_ru["revision"], edit_en["revision"]) == (4, 3)
+    assert (edit_ru["revision"], edit_en["revision"]) == (5, 4)
     for scenario in (edit_ru, edit_en):
         assert scenario["kind"] == "golden"
         cases = scenario["input"]["fixture"]["cases"]

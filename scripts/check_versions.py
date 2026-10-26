@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate release, installer, compatibility, and documentation version authorities."""
+"""Validate release, installer pin, and documentation version authorities."""
 
 from __future__ import annotations
 
@@ -12,9 +12,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SEMVER = re.compile(r"^(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$")
-NUMERIC_COMMAND_PIN = re.compile(
-    r"(?:npx\s+--yes\s+)?(?:skills|@kisev/agentomatic)@[0-9]+\.[0-9]+\.[0-9]+"
-)
+NUMERIC_COMMAND_PIN = re.compile(r"(?:npx\s+--yes\s+)?skills@[0-9]+\.[0-9]+\.[0-9]+")
 
 
 class VersionError(Exception):
@@ -86,10 +84,8 @@ def validate_skill_metadata(root: Path) -> int:
 
 def validate(root: Path = ROOT) -> dict[str, object]:
     portable = read_json(root / "packages/skills/package.json")
-    agentomatic = read_json(root / "packages/agentomatic/package.json")
     memomatic = read_json(root / "apps/memomatic/package.json")
     lock = read_json(root / "package-lock.json")
-    compatibility = read_json(root / "evals/contracts/opencode-compatibility.json")
     with (root / "mise.toml").open("rb") as stream:
         mise = tomllib.load(stream)
 
@@ -97,20 +93,23 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     lock_packages = lock.get("packages")
     if not isinstance(lock_packages, dict) or not isinstance(lock_packages.get(""), dict):
         raise VersionError("workspace package lock root is invalid")
-    release_mirrors = {
-        "packages/agentomatic/package.json": agentomatic.get("version"),
-        "package-lock.json agentomatic member": lock_packages.get("packages/agentomatic", {}).get(
-            "version"
-        )
-        if isinstance(lock_packages.get("packages/agentomatic"), dict)
-        else None,
-    }
-    drift = {name: value for name, value in release_mirrors.items() if value != release}
-    if drift:
-        raise VersionError(f"project release mirrors differ from {release}: {drift}")
     member = lock_packages.get("apps/memomatic")
     if not isinstance(member, dict) or member.get("version") != memomatic.get("version"):
         raise VersionError("memomatic workspace member version differs from its manifest")
+    with (root / "apps/skillmate/pyproject.toml").open("rb") as stream:
+        skillmate_project = tomllib.load(stream).get("project")
+    if not isinstance(skillmate_project, dict):
+        raise VersionError("skillmate project table is missing")
+    distribution = require_string(
+        skillmate_project.get("version"), "skillmate distribution", semver=True
+    )
+    if distribution != release:
+        raise VersionError("skillmate distribution version differs from the portable release")
+    skillmate_init = (root / "apps/skillmate/src/skillmate/__init__.py").read_text(encoding="utf-8")
+    init_version = re.search(r'^__version__ = "([^"]+)"$', skillmate_init, re.MULTILINE)
+    if not init_version or init_version.group(1) != release:
+        raise VersionError("skillmate __version__ differs from the portable release")
+
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     heading = re.search(
         r"^## \\?\[([0-9]+\.[0-9]+\.[0-9]+)\] - \d{4}-\d{2}-\d{2}$",
@@ -123,60 +122,7 @@ def validate(root: Path = ROOT) -> dict[str, object]:
     tools = mise.get("tools")
     if not isinstance(tools, dict):
         raise VersionError("mise tools table is missing")
-    installer = require_string(
-        agentomatic.get("skillsInstallerVersion"), "package skills installer", semver=True
-    )
     mise_installer = require_string(tools.get("npm:skills"), "mise npm:skills", semver=True)
-    if installer != mise_installer:
-        raise VersionError(
-            f"skills installer versions differ: package={installer}, mise={mise_installer}"
-        )
-
-    compatibility_range = require_string(compatibility.get("range"), "compatibility range")
-    peer_dependencies = agentomatic.get("peerDependencies")
-    if not isinstance(peer_dependencies, dict):
-        raise VersionError("OpenCode peer dependencies are missing")
-    peers = compatibility.get("peers")
-    if not isinstance(peers, dict) or not peers:
-        raise VersionError("OpenCode compatibility peer ranges are missing")
-    if set(peers) != {"@opencode/plugin"} or set(peer_dependencies) != set(peers):
-        raise VersionError("Only the native OpenCode V2 plugin peer is supported")
-    if " || ".join(peers.values()) != compatibility_range:
-        raise VersionError("OpenCode combined range differs from compatibility authority")
-    for name, peer_range in peers.items():
-        if peer_dependencies.get(name) != peer_range:
-            raise VersionError("OpenCode peer range differs from compatibility authority")
-    versions = compatibility.get("versions")
-    if (
-        not isinstance(versions, list)
-        or not versions
-        or not all(isinstance(item, str) for item in versions)
-    ):
-        raise VersionError("OpenCode compatibility versions are invalid")
-    compatible = set(versions)
-    dev_dependencies = agentomatic.get("devDependencies")
-    if not isinstance(dev_dependencies, dict):
-        raise VersionError("OpenCode development dependencies are missing")
-    if (
-        any(name.startswith("@opencode-ai/") for name in dev_dependencies)
-        or "npm:opencode-ai" in tools
-    ):
-        raise VersionError("OpenCode V1 dependencies and verification hosts are retired")
-    checked_versions = {
-        "package V2 dev dependency": dev_dependencies.get("@opencode/plugin"),
-        "mise OpenCode V2": tools.get("npm:@opencode/cli"),
-    }
-    checked_versions = {
-        name: value.get("version") if isinstance(value, dict) else value
-        for name, value in checked_versions.items()
-    }
-    unsupported = {
-        name: value for name, value in checked_versions.items() if value not in compatible
-    }
-    if unsupported:
-        raise VersionError(
-            f"OpenCode checked versions are outside compatibility authority: {unsupported}"
-        )
 
     skills = validate_skill_metadata(root)
     documents = validate_public_documents(root, release)
@@ -184,10 +130,10 @@ def validate(root: Path = ROOT) -> dict[str, object]:
         "schema": "version-check/v1",
         "status": "passed",
         "release": release,
-        "skills_installer": installer,
+        "skillmate_distribution": distribution,
+        "skills_installer": mise_installer,
         "portable_skills": skills,
         "public_documents": documents,
-        "opencode_compatibility": sorted(compatible),
     }
 
 

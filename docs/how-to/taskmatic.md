@@ -10,23 +10,24 @@ review: {"components": ["taskmatic"], "sources": ["skills/taskmatic/references/*
 ## Install and Create the Store
 
 Use Node.js 22.13+. Install the application separately from the `taskmatic` skill
-(see the [portable skills guide](portable-skills.md)). Use the development
-channel, or select a stable version once a stable release is available:
+(see the [portable skills guide](portable-skills.md)). The application ships
+from a checkout of this repository:
 
 ```shell
-# Registry version
-npm view --prefer-online @kisev/taskmatic@dev version
+git clone https://github.com/kisev/skills && cd skills
+mise install
+task generate
 
-# Install
-npm install --global @kisev/taskmatic@dev
+# Install from the checkout
+npm install --global ./apps/taskmatic
 
 # Installed package and active CLI
 npm list --global @kisev/taskmatic --depth=0
 taskmatic --version
 ```
 
-The tag can move between preview and installation. The last commands check the
-installed package and the CLI resolved from PATH. Then initialize the store:
+Rerun `git pull`, `task generate`, and the global install to update. Then
+initialize the store:
 
 ```shell
 taskmatic add "Check the first board" --board main
@@ -38,7 +39,7 @@ web server cannot initialize a missing store; create a card or board first.
 CLI, MCP and viewer must use the same absolute `TASKMATIC_HOME`, or the default
 `${XDG_STATE_HOME:-$HOME/.local/state}/agent-skills/taskmatic/`.
 
-Rerun the npm installation to update the application independently of the skill.
+Rerun the checkout installation to update the application independently of the skill.
 Restart MCP hosts and the web service after an update so they use the new runtime.
 
 ## Work with Cards

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Non-interactive behavioral evaluation harness for supported agent hosts."""
+"""Offline behavioral-evaluation harness: deterministic, hostless checks of
+the scenario corpus. Real-model observation lives in the live-runs system
+(scripts/live_runner.py); this runner never launches a model."""
 
 from __future__ import annotations
 
@@ -298,43 +300,6 @@ def normalized_prose(text: str) -> str:
     return " ".join(text.split()).casefold()
 
 
-def rewrite_case_assertions(
-    case_id: str, verify: dict[str, Any], outcome: Any
-) -> list[dict[str, str]]:
-    """Check the returned rewrite itself; a host self-report never gates these."""
-    rewrite = rewrite_from_outcome(outcome)
-    text = rewrite or ""
-    present = rewrite is not None
-    protected = list(verify.get("protected", []))
-    claims = list(verify.get("claims", []))
-    avoid = list(verify.get("avoid", []))
-    checks: list[dict[str, str]] = []
-
-    def record(suffix: str, passed: bool) -> None:
-        checks.append(
-            {"id": f"rewrite:{case_id}:{suffix}", "status": "passed" if passed else "failed"}
-        )
-
-    record("present", present)
-    record("protected", present and all(item in text for item in protected))
-    masked = text
-    for fragment in sorted(protected, key=len, reverse=True):
-        masked = masked.replace(fragment, "\x00")
-    record(
-        "punctuation",
-        present and not any(mark in masked for _, mark in FORBIDDEN_PROSE_MARKS),
-    )
-    record(
-        "claims",
-        present and all(normalized_prose(item) in normalized_prose(text) for item in claims),
-    )
-    record(
-        "avoid",
-        present and all(normalized_prose(item) not in normalized_prose(text) for item in avoid),
-    )
-    return checks
-
-
 def validate_scenario(scenario: dict[str, Any], filename: str) -> list[str]:
     required = {
         "schema",
@@ -475,12 +440,16 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
     if not isinstance(inventory, dict) or inventory.get("version") != 1:
         raise EvalError("stale_package_inventory", "public surface inventory version is invalid")
     expected = {
-        "skill": set(inventory.get("skills", [])),
-        "command": set(inventory.get("commands", [])),
-        "agent": set(inventory.get("agents", [])),
-        "plugin": set(inventory.get("plugins", [])),
-        "package-tool": set(inventory.get("package_tools", [])),
-        "infrastructure": set(inventory.get("infrastructure", [])),
+        key: set(inventory[name])
+        for key, name in (
+            ("skill", "skills"),
+            ("command", "commands"),
+            ("agent", "agents"),
+            ("plugin", "plugins"),
+            ("package-tool", "package_tools"),
+            ("infrastructure", "infrastructure"),
+        )
+        if isinstance(inventory.get(name), list)
     }
     if any(
         not values or any(not isinstance(value, str) for value in values)
@@ -503,13 +472,7 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
             raise EvalError(
                 "surface_coverage_drift", f"{surface} coverage does not match inventory"
             )
-    if (
-        len(expected["skill"]) != 44
-        or len(expected["command"]) != 42
-        or len(expected["agent"]) != 6
-        or len(expected["plugin"]) != 4
-        or len(expected["package-tool"]) != 1
-    ):
+    if len(expected.get("skill", ())) != 44:
         raise EvalError("stale_package_inventory", "public surface counts do not match stage 20")
     skill_scenarios = [
         item
@@ -531,26 +494,6 @@ def validate_public_surface_inventory(root: Path, scenarios: list[dict[str, Any]
             raise EvalError(
                 "skill_corpus_incomplete", f"skill {name} lacks the four bilingual scenarios"
             )
-
-
-def validate_compatibility_inventory(root: Path = ROOT) -> None:
-    compatibility = root / "evals" / "contracts" / "opencode-compatibility.json"
-    try:
-        value = json.loads(compatibility.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise EvalError(
-            "stale_package_inventory", f"cannot read compatibility inventory: {error}"
-        ) from error
-    if (
-        not isinstance(value, dict)
-        or value.get("schema") != "opencode-compatibility/v1"
-        or not isinstance(value.get("versions"), list)
-        or not value["versions"]
-        or not all(isinstance(item, str) for item in value["versions"])
-        or value.get("credentials") is not False
-        or value.get("network") is not False
-    ):
-        raise EvalError("stale_package_inventory", "OpenCode compatibility inventory is stale")
 
 
 def validate_negative_fixtures(root: Path) -> None:
@@ -712,7 +655,7 @@ def assertions_for_invariants(scenario: dict[str, Any], root: Path) -> list[dict
 
 
 def expected_assertions(
-    scenario: dict[str, Any], observation: dict[str, Any], *, behavioral: bool
+    scenario: dict[str, Any], observation: dict[str, Any]
 ) -> list[dict[str, Any]]:
     selected = {str(item) for item in observation.get("selected", [])}
     result: list[dict[str, Any]] = []
@@ -726,40 +669,9 @@ def expected_assertions(
         )
     expected_cases = case_outcome_contract(scenario, str(scenario.get("id", "scenario")))
     if expected_cases is not None:
-        if not behavioral:
-            result.append({"id": "case-outcomes:trusted-live-required", "status": "not_observed"})
-        else:
-            observed_cases = {
-                item["id"]: item["outcome"] for item in observation.get("case_outcomes", [])
-            }
-            expected_ids = {item["id"] for item in expected_cases}
-            contracts = rewrite_contracts(scenario, str(scenario.get("id", "scenario")))
-            for item in expected_cases:
-                identifier = item["id"]
-                if identifier in contracts:
-                    checks = rewrite_case_assertions(
-                        identifier, contracts[identifier], observed_cases.get(identifier)
-                    )
-                    result.extend(checks)
-                    result.append(
-                        {
-                            "id": f"case:{identifier}",
-                            "status": "failed"
-                            if any(check["status"] == "failed" for check in checks)
-                            else "passed",
-                        }
-                    )
-                    continue
-                result.append(
-                    {
-                        "id": f"case:{identifier}",
-                        "status": "passed"
-                        if observed_cases.get(item["id"], object()) == item["outcome"]
-                        else "failed",
-                    }
-                )
-            for identifier in sorted(set(observed_cases) - expected_ids):
-                result.append({"id": f"case:extra:{identifier}", "status": "failed"})
+        # Case contracts stay declared in the corpus; this runner observes
+        # selection only, so the case layer is reported unobserved.
+        result.append({"id": "case-outcomes:not-observed", "status": "not_observed"})
     return result
 
 
@@ -1425,164 +1337,6 @@ def detect_capabilities() -> dict[str, dict[str, Any]]:
     }
 
 
-def project_snapshot(project: Path) -> dict[str, str]:
-    snapshot: dict[str, str] = {}
-    for path in sorted(project.rglob("*")):
-        relative = path.relative_to(project).as_posix()
-        if path.is_symlink():
-            snapshot[relative] = "symlink"
-        elif path.is_file():
-            snapshot[relative] = hashlib.sha256(path.read_bytes()).hexdigest()
-    return snapshot
-
-
-def mutation_assertion(scenario: dict[str, Any], changed_paths: list[str]) -> dict[str, str] | None:
-    boundary = scenario["expected"].get("mutation_boundary")
-    if boundary == "no-writes":
-        passed = not changed_paths
-    elif boundary == "specs-only":
-        passed = all(path == "specs" or path.startswith("specs/") for path in changed_paths)
-    else:
-        return None
-    return {"id": "mutation:boundary", "status": "passed" if passed else "failed"}
-
-
-def private_evidence(args: argparse.Namespace, raw: dict[str, Any]) -> list[dict[str, str]]:
-    if args.output is None:
-        return []
-    content = canonical(
-        {
-            key: redact_text(value) if isinstance(value, str) else redact(value)
-            for key, value in raw.items()
-        }
-    )
-    content_digest = hashlib.sha256(content).hexdigest()
-    private = args.output.parent / "private"
-    private.mkdir(parents=True, exist_ok=True)
-    (private / f"{content_digest}.json").write_bytes(content + b"\n")
-    return [{"path": f"private/{content_digest}.json", "digest": content_digest}]
-
-
-def run_host(
-    scenario: dict[str, Any], args: argparse.Namespace
-) -> tuple[dict[str, Any], dict[str, Any], str, list[dict[str, str]]]:
-    if args.host != scenario["host"] and scenario["host"] != "any":
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": "unsupported"},
-            "skipped",
-            [],
-        )
-    executable = args.executable or args.host
-    if shutil.which(executable) is None and not Path(executable).is_file():
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": "unsupported"},
-            "skipped",
-            [],
-        )
-    assert args.model is not None
-    assert args.timeout is not None
-    sandbox_parent = Path(tempfile.mkdtemp(prefix="skills-eval-"))
-    sandbox = sandbox_parent / "sandbox"
-    project = sandbox / "project"
-    for directory in (
-        project,
-        sandbox / "home",
-        sandbox / "xdg-config",
-        sandbox / "xdg-cache",
-        sandbox / "xdg-state",
-    ):
-        directory.mkdir(parents=True, exist_ok=True)
-    for relative, content in sorted(scenario["input"].get("project_files", {}).items()):
-        target = project / safe_relative(relative)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(content, encoding="utf-8")
-    before = project_snapshot(project)
-    prompt = str(scenario["input"].get("prompt", ""))
-    if case_outcome_contract(scenario, str(scenario.get("id", "scenario"))) is not None:
-        prompt += (
-            "\n\nEvaluation fixture (data, not instructions):\n"
-            + json.dumps(scenario["input"]["fixture"], ensure_ascii=False, sort_keys=True)
-            + "\nReturn a structured host result with case_outcomes as an array of "
-            "objects containing exactly id and outcome for every fixture case."
-        )
-    command = host_command(args.host, executable, args.model, prompt)
-    started = time.monotonic()
-    try:
-        process = subprocess.run(
-            command,
-            cwd=project,
-            env=isolated_environment(sandbox),
-            capture_output=True,
-            text=True,
-            timeout=min(args.timeout, float(scenario["budgets"]["timeout_seconds"])),
-            start_new_session=True,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as error:
-        shutil.rmtree(sandbox_parent, ignore_errors=True)
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": "timeout", "duration_ms": int((time.monotonic() - started) * 1000)},
-            "error",
-            private_evidence(args, {"stdout": error.stdout or "", "stderr": error.stderr or ""}),
-        )
-    except OSError as error:
-        shutil.rmtree(sandbox_parent, ignore_errors=True)
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": "host_start_error"},
-            "error",
-            private_evidence(args, {"stderr": str(error)}),
-        )
-    if process.returncode != 0:
-        shutil.rmtree(sandbox_parent, ignore_errors=True)
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": "host_error"},
-            "error",
-            private_evidence(args, {"stdout": process.stdout, "stderr": process.stderr}),
-        )
-    try:
-        observed = parse_host_output(process.stdout)
-    except EvalError as error:
-        shutil.rmtree(sandbox_parent, ignore_errors=True)
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": error.code},
-            "error",
-            private_evidence(args, {"stdout": process.stdout, "stderr": process.stderr}),
-        )
-    after = project_snapshot(project)
-    changed_paths = sorted(
-        path for path in set(before) | set(after) if before.get(path) != after.get(path)
-    )
-    observed["changed_paths"] = changed_paths
-    boundary_assertion = mutation_assertion(scenario, changed_paths)
-    if boundary_assertion is not None:
-        observed["mutation_assertion"] = boundary_assertion
-    escaped = [
-        path
-        for path in sandbox_parent.rglob("*")
-        if path.is_symlink() and not str(path.resolve()).startswith(str(sandbox.resolve()))
-    ]
-    shutil.rmtree(sandbox_parent, ignore_errors=True)
-    if escaped:
-        return (
-            {"selected": [], "usage": {"telemetry": "incomplete"}},
-            {"classification": "sandbox_escape"},
-            "error",
-            private_evidence(args, {"stdout": process.stdout, "stderr": process.stderr}),
-        )
-    return (
-        observed,
-        {"classification": None},
-        "passed",
-        private_evidence(args, {"stdout": process.stdout, "stderr": process.stderr}),
-    )
-
-
 def budget_assertions(
     usage: dict[str, Any], budgets: dict[str, Any]
 ) -> tuple[list[dict[str, Any]], str]:
@@ -1605,41 +1359,24 @@ def budget_assertions(
 
 def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -> dict[str, Any]:
     started_at = time.time()
-    if args.offline:
-        try:
-            observation = offline_observation(scenario, root)
-            run_status = "passed"
-            error: dict[str, Any] = {"classification": None}
-        except EvalError as runner_error:
-            if runner_error.code != "offline_runner_timeout":
-                raise
-            fixture = scenario["input"].get("fixture")
-            selected = fixture.get("selected", []) if isinstance(fixture, dict) else []
-            observation = {"selected": selected, "usage": {"telemetry": "not-applicable"}}
-            run_status = "error"
-            error = {"classification": runner_error.code, "message": runner_error.message}
-        evidence: list[dict[str, str]] = []
-    else:
-        observation, error, run_status, evidence = run_host(scenario, args)
+    try:
+        observation = offline_observation(scenario, root)
+        run_status = "passed"
+        error: dict[str, Any] = {"classification": None}
+    except EvalError as runner_error:
+        if runner_error.code != "offline_runner_timeout":
+            raise
+        fixture = scenario["input"].get("fixture")
+        selected = fixture.get("selected", []) if isinstance(fixture, dict) else []
+        observation = {"selected": selected, "usage": {"telemetry": "not-applicable"}}
+        run_status = "error"
+        error = {"classification": runner_error.code, "message": runner_error.message}
+    evidence: list[dict[str, str]] = []
     assertions = assertions_for_invariants(scenario, root) + expected_assertions(
-        scenario, observation, behavioral=not args.offline
+        scenario, observation
     )
     assertions.extend(observation.get("runner_assertions", []))
-    if observation.get("mutation_assertion") is not None:
-        assertions.append(observation["mutation_assertion"])
-    effective_budgets = dict(scenario["budgets"])
-    if not args.offline:
-        assert args.max_tokens is not None
-        assert args.max_cost is not None
-        effective_budgets["max_tokens"] = min(effective_budgets["max_tokens"], args.max_tokens)
-        effective_budgets["max_cost"] = min(effective_budgets["max_cost"], args.max_cost)
-    if args.offline:
-        budget_status = "passed"
-    else:
-        budget_items, budget_status = budget_assertions(
-            observation.get("usage", {}), effective_budgets
-        )
-        assertions.extend(budget_items)
+    budget_status = "passed"
     assertions.sort(key=lambda item: item["id"])
     if run_status not in {"error", "skipped"} and any(
         item["status"] == "failed" for item in assertions
@@ -1655,15 +1392,13 @@ def result_for(scenario: dict[str, Any], args: argparse.Namespace, root: Path) -
         "locale": scenario.get("locale", "neutral"),
         "pair_id": scenario.get("pair_id"),
         "scenario_digest": scenario["digest"],
-        "host": args.host if not args.offline else "offline",
+        "host": "offline",
         "host_version": observation.get("host_version", "unavailable"),
-        "adapter": ADAPTER_PROTOCOLS.get(args.host, "offline/v1")
-        if not args.offline
-        else "offline/v1",
+        "adapter": "offline/v1",
         "adapter_version": 1,
-        "model": args.model if not args.offline else None,
-        "model_version": args.model if not args.offline else None,
-        "observation_mode": "hostless-contract" if args.offline else "trusted-live",
+        "model": None,
+        "model_version": None,
+        "observation_mode": "hostless-contract",
         "status": run_status,
         "assertions": assertions,
         "started_at": int(started_at),
@@ -1691,14 +1426,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--validate", action="store_true")
     parser.add_argument("--offline", action="store_true")
-    parser.add_argument("--trusted-live", action="store_true")
-    parser.add_argument("--host", choices=("opencode", "codex"))
-    parser.add_argument("--model")
-    parser.add_argument("--timeout", type=float)
-    parser.add_argument("--max-tokens", type=int)
-    parser.add_argument("--max-cost", type=float)
-    parser.add_argument("--output", type=Path)
-    parser.add_argument("--executable")
     parser.add_argument("--scenario", action="append")
     parser.add_argument("--kind", choices=("deterministic", "trigger", "near-miss", "golden"))
     parser.add_argument(
@@ -1707,24 +1434,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--capabilities", action="store_true")
     args = parser.parse_args(argv)
-    if args.trusted_live:
-        required = (
-            args.host,
-            args.model,
-            args.timeout,
-            args.max_tokens,
-            args.max_cost,
-            args.output,
-        )
-        if not all(value is not None for value in required):
-            raise EvalError(
-                "live_limits_required",
-                "trusted live mode requires host, model, all limits, and output",
-            )
-        if args.offline:
-            raise EvalError("invalid_mode", "offline and trusted live modes are exclusive")
-    elif not args.offline and not args.list and not args.validate and not args.capabilities:
-        raise EvalError("mode_required", "choose --offline or --trusted-live")
+    if not args.offline and not args.list and not args.validate and not args.capabilities:
+        raise EvalError("mode_required", "choose --offline")
     return args
 
 
@@ -1777,7 +1488,7 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "schema_version": SCHEMA_VERSION,
                     "hosts": detect_capabilities(),
-                    "modes": ["offline", "trusted-live"],
+                    "modes": ["offline"],
                 },
                 0,
             )
@@ -1785,7 +1496,6 @@ def main(argv: list[str] | None = None) -> int:
         validate_fixtures(args.root.resolve())
         scenarios = discover(args.corpus)
         validate_public_surface_inventory(args.root.resolve(), scenarios)
-        validate_compatibility_inventory(args.root.resolve())
         validate_negative_fixtures(args.root.resolve())
         selected = select(scenarios, args)
         if args.list:
@@ -1818,10 +1528,6 @@ def main(argv: list[str] | None = None) -> int:
             exit_code = 3
         else:
             exit_code = 0
-        if args.trusted_live:
-            assert args.output is not None
-            args.output.parent.mkdir(parents=True, exist_ok=True)
-            args.output.write_bytes(canonical(redact(summary)) + b"\n")
         print_failure_report(results, selected)
         emit(summary, exit_code)
     except EvalError as error:

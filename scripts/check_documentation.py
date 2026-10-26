@@ -1,5 +1,11 @@
-#!/usr/bin/env python3
-"""Check the public documentation inventory against authored public surfaces."""
+"""Cross-check authored skill surfaces against the public inventory and catalog.
+
+The authored authority is the ``skills/`` tree itself: every directory with a
+``SKILL.source.md`` is a skill, and every skill without the
+``metadata.command: "false"`` opt-out owns a thin command adapter generated
+by skillmate. The committed inventory and the bilingual catalog must match
+that authority exactly.
+"""
 
 from __future__ import annotations
 
@@ -9,45 +15,28 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# Surfaces whose canonical capability contract migrated to OpenSpec
-# (openspec/specs/). Their contract lives there; no legacy capability record
-# or index link is required. Shrinks to nothing when the legacy tree retires.
-MIGRATED_SURFACES: dict[str, set[str]] = {
-    "skills": {"commit-msg"},
-    "commands": {"commit-msg"},
-}
+
+def authored_skills(root: Path) -> set[str]:
+    return {path.parent.name for path in (root / "skills").glob("*/SKILL.source.md")}
+
+
+def authored_commands(root: Path) -> set[str]:
+    commands = set()
+    for path in (root / "skills").glob("*/SKILL.source.md"):
+        text = path.read_text(encoding="utf-8")
+        frontmatter = text.split("---", 2)[1] if text.startswith("---") else ""
+        if re.search(r'^\s+command:\s*"false"\s*$', frontmatter, re.MULTILINE):
+            continue
+        commands.add(path.parent.name)
+    return commands
 
 
 def validate(root: Path = ROOT) -> None:
     inventory = json.loads((root / "evals/contracts/public-surfaces.json").read_text())
-    package = json.loads((root / "packages/agentomatic/package.json").read_text())
-    registry = (root / "packages/agentomatic/src/registry.ts").read_text()
-    names = re.search(r"const SKILL_NAMES = \[(.*?)\]", registry, re.DOTALL)
-    if names is None:
-        raise ValueError("command adapter registry is missing")
-    adapters = set(re.findall(r'"([a-z0-9-]+)"', names.group(1)))
-    actual = {
-        "skills": {path.parent.name for path in (root / "skills").glob("*/SKILL.source.md")},
-        "commands": adapters | set(re.findall(r'name: "([a-z0-9-]+)"', registry)),
-        "plugins": {
-            name.removeprefix("./plugins/")
-            for name in package["exports"]
-            if name.startswith("./plugins/")
-        },
-        "agents": {
-            path.stem for path in (root / "packages/agentomatic/assets/agents").glob("*.md")
-        },
-    }
-    index = (root / "specs/capabilities/README.md").read_text()
+    actual = {"skills": authored_skills(root), "commands": authored_commands(root)}
     for kind, nameset in actual.items():
-        if nameset != set(inventory[kind]):
+        if set(inventory[kind]) != nameset:
             raise ValueError(f"{kind}: authored surface differs from inventory")
-        for name in nameset:
-            if name in MIGRATED_SURFACES.get(kind, set()):
-                continue
-            record = f"{kind}/{name}.md"
-            if not (root / "specs/capabilities" / record).is_file() or f"]({record})" not in index:
-                raise ValueError(f"missing canonical capability or index link: {record}")
     for path in ("docs/reference/skill-catalog.md", "docs/ru/reference/skill-catalog.md"):
         documented = set(
             re.findall(r"^\| `([a-z0-9-]+)` \|", (root / path).read_text(), re.MULTILINE)
@@ -58,4 +47,3 @@ def validate(root: Path = ROOT) -> None:
 
 if __name__ == "__main__":
     validate()
-    print("Public catalogs, capability records, and source inventories agree.")

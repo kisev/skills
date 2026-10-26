@@ -9,21 +9,23 @@ reranker, a `sessions` extraction pass, and a nightly `dream` consolidation swee
 
 ## Install
 
-```bash
-# Registry version
-npm view --prefer-online @kisev/memomatic@latest version
+The application ships from a checkout of this repository:
 
-# Install
-npm install --global @kisev/memomatic
+```bash
+git clone https://github.com/kisev/skills && cd skills
+mise install
+task generate
+
+# Install from the checkout
+npm install --global ./apps/memomatic
 
 # Installed package and active CLI
 npm list --global @kisev/memomatic --depth=0
 memomatic --version
 ```
 
-Tags can move between preview and installation; the last commands show the
-installed package and the CLI resolved from PATH. Use `@dev` in both the view
-and install commands for the development channel.
+The last commands show the installed package and the CLI resolved from PATH.
+Rerun `git pull`, `task generate`, and the global install to update.
 
 The corpus lives under `$XDG_STATE_HOME/memomatic/` (`MEMORY.md`, `USER.md`,
 daily notes, `DREAMS.md`); rules live in `$XDG_CONFIG_HOME/memomatic/MEMORY_RULES.md`.

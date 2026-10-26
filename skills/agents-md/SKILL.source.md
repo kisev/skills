@@ -2,8 +2,10 @@
 name: agents-md
 description: >-
   Create, update, reduce, or verify repository-scoped AGENTS.md from repository
-  facts, including inherited and nested instructions. Use for agent instructions,
-  not README.md or CONTRIBUTING.md. Russian discovery terms: инструкции агентам.
+  facts, including inherited and nested instructions, and keep a CLAUDE.md
+  mirror (symlink, or an equal copy where symlinks are unavailable) beside
+  every managed file. Use for agent instructions, not README.md or
+  CONTRIBUTING.md. Russian discovery terms: инструкции агентам.
 license: MIT
 metadata:
   author: "Kirill Sevriugin"
@@ -18,3 +20,8 @@ Before asking the user, apply `references/question-guidelines.md`.
 Read and follow `references/workflow.md`. Apply `references/language-policy.md` for
 user-facing prose. Preserve exact code, commands, paths, IDs, JSON fields, and
 quotations.
+
+Apply `references/writing-for-agents.md` for wording rules and pointers.
+
+Apply `references/agents-md-guidelines.md` for the standard shared section
+and fact-collection checklist.

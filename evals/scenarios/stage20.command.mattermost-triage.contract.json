@@ -4,7 +4,7 @@
     "max_tokens": 1000,
     "timeout_seconds": 20
   },
-  "digest": "e7ad34c8250d561bbc8ee39c4ae4f0f3f5213eaba305a1a5da26ddc66a231c0a",
+  "digest": "8059720540e32b78686e806b33d6a6a49a58abeb393cf43903c0125061715101",
   "expected": {
     "mutation_boundary": "adapter-only",
     "not_selected": [],
@@ -22,7 +22,7 @@
   "invariants": [
     {
       "id": "stage20.command.mattermost-triage.contract.source",
-      "path": "packages/agentomatic/src/registry.ts"
+      "path": "apps/skillmate/src/skillmate/adapters.py"
     }
   ],
   "kind": "deterministic",

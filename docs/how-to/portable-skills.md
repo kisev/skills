@@ -3,7 +3,7 @@
 [Русский](../ru/how-to/portable-skills.md)
 
 Use this guide to install, update, rebind, clean up, or troubleshoot portable
-skills. These operations are independent of `@kisev/agentomatic`.
+skills with the `skills` CLI. These operations are independent of `skillmate`.
 
 ## Choose a Scope and Host
 
@@ -104,9 +104,7 @@ Pages URL and the same scope to rebind it.
 remove their local copies. The removal offer appears only when `update` runs in
 a terminal without its `--yes` flag; in non-interactive mode the CLI skips the
 offer and keeps retired copies, so remove them explicitly instead. `update`
-takes skill names, not source URLs, as positional arguments. OpenCode package
-assets have a separate update lifecycle described in the
-[OpenCode integration guide](opencode-integration.md#update).
+takes skill names, not source URLs, as positional arguments.
 
 ## Check the Environment Contract
 
@@ -126,15 +124,15 @@ Each line is `OK` or `FAIL`, and a failure prints the exact repair command
 instead of dead-ending. The runner installs nothing and makes no network call.
 The manifest is stitched at build time and is deterministic: `task generate:check`
 validates it, and the local channel check compares the manifest
-`source_revision` with the Pages index and the workspace npm pin without the
-registry. `agentomatic doctor` reads the installed manifests for the global and
-project scopes and prints the same contract; without an installed manifest it
-reports an honest "not found".
+`source_revision` with the Pages index without the registry. `skillmate
+doctor` reads the installed manifests for the global and project scopes and
+prints the same contract; without an installed manifest it reports an honest
+"not found".
 
 ## Remove Retired Names
 
-The current [migration inventory](../migration-inventory.md) defines thirteen
-retired names. Normally, accept their removal when `skills update` reports them.
+Thirteen retired names are known. Normally, accept their removal when
+`skills update` reports them.
 To remove them explicitly from a global installation, run:
 
 ```shell
