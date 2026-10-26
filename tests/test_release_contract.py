@@ -751,7 +751,7 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
         < workflow.index("pypi-publish:")
         < workflow.index("github-release:")
     )
-    assert "needs:\n      - stable-pages\n" in workflow
+    assert "needs:\n      - stable-preflight\n      - stable-pages\n" in workflow
     # PyPI trusted publishing runs only for a latest-channel tag; the untagged
     # dev push and maintenance-channel tags never reach a package registry.
     assert "needs.stable-preflight.outputs.deploys-pages == 'true'" in workflow
@@ -777,6 +777,17 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     # must precede both provenance builders; the GitHub Release job never runs
     # for a dev push.
     assert "startsWith(github.ref, 'refs/tags/v')" in workflow
+    # The provenance manifests are produced in the preflight jobs and handed
+    # to the verify and release jobs as run-bound artifacts; every handoff
+    # point refuses to run without its manifest.
+    assert workflow.count("if-no-files-found: error") == 2
+    assert workflow.count("upload-artifact@") == 2
+    assert workflow.count("download-artifact@") == 3
+    assert "path: .build/release\n" in workflow
+    assert workflow.index("Upload the release manifest") > workflow.index(
+        "Upload exact Pages artifact"
+    )
+    assert "- stable-preflight\n" in workflow.split("github-release:", 1)[1].split("env:", 1)[0]
     taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
     dev_prepare = taskfile.split("dev:prepare:", 1)[1].split("dev:await-ci:", 1)[0]
     assert dev_prepare.index("compose_pages_site.py") < dev_prepare.index("build_dev_artifacts.py")
