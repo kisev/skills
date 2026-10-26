@@ -12,6 +12,7 @@ import pytest
 
 from scripts import (
     await_ci_success,
+    build_dev_artifacts,
     build_distribution,
     build_release_artifacts,
     check_release,
@@ -51,6 +52,26 @@ def test_current_release_metadata_is_aligned() -> None:
 @pytest.mark.parametrize("version", ["01.2.3", "1.02.3", "1.2.03"])
 def test_release_version_rejects_leading_zeroes(version: str) -> None:
     assert check_release.SEMVER.fullmatch(version) is None
+
+
+def test_dev_artifacts_write_their_own_manifest_without_a_release_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The dev channel must not touch the stable release manifest and must
+    # work on a clean runner where `.build/release` does not exist yet.
+    output = tmp_path / "fresh" / "release"
+    monkeypatch.setattr(build_dev_artifacts, "OUTPUT", output)
+    monkeypatch.setattr(
+        build_release_artifacts, "page_hashes", lambda: {"files": {"x": {"sha256": "0" * 64}}}
+    )
+    revision = build_release_artifacts.command("git", "rev-parse", "HEAD").strip()
+    version = f"{RELEASE_VERSION}-dev.1.g{revision[:12]}"
+    manifest = build_dev_artifacts.build(version, revision)
+    assert manifest["schema"] == "@kisev/skills-dev/v3"
+    assert manifest["channel"] == "dev"
+    written = json.loads((output / "dev.json").read_text(encoding="utf-8"))
+    assert written["version"] == version
+    assert not (output / "release.json").exists()
 
 
 def test_dev_version_uses_stable_base_run_and_revision() -> None:

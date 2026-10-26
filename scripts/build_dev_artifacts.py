@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the exact npm artifact and manifest for one development snapshot."""
+"""Build the exact dev manifest for one development snapshot."""
 
 from __future__ import annotations
 
@@ -28,17 +28,16 @@ def build(version: str, revision: str) -> dict[str, Any]:
     if revision != actual_revision:
         raise DevArtifactError("development revision does not match HEAD")
 
-    if OUTPUT.exists():
-        OUTPUT.mkdir(parents=True, exist_ok=True)
+    OUTPUT.mkdir(parents=True, exist_ok=True)
 
     manifest = {
         "schema": "@kisev/skills-dev/v3",
         "channel": "dev",
         "version": version,
         "revision": revision,
-        "pages": {"files": build_release_artifacts.page_hashes()},
+        "pages": build_release_artifacts.page_hashes(),
     }
-    (OUTPUT / "release.json").write_bytes(build_release_artifacts.canonical(manifest))
+    (OUTPUT / "dev.json").write_bytes(build_release_artifacts.canonical(manifest))
     return manifest
 
 

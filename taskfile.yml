@@ -438,7 +438,7 @@ tasks:
       - >-
         mise exec -- uv run --locked python scripts/verify_distribution_url.py
         "${PAGES_URL%/}/dev" --version "$DEV_VERSION" --revision "$DEV_REVISION"
-        --attempts 24 --manifest .build/release/release.json
+        --attempts 24 --manifest .build/release/dev.json
 
   dependency:audit:
     desc: Audit locked Python and npm dependencies
