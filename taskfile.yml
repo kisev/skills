@@ -357,17 +357,19 @@ tasks:
       - mise exec -- uv run --locked python scripts/check_release.py --published --require-clean
 
   release:preflight:
-    desc: Verify a release commit before creating its tag
+    desc: Verify a release commit, compose Pages, and build the release manifest
     deps: [pre-push]
     cmds:
       - task: release:verify
+      - task: pages:compose:stable
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:prepare:
-    desc: Verify the published tag and build immutable release artifacts
+    desc: Verify the published tag, compose Pages, and build immutable release artifacts
     deps: [pre-push]
     cmds:
       - task: release:verify:published
+      - task: pages:compose:stable
       - mise exec -- uv run --locked python scripts/build_release_artifacts.py
 
   release:pages:verify:
@@ -407,7 +409,7 @@ tasks:
         --run-number "$DEV_RUN_NUMBER" --revision "$DEV_REVISION"
 
   dev:prepare:
-    desc: Build exact npm and composed Pages artifacts for one dev snapshot
+    desc: Build exact dev artifacts and the composed Pages channel
     cmds:
       - >-
         mise exec -- uv run --locked python scripts/build_skills.py
@@ -417,13 +419,13 @@ tasks:
         --version "$DEV_VERSION"
       - task: package:build
       - task: site:build
-      - mise exec -- uv run --locked python scripts/build_dev_artifacts.py
       - >-
         mise exec -- uv run --locked python scripts/compose_pages_site.py
         --stable-url https://kisev.github.io/skills
         --dev-dir .build/packages/skills
         --site-dir apps/docs-site/dist
         --output .build/pages
+      - mise exec -- uv run --locked python scripts/build_dev_artifacts.py
 
   dev:await-ci:
     desc: Wait for the terminal CI success of the current revision

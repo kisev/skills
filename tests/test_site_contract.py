@@ -205,7 +205,7 @@ def test_site_is_wired_into_the_task_graph_and_pages_composition() -> None:
     assert "python scripts/check_npm_audit.py --prefix apps/docs-site" in taskfile
     compose_call = taskfile.split("pages:compose:stable:", 1)[1].split("dev:version:", 1)[0]
     assert "--site-dir apps/docs-site/dist" in compose_call
-    dev_prepare = taskfile.split("dev:prepare:", 1)[1].split("dev:npm:", 1)[0]
+    dev_prepare = taskfile.split("dev:prepare:", 1)[1].split("dev:await-ci:", 1)[0]
     assert "task: site:build" in dev_prepare
     assert "--site-dir apps/docs-site/dist" in dev_prepare
     check_core = taskfile.split("check:core:", 1)[1].split("check:", 1)[0]

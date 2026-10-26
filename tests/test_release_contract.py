@@ -752,6 +752,17 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert "cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}" in workflow
     assert "github.event.deleted != true" in workflow
     assert "task dev:prepare" in workflow
+    # The release manifest hashes the composed Pages channel, so composition
+    # must precede both provenance builders; the GitHub Release job never runs
+    # for a dev push.
+    assert "startsWith(github.ref, 'refs/tags/v')" in workflow
+    taskfile = (ROOT / "taskfile.yml").read_text(encoding="utf-8")
+    dev_prepare = taskfile.split("dev:prepare:", 1)[1].split("dev:await-ci:", 1)[0]
+    assert dev_prepare.index("compose_pages_site.py") < dev_prepare.index("build_dev_artifacts.py")
+    release_prepare = taskfile.split("release:prepare:", 1)[1].split("release:pages:verify:", 1)[0]
+    assert release_prepare.index("pages:compose:stable") < release_prepare.index(
+        "build_release_artifacts.py"
+    )
     assert "task dev:pages:verify" in workflow
     assert "task release:pages:verify" in workflow
     assert "task release:github" in workflow
