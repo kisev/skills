@@ -37,8 +37,8 @@ def command(*arguments: str, cwd: Path = ROOT) -> str:
     return result.stdout.strip()
 
 
-def page_hashes() -> dict[str, Any]:
-    pages = OUTPUT.parent / "pages"
+def page_hashes(channel: Path | None = None) -> dict[str, Any]:
+    pages = channel if channel is not None else OUTPUT.parent / "pages"
     if not pages.is_dir():
         raise ArtifactError(f"composed Pages channel is missing at {pages}")
     files: dict[str, Any] = {}

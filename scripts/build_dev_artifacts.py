@@ -15,6 +15,9 @@ if str(ROOT) not in sys.path:
 from scripts import build_distribution, build_release_artifacts  # noqa: E402
 
 OUTPUT = ROOT / ".build" / "release"
+# The dev channel serves this payload under /dev; the manifest must describe
+# exactly what the deployed /dev subtree contains, not the composed root.
+DEV_PAYLOAD = ROOT / ".build" / "packages" / "skills"
 
 
 class DevArtifactError(Exception):
@@ -35,7 +38,7 @@ def build(version: str, revision: str) -> dict[str, Any]:
         "channel": "dev",
         "version": version,
         "revision": revision,
-        "pages": build_release_artifacts.page_hashes(),
+        "pages": build_release_artifacts.page_hashes(DEV_PAYLOAD),
     }
     (OUTPUT / "dev.json").write_bytes(build_release_artifacts.canonical(manifest))
     return manifest

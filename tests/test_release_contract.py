@@ -61,9 +61,13 @@ def test_dev_artifacts_write_their_own_manifest_without_a_release_dir(
     # work on a clean runner where `.build/release` does not exist yet.
     output = tmp_path / "fresh" / "release"
     monkeypatch.setattr(build_dev_artifacts, "OUTPUT", output)
-    monkeypatch.setattr(
-        build_release_artifacts, "page_hashes", lambda: {"files": {"x": {"sha256": "0" * 64}}}
-    )
+    inventoried: list[Path | None] = []
+
+    def fake_hashes(channel: Path | None = None) -> dict[str, object]:
+        inventoried.append(channel)
+        return {"files": {"x": {"bytes": 1, "sha256": "0" * 64}}}
+
+    monkeypatch.setattr(build_release_artifacts, "page_hashes", fake_hashes)
     revision = build_release_artifacts.command("git", "rev-parse", "HEAD").strip()
     version = f"{RELEASE_VERSION}-dev.1.g{revision[:12]}"
     manifest = build_dev_artifacts.build(version, revision)
@@ -72,6 +76,7 @@ def test_dev_artifacts_write_their_own_manifest_without_a_release_dir(
     written = json.loads((output / "dev.json").read_text(encoding="utf-8"))
     assert written["version"] == version
     assert not (output / "release.json").exists()
+    assert inventoried == [build_dev_artifacts.DEV_PAYLOAD]
 
 
 def test_dev_version_uses_stable_base_run_and_revision() -> None:
