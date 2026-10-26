@@ -415,9 +415,12 @@ def test_gate_registry_drift_fails_the_gate(tmp_path: Path) -> None:
         ),
         ("taskfile.yml", "      - task: site:test\n", ""),
         ("lefthook.yml", '        - "packages/**"\n', ""),
+        ("lefthook.yml", "task skillmate:check", "task skillmate:missing"),
         ("gate-registry.json", '"task": "docs:check"', '"task": "docs:check-renamed"'),
     ):
-        root = rendered_gate_root(tmp_path / surface.replace("/", "_"))
+        root = rendered_gate_root(
+            tmp_path / f"{len(list(tmp_path.iterdir()))}-{surface.replace('/', '_')}"
+        )
         content = (root / surface).read_text(encoding="utf-8")
         assert old in content, surface
         (root / surface).write_text(content.replace(old, new), encoding="utf-8")

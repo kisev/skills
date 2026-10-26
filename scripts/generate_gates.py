@@ -243,7 +243,15 @@ def pre_push_section(lefthook: str) -> str:
     return parts[1] if len(parts) == 2 else ""
 
 
-def validate_lefthook(lefthook: str, registry: Registry) -> None:
+def taskfile_task_names(taskfile: str) -> set[str]:
+    return {
+        match.group(1)
+        for line in taskfile.splitlines()
+        if (match := re.match(r"^  ([a-zA-Z][\w:.-]*):\s*(?:#.*)?$", line))
+    }
+
+
+def validate_lefthook(lefthook: str, registry: Registry, taskfile: str) -> None:
     pre_push = pre_push_section(lefthook)
     if not pre_push:
         raise RegistryError("lefthook.yml has no pre-push section")
@@ -252,6 +260,12 @@ def validate_lefthook(lefthook: str, registry: Registry) -> None:
     for layer in registry.scoped_layers:
         if f"task {layer.task}" not in pre_push:
             raise RegistryError(f"pre-push must run task {layer.task} for the {layer.name} layer")
+    known = taskfile_task_names(taskfile)
+    for reference in sorted(set(re.findall(r"task ([a-zA-Z][\w:.-]*)", pre_push))):
+        if reference not in known:
+            raise RegistryError(
+                f"pre-push runs task {reference}, which taskfile.yml does not define"
+            )
     if "task pre-push" in lefthook:
         raise RegistryError("hooks must not recurse into task pre-push")
 
@@ -272,7 +286,7 @@ def render(root: Path, registry: Registry) -> dict[Path, str]:
 
     validate_taskfile(taskfile, registry)
     validate_ci(ci, registry)
-    validate_lefthook(lefthook, registry)
+    validate_lefthook(lefthook, registry, taskfile)
 
     ci = splice(ci, "matrix:quality", render_matrix(registry.matrix_layers(False)))
     ci = splice(ci, "matrix:built-quality", render_matrix(registry.matrix_layers(True)))
