@@ -52,26 +52,29 @@ def _write(path: Path, text: str) -> None:
         raise
 
 
+PYPROJECT_LINE = re.compile(r'(?m)^([ \t]*)version = "[^"]*"$')
+INIT_LINE = re.compile(r'(?m)^([ \t]*)__version__ = "[^"]*"$')
+
+
 def stamp(version: str, pyproject: Path = PYPROJECT, package_init: Path = INIT) -> None:
-    """Rewrite both skillmate version fields in the (ephemeral) working tree."""
+    """Rewrite both skillmate version fields in the (ephemeral) working tree.
+
+    TOML formatters indent table keys, so the matched line's indentation is
+    preserved in the replacement.
+    """
     if not PRERELEASE.fullmatch(version):
         raise ValueError("version must be a PEP 440 prerelease")
     targets = (
-        (pyproject, re.compile(r'(?m)^version = "[^"]*"$'), f'version = "{version}"'),
-        (
-            package_init,
-            re.compile(r'(?m)^__version__ = "[^"]*"$'),
-            f'__version__ = "{version}"',
-        ),
+        (pyproject, PYPROJECT_LINE, 'version = "{}"'),
+        (package_init, INIT_LINE, '__version__ = "{}"'),
     )
-    for path, pattern, line in targets:
+    for path, pattern, template in targets:
         text = path.read_text(encoding="utf-8")
-        # The validated prerelease version contains no regex escapes, so the
-        # replacement string is safe to pass through subn directly.
-        updated, count = pattern.subn(line, text, count=1)
-        if count != 1:
+        match = pattern.search(text)
+        if match is None:
             raise ValueError(f"{path.name} has no skillmate version line to stamp")
-        _write(path, updated)
+        line = match.group(1) + template.format(version)
+        _write(path, text[: match.start()] + line + text[match.end() :])
 
 
 def main(argv: list[str] | None = None) -> int:

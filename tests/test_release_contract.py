@@ -91,12 +91,19 @@ def test_dev_pypi_version_is_a_unique_pep440_prerelease() -> None:
 
 
 def test_dev_pypi_stamp_rewrites_both_version_fields(tmp_path: Path) -> None:
+    # The real pyproject is formatter-indented; stamp through a copy of it so
+    # the test exercises the committed shape, not a hand-written ideal.
     pyproject = tmp_path / "pyproject.toml"
-    pyproject.write_text('[project]\nname = "skillmate"\nversion = "12.0.1"\n', encoding="utf-8")
+    pyproject.write_text(
+        (ROOT / "apps/skillmate/pyproject.toml").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     package = tmp_path / "__init__.py"
     package.write_text('__version__ = "12.0.1"\n', encoding="utf-8")
     dev_pypi_version.stamp("12.0.1.dev140", pyproject, package)
-    assert 'version = "12.0.1.dev140"' in pyproject.read_text(encoding="utf-8")
+    stamped = pyproject.read_text(encoding="utf-8")
+    assert '  version = "12.0.1.dev140"' in stamped
+    assert 'version = "12.0.1"\n' not in stamped
     assert '__version__ = "12.0.1.dev140"' in package.read_text(encoding="utf-8")
     broken = tmp_path / "broken.toml"
     broken.write_text("[project]\n", encoding="utf-8")
