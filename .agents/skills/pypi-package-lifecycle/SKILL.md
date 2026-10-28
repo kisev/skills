@@ -19,9 +19,10 @@ distribution `skillmate` under the `kisev` account. Full description:
   same version. `task version:check` enforces the alignment.
 - Never rewrite a published version or tag; a corrective release is a new
   patch version. Registry propagation alone is never a reason to bump.
-- A dev channel is registry-free: `--from-checkout` installs unpublished
-  working-tree content locally and stamps it as dev. Nothing untagged
-  reaches PyPI.
+- Every successful `dev` push publishes the PyPI prerelease
+  `{version}.dev{run}` through the same trusted publishing; prereleases are
+  immutable, and a broken one is yanked and superseded by the next push.
+  `--from-checkout` remains the registry-free path for unpushed content.
 - Renaming the distribution, import package, or console command is a
   full-fidelity migration through an OpenSpec change, never a direct edit.
 

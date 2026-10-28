@@ -48,9 +48,10 @@ REVIEWMATIC_REF='<ref>' # use the exact release tag for the stable skills channe
 uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 ```
 
-On the dev channel, install from a checkout of this repository — no registry is involved:
+On the dev channel, every successful push publishes a `skillmate` prerelease to PyPI, and unpushed content still installs from a checkout:
 
 ```shell
+uvx --prerelease skillmate --version
 skillmate install --from-checkout /path/to/skills --yes   # unpublished working-tree content
 REVIEWMATIC_REF=dev # moving development branch, matching the dev skills channel
 uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version

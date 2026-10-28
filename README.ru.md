@@ -48,9 +48,10 @@ REVIEWMATIC_REF='<ref>' # используйте точный релизный �
 uvx --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version
 ```
 
-На dev-канале установите из чекаута репозитория — реестр не участвует:
+На dev-канале каждый успешный push публикует prerelease `skillmate` на PyPI, а неопубликованное содержимое по-прежнему ставится из чекаута:
 
 ```shell
+uvx --prerelease skillmate --version
 skillmate install --from-checkout /path/to/skills --yes   # неопубликованное содержимое рабочего дерева
 REVIEWMATIC_REF=dev # подвижная ветка разработки, совпадает с dev-каналом навыков
 uvx --refresh-package reviewmatic --from "git+https://github.com/kisev/skills.git@${REVIEWMATIC_REF}#subdirectory=apps/reviewmatic" reviewmatic --version

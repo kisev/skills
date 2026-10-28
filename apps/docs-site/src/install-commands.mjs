@@ -7,7 +7,8 @@ const REVIEWMATIC_SOURCE =
 export function integrationInstallCommands(channel) {
   if (channel === "dev") {
     return [
-      "# Unpublished content installs from a checkout; no registry is involved",
+      "# Published prereleases and unpublished checkout content",
+      "uvx --prerelease skillmate --version",
       "skillmate install --from-checkout /path/to/skills --yes   # unpublished working-tree content",
       "",
       "# Reviewmatic from the moving dev branch",

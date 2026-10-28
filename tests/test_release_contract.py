@@ -18,6 +18,7 @@ from scripts import (
     check_release,
     compose_pages_site,
     create_github_release,
+    dev_pypi_version,
     dev_version,
     release_channel,
     verify_distribution_url,
@@ -77,6 +78,32 @@ def test_dev_artifacts_write_their_own_manifest_without_a_release_dir(
     assert written["version"] == version
     assert not (output / "release.json").exists()
     assert inventoried == [build_dev_artifacts.DEV_PAYLOAD]
+
+
+def test_dev_pypi_version_is_a_unique_pep440_prerelease() -> None:
+    assert dev_pypi_version.derive("12.0.1", "140") == "12.0.1.dev140"
+    for bad in ("1.2", "01.2.3", "1.2.3-dev", ""):
+        with pytest.raises(ValueError, match="base version"):
+            dev_pypi_version.derive(bad, "140")
+    for bad in ("0", "01", "14a", "-1", ""):
+        with pytest.raises(ValueError, match="run number"):
+            dev_pypi_version.derive("12.0.1", bad)
+
+
+def test_dev_pypi_stamp_rewrites_both_version_fields(tmp_path: Path) -> None:
+    pyproject = tmp_path / "pyproject.toml"
+    pyproject.write_text('[project]\nname = "skillmate"\nversion = "12.0.1"\n', encoding="utf-8")
+    package = tmp_path / "__init__.py"
+    package.write_text('__version__ = "12.0.1"\n', encoding="utf-8")
+    dev_pypi_version.stamp("12.0.1.dev140", pyproject, package)
+    assert 'version = "12.0.1.dev140"' in pyproject.read_text(encoding="utf-8")
+    assert '__version__ = "12.0.1.dev140"' in package.read_text(encoding="utf-8")
+    broken = tmp_path / "broken.toml"
+    broken.write_text("[project]\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="version line"):
+        dev_pypi_version.stamp("12.0.1.dev140", broken, package)
+    with pytest.raises(ValueError, match="PEP 440"):
+        dev_pypi_version.stamp("12.0.1-dev.140.g000000000000", pyproject, package)
 
 
 def test_dev_version_uses_stable_base_run_and_revision() -> None:
@@ -789,6 +816,15 @@ def test_release_workflow_gates_publication_and_final_release() -> None:
     assert "cancel-in-progress: ${{ startsWith(github.ref, 'refs/tags/v') }}" in workflow
     assert "github.event.deleted != true" in workflow
     assert "task dev:prepare" in workflow
+    # Dev pushes publish the skillmate prerelease to PyPI next to the Pages
+    # /dev channel, with the same trusted-publisher environment as releases.
+    dev_pypi = workflow.split("pypi-publish-dev:", 1)[1]
+    assert workflow.index("dev-preflight:") < workflow.index("pypi-publish-dev:")
+    assert "id-token: write" in dev_pypi
+    assert "dev_pypi_version.py" in dev_pypi
+    assert "--stamp" in dev_pypi
+    assert "environment:\n      name: pypi" in dev_pypi
+    assert workflow.count("uv publish --trusted-publishing always") == 2
     # The release manifest hashes the composed Pages channel, so composition
     # must precede both provenance builders; the GitHub Release job never runs
     # for a dev push.

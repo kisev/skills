@@ -33,9 +33,14 @@ Publication is automated and runs only from a tag:
   the Pages root.
 - The PyPI upload uses trusted publishing (GitHub OIDC) from `main` tags; no
   PyPI token is stored. The workflow refuses untagged or non-tag runs.
-- A dev channel is registry-free: `--from-checkout` installs unpublished
-  working-tree content locally and stamps it as dev. Nothing untagged ever
-  reaches PyPI.
+- Every successful `dev` push publishes the PyPI prerelease `skillmate`
+  `{version}.dev{run}` through the same trusted-publishing environment; the
+  run number is shared with the Pages dev version. Prereleases are immutable:
+  a broken one is yanked on the PyPI project page and superseded by the next
+  push. Until the first stable release exists, `uvx skillmate` resolves the
+  newest prerelease; afterwards select it with `uvx --prerelease skillmate`.
+  `--from-checkout` remains the registry-free path for unpushed working-tree
+  content.
 
 The release discipline (version mirrors, changelog, confirmation gates,
 annotated tags) lives in the `pypi-package-lifecycle` project skill and

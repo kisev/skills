@@ -242,3 +242,36 @@ jobs:
         env:
           PAGES_URL: ${{ steps.deployment.outputs.page_url }}
         run: task dev:pages:verify
+
+  pypi-publish-dev:
+    name: Publish skillmate dev prerelease to PyPI
+    needs: dev-preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/project/skillmate
+    env:
+      DEV_RUN_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          ref: ${{ needs.dev-preflight.outputs.revision }}
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c  # v4.3.0
+      - name: Stamp the prerelease version and build the distribution
+        run: |
+          version="$(mise exec -- uv run --locked python scripts/dev_pypi_version.py --run-number "$DEV_RUN_NUMBER" --stamp)"
+          cd apps/skillmate
+          mise exec -- uv build
+          found="$(ls "dist/skillmate-${version}-"* 2>/dev/null || true)"
+          test -n "$found" || {
+            echo "built skillmate version does not match $version" >&2
+            exit 1
+          }
+      - name: Publish to PyPI through trusted publishing
+        run: |
+          cd apps/skillmate
+          mise exec -- uv publish --trusted-publishing always
