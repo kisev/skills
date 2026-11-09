@@ -1,8 +1,8 @@
 # Design
 
-> Capture after the OCR-engine round, 2026-11-09. Still not final. Decisions
-> are marked (confirmed); the manager boundary in D3 and two runbook items in
-> D8 are (proposed) pending the owner's confirmation.
+> Capture after the OCR-engine and profile rounds on 2026-11-09. Decisions are
+> owner-confirmed unless marked (open). Implementation details that do not
+> change the approach are listed under Implementation notes.
 
 ## Context
 
@@ -16,20 +16,28 @@ contract test in `apps/reviewmatic/tests/test_skill_contract.py` pins the
 runtime command surface, the skill texts, and the documentation map to each
 other.
 
-The engine decision reverses the runtime's drift. The owner's original goal
-was a helper that saves model time and tokens by collecting review context
-once; the runtime instead became a judge of the model's work — stages,
-schemas, receipts, digest bindings, refusals. The rework keeps only the
-mechanical guarantees.
+The runtime drifted from its purpose. It was meant to save model time and
+tokens by collecting review context once; it became a judge of the model's
+work — stages, schemas, receipts, digest bindings, refusals. The rework keeps
+the mechanical guarantees and removes the adjudication.
 
-The external `ocr` CLI (OpenCodeReview; v1.13.6 is installed here) provides
-the review engine: `ocr review --provider/--model/--effort
+The external `ocr` CLI (OpenCodeReview; the tested minimum is v1.13.6)
+provides the review engine: `ocr review --provider/--model/--effort
 low|medium|high --background-file <md> --format json --audience agent
---from/--to/--repo/--output`, sessions persisted under
-`~/.opencodereview/sessions/` with `ocr session
-list/show/comments/compare/export`, `ocr review --resume <id>`, and an
-8000-byte background-file limit. GitLab draft notes provide the publication
-flow: commands create drafts, the human edits and publishes in the web UI.
+--from/--to/--repo/--output`, sessions under `~/.opencodereview/sessions/`
+with `ocr session list/show/comments/compare/export`, `ocr review --resume
+<id>`, and an 8000-byte background-file limit. It is a CLI, so behavior is
+identical on opencode, codex, and claude. `ocr llm providers` lists built-in
+providers without secrets; custom providers and their models are only in
+`~/.opencodereview/config.json`, which the skill never reads.
+
+GitLab draft notes provide the publication flow: a non-interactive `glab api`
+block creates drafts; the human edits and publishes in the web UI.
+
+Shared references carry the reply voice: `humanize-patterns.md` (18 KB),
+`clarity-rules.md` (1.6 KB), and a new `discussion-replies.md`. They are
+materialized through `shared/manifest.json`, so the skill does not depend on
+the `humanize` or `eli5` skills being installed.
 
 Two known defects stay on the fix list: `apps/reviewmatic/README.md` claims
 an optional `--repo-root` with a managed clone fallback while
@@ -45,19 +53,23 @@ because OpenSpec is out of scope for this change.
 - Identical behavior on opencode, codex, and claude: the review engine is an
   external CLI, not host-specific subagents.
 - One question round at the start, then fully autonomous until the report.
-- The runbook keeps its current shape, with only the changes listed in D8.
+- The runbook keeps its current shape, with only the changes listed in D9.
 - The human publishes through GitLab draft notes in the web UI.
+- Replies read as the user's own, in the discussion's context.
 - The runtime is a helper: it assembles context and checks mechanical facts;
   it never judges content.
+- No runtime dependency on other skills: the reply and clarity rules are
+  bundled.
 
 **Non-Goals:**
 
 - Task assessment: necessity, priority, triage, planning, spec authoring.
-- OpenSpec integration — out of scope for this change; may return later.
-- Local WIP review — removed together with the rename to `mr-review`.
+- OpenSpec integration — out of scope; may return later.
+- Local WIP review — removed with the rename to `mr-review`.
 - In-house critics, arbitrator receipts, and the incremental state machine —
   replaced by OCR runs and OCR sessions.
 - Autonomous publication of anything.
+- Reading `~/.opencodereview/config.json` or any file that holds secrets.
 
 ## Decisions
 
@@ -74,29 +86,30 @@ who decides; it does not re-plan or author a specification.
 ### D2. `ocr` is the only review engine (confirmed)
 
 The OpenCodeReview CLI reviews the diff. It is a declared dependency on the
-same level as `glab` and lands in `references/requirements.json`. The
-in-house critic/receipt/arbitration machinery and the OCR-as-panel-member
-path are removed. Depth is chosen by runs: one run by default, more runs
-with different `--provider/--model/--effort`. Findings come only from OCR
-runs — never from the manager.
+same level as `glab` and lands in `references/requirements.json` with the
+minimum tested version 1.13.6. The in-house critic/receipt/arbitration
+machinery and the OCR-as-panel-member path are removed. Depth is chosen by
+runs: one run by default, more runs with different
+`--provider/--model/--effort`. Findings come only from OCR runs — never from
+the manager.
 
-### D3. The main session is the manager (proposed boundary)
+### D3. Manager contract (confirmed)
 
-The manager: collects context (fast, read-only); asks the single startup
-round; authors the OCR background; starts the OCR run(s); when several runs
-were selected, merges duplicates and conflicts with recorded reasons — the
-arbitration, surfaced in the runbook; when a previous session exists for the
-MR, runs `ocr session compare old new` and feeds the grouping into the
-runbook; synthesizes the fulfillment verdict, the SemVer assessment, a short
-architecture paragraph, and the checks and limitations; writes the runbook
-and the draft-note block; reports to chat and stops.
+The manager: collects context; asks the single startup round; authors the
+OCR background; starts the OCR run(s); when several runs were selected,
+merges duplicates and conflicts with recorded reasons — the arbitration,
+surfaced in the runbook; when a previous session exists for the MR, runs
+`ocr session compare old new` and feeds the grouping into the runbook;
+synthesizes the fulfillment verdict, the SemVer assessment, one architecture
+paragraph, and the simplified checks; writes the runbook and the draft-note
+block; reports the process to chat and stops.
 
-The manager never: hunts for defects in the diff itself; adds its own code
-findings — a suspicion goes to questions or limitations without severity, or
-buys one more pointed OCR run; silently drops or downgrades an OCR finding —
-the reason is recorded (duplicate, out of scope, contradicts the confirmed
-task baseline); publishes anything; substitutes itself for a failed OCR run
-— it reports the failure and stops.
+The manager never: hunts for defects in the diff itself; adds its own
+findings — a suspicion becomes a question without severity or buys one more
+pointed OCR run; silently drops or downgrades an OCR finding — the reason is
+recorded (duplicate, out of scope, contradicts the confirmed task baseline);
+publishes anything; substitutes itself for a failed OCR run — it reports the
+failure and stops.
 
 ### D4. Incrementality is OCR sessions (confirmed)
 
@@ -111,40 +124,73 @@ automatically when a previous session exists. A compressed prior-review
 summary — verdict, accepted risks, open questions — still rides in the
 background file as context, not as a checklist.
 
-### D5. One question round, then autonomous (confirmed)
+### D5. One startup round, then autonomous (confirmed)
 
 After the read-only collection the manager asks exactly once: the OCR
-model and effort (default: the configured one; optionally a second run) and
-the confirmation of the task baseline — goal and acceptance criteria from
-the linked issues and the MR description. Everything afterwards runs without
+model(s) and effort (default the profile default; effort default `medium`,
+both overridable), and the confirmation of the task baseline — goal and
+acceptance criteria from the linked issues and the MR description. There is
+no clean-versus-incremental question. Everything afterwards runs without
 user interaction until the final chat report.
 
-### D6. The background file (confirmed)
+### D6. Review profiles (confirmed)
 
-The manager authors `background.md` for the OCR run: the task goal,
-acceptance criteria, the essence of unresolved discussions, the CI status,
-and the compressed prior-review context. The runtime writes the file and
-enforces OCR's 8000-byte limit with disclosed cuts; the full GitLab context
-stays with the manager for the runbook.
+- Global `~/.reviewmatic/reviewers.json`; local `./.reviewmatic/reviewers.json`
+  found in the current directory, then the git root.
+- The local file overlays the global one: a matching alias replaces, new
+  aliases add, and the local `default` wins.
+- Contents: `default` plus `reviewers[]` with `alias`, `provider`, `model`,
+  and `effort`. No secrets.
+- The skill never reads `~/.opencodereview/config.json`. Provider names may
+  be validated with `ocr llm providers`, which prints built-in providers
+  without secrets; custom providers and model names come from the profile.
+- Startup: with a profile, its aliases are offered (multi-select, one by
+  default); without one, OCR's configured default or a one-off
+  provider/model, with an offer to save it to the profile.
+- Several selected aliases run as parallel `ocr review` processes, each with
+  its own `--output`; the manager merges the results.
+- The profile is created explicitly by the user or a setup command; no
+  secrets are ever written.
 
-### D7. Publication through draft notes (confirmed)
+### D7. Background file (confirmed)
 
-The runbook ends with one `sh` block of non-interactive `glab api` calls
-that create GitLab draft notes — positioned diff drafts where a position
-derives from the finding and the exact base/head, general MR drafts
-otherwise. No publish command exists. The human opens the MR in the GitLab
-UI, edits the drafts, and submits the review there. The runbook carries each
-finding's essence, severity, and location — not the full publication bodies,
-which the human checks in the UI.
+The manager authors `background.md`: the task goal, acceptance criteria, the
+essence of unresolved discussions, the CI status, and the compressed
+prior-review context. The runtime enforces OCR's 8000-byte limit with
+disclosed cuts; the full GitLab context stays with the manager for the
+runbook.
 
-### D8. Runbook: keep the shape, listed changes only (confirmed; two items proposed)
+### D8. Reply voice and thread replies (confirmed)
 
-Keep the current runbook format. Changes:
+- A new shared `shared/references/discussion-replies.md` is materialized into
+  the skill. It requires: reading the whole thread and the MR context;
+  answering the latest relevant point first, then adding only new
+  information; writing from the authenticated user's first person and
+  factual role; not narrating the user in the third person or attributing
+  actions, decisions, or promises they did not make; staying on the
+  discussion's subject; no code suggestions; no invented reactions;
+  addressing the participant naturally without forcing a pronoun; preserving
+  exact tokens.
+- `clarity-rules.md` is materialized and applied for plain language.
+- `humanize-patterns.md` is materialized in full and bundled, so no other
+  skill is required. The fast path reads `discussion-replies.md` and
+  `clarity-rules.md`; the full catalog is available for an optional final
+  editing pass, not required for every reply.
+- Open discussions: all are processed; a substantive reply is drafted where
+  one is needed.
+- Closed discussions: a reply is drafted only when the problem is still
+  relevant on the current head; it is paired with a reopen. Otherwise no
+  action.
+- Replies are published as draft notes, never directly.
+
+### D9. Runbook (confirmed)
+
+Keep the current format. Changes:
 
 - `Review panel` becomes `OCR runs` (provider, model, effort per run).
 - `Arbitration verdicts` appears only when several runs were merged.
 - `Local fixes` is removed with the local mode.
-- `Manual publication preflight` becomes the draft-note block (D7).
+- `Manual publication preflight` becomes the draft-note block (D10).
 - `Previous findings` is fed by `ocr session compare`.
 - A `Task fulfillment` block is added: solves / partially / not, with
   evidence.
@@ -152,60 +198,82 @@ Keep the current runbook format. Changes:
 - `Project labels` is removed.
 - `MR metadata` — the five-field recommendation and the auto-mode proposal
   comment — is removed.
-- (proposed) `Architecture assessment` stays as one manager-written
-  paragraph.
-- (proposed) `Checks` stays simplified: pipeline status, failed jobs one
-  line each, what the OCR runs covered, what stayed unverified — deep
-  per-job trace classification is dropped.
+- `Architecture assessment` stays as one manager-written paragraph.
+- `Checks` is simplified: pipeline status, failed jobs one line each, what
+  the OCR runs covered, and what stayed unverified — no deep per-job trace
+  classification.
 
-### D9. Rename and scope cut (confirmed)
+### D10. Draft notes (confirmed)
+
+The runbook ends with one `sh` block of non-interactive `glab api` calls that
+create GitLab draft notes — positioned diff drafts where a position derives
+from the finding and the exact base/head, general MR drafts otherwise; thread
+replies use `in_reply_to_discussion_id` where GitLab supports it. The block
+starts with one head check against the reviewed head and stops on a mismatch.
+No publish command exists. The human opens the MR in the GitLab UI, edits the
+drafts, and submits the review there. The runbook carries each finding's
+essence, severity, and location — not the full bodies.
+
+### D11. Chat report (confirmed)
+
+The final chat report describes the process only: what was collected and what
+failed; each OCR run (alias, provider, model, effort, parallel or serial,
+duration, exit code, findings count); the merge result when several runs were
+used; limitations (background cuts, unavailable CI traces); the runbook path
+and the draft block path; the next step. No MR verdict or assessment in chat.
+
+### D12. Rename and scope cut (confirmed)
 
 The skill is renamed `code-review` → `mr-review`; the local WIP mode is
 removed. The rename touches the skill directory, `SKILL.source.md`,
 `shared/manifest.json`, `shared/skill-relations.json`, the reviewmatic
-profile and XDG paths, artifact type names, the contract test,
+profile paths, artifact type names, the contract test,
 `docs/reference/code-review.md` with its Russian mirror, the skill catalog,
 and the host command. The OpenSpec change directory keeps its name
 (`spec-code-review`).
 
-### D10. The runtime is a helper, never a judge (confirmed)
+### D13. The runtime is a helper, never a judge (confirmed)
 
 The runtime keeps only mechanical guarantees: complete read-only collection,
 exact refs, the background-file limit, freshness, redaction, no remote
-mutations, and draft-note command generation. It does not validate semantic
-content, runs no stage machine, and never blocks on prose. Its command
-surface is derived from these duties — collect, background, drafts,
-revalidate, runtime-info; the exact names are an implementation detail.
+mutations, profile loading, and draft-note command generation. It does not
+validate semantic content, runs no stage machine, and never blocks on prose.
+Its command surface is derived from these duties — collect, background,
+drafts, revalidate, runtime-info; the exact names are an implementation
+detail.
 
 ## Risks / Trade-offs
 
 - [The 8000-byte background starves context] → prioritized compression with
   disclosed cuts; task and acceptance criteria first; the manager keeps the
   full context for the runbook.
-- [`ocr` output drift across versions] → pin the version in
-  `references/requirements.json` like the runtime pin; tolerant parsing with
-  fixtures.
+- [`ocr` output drift across versions] → minimum version 1.13.6 in
+  `requirements.json`; tolerant parsing with fixtures.
 - [The manager quietly becomes a second reviewer] → D3's never-list;
   findings originate only from OCR runs.
-- [Sessions live per host under `~/.opencodereview`] → compare needs the
-  same host; the runbook's compressed context travels without it.
+- [Sessions live per host under `~/.opencodereview`] → compare needs the same
+  host; the runbook's compressed context travels without it.
 - [Draft notes need a recent GitLab] → capability check at collection;
   fallback to general drafts, never to direct publishing.
 - [`session compare` heuristics mis-group findings] → the grouping is
   advisory context in the runbook; verdicts stand on the current run.
+- [Bundling the 18 KB humanize catalog grows the archive] → it is a
+  reference read only on the optional final pass; the fast path reads the
+  compact `discussion-replies.md` and `clarity-rules.md`.
+- [Profile overlay surprises] → local wins by alias and default; the
+  effective profile is printed at startup.
 - [The rename misses a coupled surface] → a dedicated task with a grep sweep
   and the contract test updated in the same change.
 
-## Open Questions
+## Implementation notes
 
-1. The manager boundary in D3 — confirm the never-list, especially that a
-   suspicion buys one more OCR run instead of a manager finding.
-2. The two proposed runbook items in D8: the architecture paragraph and the
-   simplified checks.
-3. Model selection detail: default to `ocr`'s configured provider/model and
-   offer a manual override plus an optional second run — or list candidates?
-   `ocr config` is interactive and has no list command.
-4. OCR version pinning policy: an exact version in requirements.json versus
-   a minimum.
-5. Whether to expose `--effort` in the startup round or fix it (default
-   medium).
+- GitLab draft notes must be verified against the target GitLab version;
+  `in_reply_to_discussion_id` is used where supported, otherwise a general
+  draft note.
+- OCR minimum version: 1.13.6, the tested floor.
+- Profile discovery: the current directory, then the git root; the first
+  local file overlays the global one.
+- The shared references are materialized through `shared/manifest.json`;
+  `discussion-replies.md` is new, `humanize-patterns.md` and
+  `clarity-rules.md` already exist.
+- The runtime's exact command names are chosen during implementation.
