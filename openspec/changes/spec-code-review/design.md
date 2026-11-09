@@ -1,8 +1,8 @@
 # Design
 
-> Draft capture from the owner's exploration on 2026-11-09. Not final: the
-> confirmed decisions below are settled; the open questions at the end block
-> the capability spec and the task breakdown.
+> Capture after the OCR-engine round, 2026-11-09. Still not final. Decisions
+> are marked (confirmed); the manager boundary in D3 and two runbook items in
+> D8 are (proposed) pending the owner's confirmation.
 
 ## Context
 
@@ -16,166 +16,196 @@ contract test in `apps/reviewmatic/tests/test_skill_contract.py` pins the
 runtime command surface, the skill texts, and the documentation map to each
 other.
 
-Parts of the current contract that the new boundary touches directly:
+The engine decision reverses the runtime's drift. The owner's original goal
+was a helper that saves model time and tokens by collecting review context
+once; the runtime instead became a judge of the model's work — stages,
+schemas, receipts, digest bindings, refusals. The rework keeps only the
+mechanical guarantees.
 
-- `references/context-package.md` seeds `solves-original-problem` for
-  critics. It is the fulfillment question, so it stays and moves first.
-- `references/review-panel.md` makes the arbitrator weigh those answers. That
-  is fulfillment, not task assessment, so it stays in principle.
-- `references/necessity-doctrine.md` and
-  `references/architecture-checklist.md` mix task necessity with
-  implementation review. The necessity half is outside the skill; the
-  fulfillment half stays.
-- `references/run-path.md` treats `--incremental off` as an explicit opt-out
-  only. Clean and incremental runs are both first-class in the new model.
-- `apps/reviewmatic/README.md` says `--repo-root` is optional with a managed
-  clone fallback, while `review_worktree.py:474` requires a checkout. The
-  README is stale.
-- OpenSpec is not mentioned anywhere in `skills/code-review/` or
-  `apps/reviewmatic/src/`. Related GitLab issues are collected as
-  `iid`/`title`/`state`/`web_url` only (`context.py:852`), which is thinner
-  than the task context the review needs.
+The external `ocr` CLI (OpenCodeReview; v1.13.6 is installed here) provides
+the review engine: `ocr review --provider/--model/--effort
+low|medium|high --background-file <md> --format json --audience agent
+--from/--to/--repo/--output`, sessions persisted under
+`~/.opencodereview/sessions/` with `ocr session
+list/show/comments/compare/export`, `ocr review --resume <id>`, and an
+8000-byte background-file limit. GitLab draft notes provide the publication
+flow: commands create drafts, the human edits and publishes in the web UI.
+
+Two known defects stay on the fix list: `apps/reviewmatic/README.md` claims
+an optional `--repo-root` with a managed clone fallback while
+`review_worktree.py:474` requires a checkout, and OpenSpec is mentioned
+nowhere in `skills/code-review/` or `apps/reviewmatic/src/` — moot for now,
+because OpenSpec is out of scope for this change.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
 - One central question: does the change solve the task it was made for?
-- The task definition is an input; the skill does not re-assess the task.
-- The human confirms the review baseline before assessment.
-- Doubts in the baseline are explicit, separate from code findings, and
-  never silently resolved.
-- Clean and incremental runs are first-class and explicitly selected.
-- A human-focused runbook; no autonomous remote actions.
+- Identical behavior on opencode, codex, and claude: the review engine is an
+  external CLI, not host-specific subagents.
+- One question round at the start, then fully autonomous until the report.
+- The runbook keeps its current shape, with only the changes listed in D8.
+- The human publishes through GitLab draft notes in the web UI.
+- The runtime is a helper: it assembles context and checks mechanical facts;
+  it never judges content.
 
 **Non-Goals:**
 
-- Triage, planning, decomposition, and specification authoring.
-- Deciding the necessity, priority, or product scope of the task.
-- Posting or publishing anything automatically.
-- Reconstructing a full OpenSpec change when the project has none.
-- Release policy, SemVer, and labels as default review content. They may
-  return as an optional block, not as the center.
+- Task assessment: necessity, priority, triage, planning, spec authoring.
+- OpenSpec integration — out of scope for this change; may return later.
+- Local WIP review — removed together with the rename to `mr-review`.
+- In-house critics, arbitrator receipts, and the incremental state machine —
+  replaced by OCR runs and OCR sessions.
+- Autonomous publication of anything.
 
 ## Decisions
 
-### D1. Fulfillment is the center; the task definition is input (confirmed)
+### D1. Fulfillment is the center (confirmed)
 
 `code-review` answers whether the implementation fulfills the agreed task.
-The definition of that task comes from upstream and is taken as given. The
-skill may flag that the definition is ambiguous, contradictory, or
-insufficient to judge fulfillment; it may propose a targeted edit to an
-existing change document; it does not re-run triage or planning, and it does
-not author a new specification.
+The definition of that task comes from upstream — linked GitLab issues, the
+MR description, and human answers — and is taken as given. The seeded
+`solves-original-problem` question is the fulfillment question and stays
+first. If the implementation exposes a gap or contradiction in the task
+statement, the review records it as a doubt with the possible readings and
+who decides; it does not re-plan or author a specification.
 
-The seeded `solves-original-problem` question is the fulfillment question,
-not a task-level question. It stays and becomes the first question of the
-review.
+### D2. `ocr` is the only review engine (confirmed)
 
-### D2. Three levels (confirmed)
+The OpenCodeReview CLI reviews the diff. It is a declared dependency on the
+same level as `glab` and lands in `references/requirements.json`. The
+in-house critic/receipt/arbitration machinery and the OCR-as-panel-member
+path are removed. Depth is chosen by runs: one run by default, more runs
+with different `--provider/--model/--effort`. Findings come only from OCR
+runs — never from the manager.
 
-```text
-[outside the skill]
-  task assessment -> agreed baseline (goal, criteria, constraints, decisions)
-                              |
-                              v
-[inside the skill]
-  1. load the baseline
-  2. confirm the review criteria with the human
-  3. answer the fulfillment question with evidence
-  4. mark implementation divergences and risks
-  5. record baseline doubts, with targeted document edits when warranted
-  6. produce the runbook
-```
+### D3. The main session is the manager (proposed boundary)
 
-### D3. Baseline loading and doubts (confirmed)
+The manager: collects context (fast, read-only); asks the single startup
+round; authors the OCR background; starts the OCR run(s); when several runs
+were selected, merges duplicates and conflicts with recorded reasons — the
+arbitration, surfaced in the runbook; when a previous session exists for the
+MR, runs `ocr session compare old new` and feeds the grouping into the
+runbook; synthesizes the fulfillment verdict, the SemVer assessment, a short
+architecture paragraph, and the checks and limitations; writes the runbook
+and the draft-note block; reports to chat and stops.
 
-- **OpenSpec present:** locate `openspec/changes/<id>` in the reviewed
-  checkout, preferring changed paths; ask once when the choice is
-  ambiguous. Read `proposal.md`, `design.md`, and `tasks.md`. External
-  OpenSpec stores are outside the initial scope.
-- **No OpenSpec:** collect the available task context — linked issues, MR
-  description, and human answers. Record goal and acceptance criteria as
-  known, unknown, or assumed. If the baseline cannot support the
-  fulfillment answer, record `not_verified`, name the missing input, and
-  recommend the task/spec skill or a human decision. Do not author a spec.
-- **Baseline doubt:** one row naming what is ambiguous, the possible
-  readings, which reading the implementation followed, and who decides. A
-  doubt is never silently resolved and never becomes a code finding.
+The manager never: hunts for defects in the diff itself; adds its own code
+findings — a suspicion goes to questions or limitations without severity, or
+buys one more pointed OCR run; silently drops or downgrades an OCR finding —
+the reason is recorded (duplicate, out of scope, contradicts the confirmed
+task baseline); publishes anything; substitutes itself for a failed OCR run
+— it reports the failure and stops.
 
-### D4. Keep, demote, cut (direction, not final)
+### D4. Incrementality is OCR sessions (confirmed)
 
-| Current capability | Direction | Reason |
-| - | - | - |
-| `glab` GET collection, exact snapshot, freshness | keep | routine the human should not repeat |
-| Baseline loading (OpenSpec change, issues, MR context) | keep, extend | the fulfillment question needs it |
-| Context package: goal, criteria, constraints, questions | keep | the baseline for the review |
-| `solves-original-problem` | keep, promote | the central question |
-| Implementation-vs-intent assessment | keep, main work | the review itself |
-| Human runbook | keep, reshape | output for a human decision |
-| Manual publication | keep | no autonomous remote actions |
-| Local WIP mode | demote | the primary scenario is an MR |
-| Independent second opinion | demote, optional | the human checkpoint matters more |
-| Profiles, session modes, `fast`/`normal` | demote | the mode matrix is part of the weight |
-| SemVer, release policy, labels | demote to optional | not fulfillment |
-| Architecture/simplification criteria | demote | line-level detail the human wants to delegate |
-| Panel poll and mandatory multi-critic arbitration | cut from default | machine concern, not a human decision |
-| OCR critic | cut | external CLI with narrow value |
-| Suggestions, patches, thread replies as default | cut from default | the owner asked for problem marks, not fixes |
-| Decision/render/prose pipeline | cut | one authored runbook replaces it |
-| Repair paths and legacy v2 commands | cut from the primary surface | one flow instead of three |
-| 37 public subcommands | reduce to roughly six | collect, prepare, confirm, assess, runbook, refresh |
+Every run persists a session. A follow-up review of the same MR is a fresh
+run over the current range plus `ocr session compare` against the previous
+session: new / persisting / resolved / not-reviewed, matched on path,
+category, and the offending snippet. The reviewer always sees current code —
+no anchoring on old findings and no ledger reconciliation. `--resume` serves
+interrupted runs. The in-house incremental state machine is removed, and the
+clean-versus-incremental startup question disappears: compare runs
+automatically when a previous session exists. A compressed prior-review
+summary — verdict, accepted risks, open questions — still rides in the
+background file as context, not as a checklist.
 
-### D5. Clean and incremental are explicit (confirmed direction)
+### D5. One question round, then autonomous (confirmed)
 
-- `--fresh` ignores prior review context.
-- `--incremental` reuses the prior runbook, answers, and confirmed
-  baseline; it always re-reads the change documents and re-confirms the
-  baseline when they changed.
-- No auto mode decides this silently.
+After the read-only collection the manager asks exactly once: the OCR
+model and effort (default: the configured one; optionally a second run) and
+the confirmation of the task baseline — goal and acceptance criteria from
+the linked issues and the MR description. Everything afterwards runs without
+user interaction until the final chat report.
 
-### D6. Output is a human runbook, not a publication plan (confirmed direction)
+### D6. The background file (confirmed)
 
-The runbook is organized around what the human must decide and ask, not
-around a list of machine actions:
+The manager authors `background.md` for the OCR run: the task goal,
+acceptance criteria, the essence of unresolved discussions, the CI status,
+and the compressed prior-review context. The runtime writes the file and
+enforces OCR's 8000-byte limit with disclosed cuts; the full GitLab context
+stays with the manager for the runbook.
 
-1. task baseline and the criteria the review was judged against;
-2. fulfillment verdict: fully, partially, or not solved;
-3. baseline doubts, with possible readings and the deciding party;
-4. implementation divergences and risks, with `file:line`, no suggestions;
-5. questions for the author or the human;
-6. an optional metadata/release block when the project needs one.
+### D7. Publication through draft notes (confirmed)
 
-Exact refs stay private. Publication remains manual.
+The runbook ends with one `sh` block of non-interactive `glab api` calls
+that create GitLab draft notes — positioned diff drafts where a position
+derives from the finding and the exact base/head, general MR drafts
+otherwise. No publish command exists. The human opens the MR in the GitLab
+UI, edits the drafts, and submits the review there. The runbook carries each
+finding's essence, severity, and location — not the full publication bodies,
+which the human checks in the UI.
+
+### D8. Runbook: keep the shape, listed changes only (confirmed; two items proposed)
+
+Keep the current runbook format. Changes:
+
+- `Review panel` becomes `OCR runs` (provider, model, effort per run).
+- `Arbitration verdicts` appears only when several runs were merged.
+- `Local fixes` is removed with the local mode.
+- `Manual publication preflight` becomes the draft-note block (D7).
+- `Previous findings` is fed by `ocr session compare`.
+- A `Task fulfillment` block is added: solves / partially / not, with
+  evidence.
+- `SemVer impact` stays as is.
+- `Project labels` is removed.
+- `MR metadata` — the five-field recommendation and the auto-mode proposal
+  comment — is removed.
+- (proposed) `Architecture assessment` stays as one manager-written
+  paragraph.
+- (proposed) `Checks` stays simplified: pipeline status, failed jobs one
+  line each, what the OCR runs covered, what stayed unverified — deep
+  per-job trace classification is dropped.
+
+### D9. Rename and scope cut (confirmed)
+
+The skill is renamed `code-review` → `mr-review`; the local WIP mode is
+removed. The rename touches the skill directory, `SKILL.source.md`,
+`shared/manifest.json`, `shared/skill-relations.json`, the reviewmatic
+profile and XDG paths, artifact type names, the contract test,
+`docs/reference/code-review.md` with its Russian mirror, the skill catalog,
+and the host command. The OpenSpec change directory keeps its name
+(`spec-code-review`).
+
+### D10. The runtime is a helper, never a judge (confirmed)
+
+The runtime keeps only mechanical guarantees: complete read-only collection,
+exact refs, the background-file limit, freshness, redaction, no remote
+mutations, and draft-note command generation. It does not validate semantic
+content, runs no stage machine, and never blocks on prose. Its command
+surface is derived from these duties — collect, background, drafts,
+revalidate, runtime-info; the exact names are an implementation detail.
 
 ## Risks / Trade-offs
 
-- [Cutting suggestions and patches reduces author utility] -> keep them as a
-  separate opt-in skill or a later block; do not bake them into the default.
-- [A narrow review misses task-level defects] -> baseline doubts are
-  first-class and always surfaced; the human decides.
-- [A thin runtime loses binding and freshness] -> keep exact snapshots,
-  digests, and freshness checks in the runtime; move only authoring out.
-- [The OpenSpec change may live outside the reviewed repository] -> ask once;
-  external stores are out of scope initially.
-- [The protocol becomes a megacombine again] -> one checkpoint and one
-  output; every retained feature must serve the fulfillment question.
+- [The 8000-byte background starves context] → prioritized compression with
+  disclosed cuts; task and acceptance criteria first; the manager keeps the
+  full context for the runbook.
+- [`ocr` output drift across versions] → pin the version in
+  `references/requirements.json` like the runtime pin; tolerant parsing with
+  fixtures.
+- [The manager quietly becomes a second reviewer] → D3's never-list;
+  findings originate only from OCR runs.
+- [Sessions live per host under `~/.opencodereview`] → compare needs the
+  same host; the runbook's compressed context travels without it.
+- [Draft notes need a recent GitLab] → capability check at collection;
+  fallback to general drafts, never to direct publishing.
+- [`session compare` heuristics mis-group findings] → the grouping is
+  advisory context in the runbook; verdicts stand on the current run.
+- [The rename misses a coupled surface] → a dedicated task with a grep sweep
+  and the contract test updated in the same change.
 
 ## Open Questions
 
-These change the approach and the task breakdown, so they block `tasks.md`
-and the capability spec. Recommendations are defaults, not decisions.
-
-1. **Runtime role.** A) thin evidence/binder runtime; B) trimmed workflow
-   engine; C) no runtime, `glab` and `git` only. Recommendation: A.
-2. **Independent review depth.** A) one reviewer plus an optional second
-   opinion; B) panel of two plus an arbitrator by default; C) none.
-   Recommendation: A.
-3. **Local WIP mode.** A) keep a thin local lane later; B) a separate skill;
-   C) drop it. Recommendation: A.
-4. **Final cut list.** Confirm the cuts in D4, in particular the panel, OCR,
-   suggestions/patches, SemVer/labels, profiles, session modes, and the
-   repair/legacy surfaces.
-5. **Incremental reuse.** A) prior runbook, answers, and baseline only; code
-   is always reassessed against the current snapshot; B) also reuse prior
-   code analysis when the snapshot is compatible. Recommendation: A.
+1. The manager boundary in D3 — confirm the never-list, especially that a
+   suspicion buys one more OCR run instead of a manager finding.
+2. The two proposed runbook items in D8: the architecture paragraph and the
+   simplified checks.
+3. Model selection detail: default to `ocr`'s configured provider/model and
+   offer a manual override plus an optional second run — or list candidates?
+   `ocr config` is interactive and has no list command.
+4. OCR version pinning policy: an exact version in requirements.json versus
+   a minimum.
+5. Whether to expose `--effort` in the startup round or fix it (default
+   medium).
