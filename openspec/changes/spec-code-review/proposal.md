@@ -25,7 +25,7 @@ Reframe the skill around one central question: **does this change solve the task
 
 ### New Capabilities
 
-None yet — the capability spec is drafted from `design.md`.
+- `mr-review` — the exhaustive merge-request review contract: task boundary, OCR engine, manager, profiles, runbook, draft notes, and replies.
 
 ### Modified Capabilities
 
