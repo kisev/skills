@@ -1,30 +1,43 @@
 {
-  "schema": "eval-scenario/v1",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "578b3d1d473fc0a77d4b3c7a213780e88d434166e83b0a9f4c1d2c138e7d7e2c",
+  "expected": {
+    "not_selected": ["skill:mr-review"],
+    "selected": ["skill:code-explain"]
+  },
+  "host": "any",
   "id": "stage17.code-explain.history",
-  "revision": 1,
+  "input": {
+    "fixture": {
+      "selected": ["skill:code-explain"]
+    },
+    "prompt": "\u041f\u043e\u043a\u0430\u0436\u0438 \u0438\u0441\u0442\u043e\u0440\u0438\u044e \u0438 \u044d\u0432\u043e\u043b\u044e\u0446\u0438\u044e \u0444\u0430\u0439\u043b\u043e\u0432 \u0431\u0435\u0437 verdict."
+  },
+  "invariants": [
+    {
+      "contains": "chronology",
+      "id": "history",
+      "path": "skills/code-explain/references/workflow.md"
+    },
+    {
+      "contains": "no findings or verdict",
+      "id": "no-verdict",
+      "path": "skills/code-explain/references/workflow.md"
+    }
+  ],
   "kind": "trigger",
   "locale": "ru",
   "pair_id": "stage17.code-explain.history",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Покажи историю и эволюцию файлов без verdict.",
-    "fixture": { "selected": ["skill:code-explain"] }
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
   },
-  "expected": { "selected": ["skill:code-explain"], "not_selected": ["skill:code-review"] },
-  "invariants": [
-    {
-      "id": "history",
-      "path": "skills/code-explain/references/workflow.md",
-      "contains": "chronology"
-    },
-    {
-      "id": "no-verdict",
-      "path": "skills/code-explain/references/workflow.md",
-      "contains": "no findings or verdict"
-    }
-  ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "9f076d9a4ddea5a1d706e13c02c6909e854ba507568733d5fb09f1ee7f85f88a"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

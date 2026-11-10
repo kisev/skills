@@ -1,0 +1,7 @@
+{
+  "engine": "codex",
+  "engine_profile": "live-runs",
+  "budgets": {
+    "timeout_seconds": 480
+  }
+}

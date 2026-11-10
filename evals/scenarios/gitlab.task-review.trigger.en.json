@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.task-review.trigger.en",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "f9e108f1ad630cc423dbd7fab560b190906efb65a0c1d431ee26b2b1661a3346",
+  "expected": {
+    "not_selected": ["skill:mr-review"],
+    "selected": ["skill:task-review"]
+  },
   "host": "any",
+  "id": "gitlab.task-review.trigger.en",
   "input": {
-    "prompt": "Review the quality of an explicit work item.",
     "fixture": {
       "selected": ["skill:task-review"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:task-review"],
-    "not_selected": ["skill:code-review"]
+    },
+    "prompt": "Review the quality of an explicit work item."
   },
   "invariants": [
     {
+      "contains": "quality verdict",
       "id": "metadata-verdict",
-      "path": "skills/task-review/references/workflow.md",
-      "contains": "quality verdict"
+      "path": "skills/task-review/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "gitlab.task-review.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "50de462f385a19711d60806b31bca26f9eea5e9c5c03e4d234be2397b02dac91",
-  "locale": "en",
-  "pair_id": "gitlab.task-review.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

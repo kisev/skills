@@ -881,7 +881,6 @@ def test_backend_run_records_deferred_browser_without_loading_it(
         "pipeline",
         "review_comments",
         "preparation",
-        "review_plan",
     ):
         monkeypatch.setattr(checks, name, lambda *_args: None)
     modules = []
@@ -898,34 +897,6 @@ def test_backend_run_records_deferred_browser_without_loading_it(
     assert report["coverage"]["deferred"]
     assert report["coverage"]["mandatory_remaining"]
     assert "browser" not in {entry["name"] for entry in report["scenarios"]}
-    assert "gitlab_same_file_checks" in modules
-
-
-@pytest.mark.parametrize(
-    "suggestions", [[], [{"id": True, "applied": False}], [{"id": 1, "applied": True}]]
-)
-def test_suggestion_application_rejects_missing_invalid_or_applied_ids(
-    local: Any, monkeypatch: pytest.MonkeyPatch, suggestions: list[dict[str, Any]]
-) -> None:
-    from tests.integration.gitlab.scripts import same_file_checks
-
-    monkeypatch.setattr(
-        local,
-        "request",
-        lambda *_args: {"notes": [{"body": "Harness grouped first", "suggestions": suggestions}]},
-    )
-    monkeypatch.setattr(
-        same_file_checks,
-        "command",
-        lambda *_args, **_kwargs: pytest.fail("Invalid suggestion was dispatched"),
-    )
-    f = {
-        "prefix": "/projects/7",
-        "mr": {"iid": 2},
-        "grouped_threads": [{"id": "thread", "notes": [{"body": "Harness grouped first"}]}],
-    }
-    with pytest.raises(RuntimeError, match="unique pending"):
-        same_file_checks.apply_api(local, f, "Harness grouped first", local.reports, 0)
 
 
 @pytest.mark.parametrize("foreign", [True, False])

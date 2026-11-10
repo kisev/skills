@@ -1,30 +1,43 @@
 {
-  "schema": "eval-scenario/v1",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "0e9e99a20ec684aa0f0dcd76056074570cd47a31ffa0462affd58d87630fedc3",
+  "expected": {
+    "not_selected": ["skill:docs-prepare", "skill:humanize"],
+    "selected": []
+  },
+  "host": "any",
   "id": "skill.core-contracts.near-miss.en",
-  "revision": 2,
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "Just rephrase text without checking contracts or planning changes."
+  },
+  "invariants": [
+    {
+      "contains": "any human language",
+      "id": "humanize-language",
+      "path": "skills/humanize/references/workflow.md"
+    },
+    {
+      "contains": "write it directly with atomic replacement",
+      "id": "docs-plan",
+      "path": "skills/docs-prepare/references/workflow.md"
+    }
+  ],
   "kind": "near-miss",
   "locale": "en",
   "pair_id": "skill.core-contracts.near-miss",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Just rephrase text without checking contracts or planning changes.",
-    "fixture": { "selected": [] }
+  "revision": 2,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
   },
-  "expected": { "selected": [], "not_selected": ["skill:docs-prepare", "skill:humanize"] },
-  "invariants": [
-    {
-      "id": "humanize-language",
-      "path": "skills/humanize/references/workflow.md",
-      "contains": "any human language"
-    },
-    {
-      "id": "docs-plan",
-      "path": "skills/docs-prepare/references/workflow.md",
-      "contains": "write it directly with atomic replacement"
-    }
-  ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "0e9e99a20ec684aa0f0dcd76056074570cd47a31ffa0462affd58d87630fedc3"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

@@ -1,53 +1,61 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "spec-manage.update-language-preservation",
-  "revision": 1,
-  "locale": "neutral",
-  "pair_id": null,
-  "kind": "deterministic",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "0de02fb37f02447c651c15999f7a1b596e2ce79f51f06c9ec7b3fdcd7c504b25",
+  "expected": {
+    "mutation_boundary": "specs-only",
+    "not_selected": [],
+    "selected": ["skill:spec-manage"]
+  },
   "host": "any",
+  "id": "spec-manage.update-language-preservation",
   "input": {
-    "prompt": "Verify that spec-update preserves the declared canonical language independently from the request language.",
     "fixture": {
-      "selected": ["skill:spec-manage"],
       "cases": [
         {
-          "id": "matching-request-language",
           "canonical_language": "English",
+          "id": "matching-request-language",
           "request": "Update the interface requirement."
         },
         {
-          "id": "different-request-language",
           "canonical_language": "English",
-          "request": "Обнови требование интерфейса."
+          "id": "different-request-language",
+          "request": "\u041e\u0431\u043d\u043e\u0432\u0438 \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u0435 \u0438\u043d\u0442\u0435\u0440\u0444\u0435\u0439\u0441\u0430."
         },
         {
-          "id": "mixed-request-language",
           "canonical_language": "English",
-          "request": "Update требование для CLI output."
+          "id": "mixed-request-language",
+          "request": "Update \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u0435 \u0434\u043b\u044f CLI output."
         }
-      ]
-    }
-  },
-  "expected": {
-    "selected": ["skill:spec-manage"],
-    "not_selected": [],
-    "mutation_boundary": "specs-only"
+      ],
+      "selected": ["skill:spec-manage"]
+    },
+    "prompt": "Verify that spec-update preserves the declared canonical language independently from the request language."
   },
   "invariants": [
     {
+      "contains": "same-language, different-language, or\nmixed-language user request does not override the canonical language",
       "id": "request-language-does-not-override",
-      "path": "skills/spec-manage/references/canonical-contract.md",
-      "contains": "same-language, different-language, or\nmixed-language user request does not override the canonical language"
+      "path": "skills/spec-manage/references/canonical-contract.md"
     },
     {
+      "contains": "Never select the canonical language from the current request",
       "id": "update-preserves-tree-language",
-      "path": "skills/spec-manage/references/workflow.md",
-      "contains": "Never select the canonical language from the current request"
+      "path": "skills/spec-manage/references/workflow.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "0de02fb37f02447c651c15999f7a1b596e2ce79f51f06c9ec7b3fdcd7c504b25"
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

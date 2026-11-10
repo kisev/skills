@@ -143,24 +143,6 @@ def git(log: list[dict[str, Any]], cwd: Path, env: dict[str, str], *args: str) -
     ).stdout.strip()
 
 
-def init_repo(
-    log: list[dict[str, Any]], path: Path, env: dict[str, str], files: dict[str, str]
-) -> str:
-    path.mkdir(parents=True)
-    git(log, path, env, "init", "--quiet", "--initial-branch=main")
-    git(log, path, env, "config", "user.name", "Reviewmatic smoke")
-    git(log, path, env, "config", "user.email", "reviewmatic-smoke@example.invalid")
-    # These commits exist only in disposable smoke repositories, not project history.
-    git(log, path, env, "config", "commit.gpgsign", "false")
-    for relative, content in files.items():
-        destination = path / relative
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(content, encoding="utf-8")
-    git(log, path, env, "add", ".")
-    git(log, path, env, "commit", "--quiet", "-m", "smoke baseline")
-    return git(log, path, env, "rev-parse", "HEAD")
-
-
 def copy_application(snapshot: Path) -> None:
     destination = snapshot / "apps" / "reviewmatic"
     destination.parent.mkdir(parents=True)
@@ -193,107 +175,109 @@ def verify_source_continuation(
     uvx: str,
     environment: dict[str, str],
 ) -> None:
-    checkout = temp / "local-wip"
-    init_repo(log, checkout, environment, {"review.txt": "before\n"})
-    (checkout / "review.txt").write_text("before\nchanged\n", encoding="utf-8")
-    prepared = json.loads(
+    """Exercise the helper surface from the selected Git source."""
+    info = json.loads(
         run(
             log,
-            "uvx prepare-local",
+            "uvx runtime-info",
+            uvx_command(uvx, source, ["runtime-info"]),
+            temp,
+            environment,
+        ).stdout
+    )
+    if info.get("status") != "ok" or info.get("external_mutations") is not False:
+        raise SmokeError(f"runtime-info did not complete: {json.dumps(info)}")
+
+    profile = json.loads(
+        run(
+            log,
+            "uvx profiles",
+            uvx_command(uvx, source, ["profiles"]),
+            temp,
+            environment,
+        ).stdout
+    )
+    if profile.get("status") != "missing":
+        raise SmokeError(f"the isolated profile was not missing: {json.dumps(profile)}")
+
+    background_input = temp / "background.json"
+    background_input.write_text(
+        json.dumps(
+            {
+                "task": {"goal": "Verify the helper surface.", "acceptance_criteria": ["Runs."]},
+                "sections": [{"title": "Context", "body": "The selected Git ref runs."}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    background_output = temp / "background.md"
+    assembled = json.loads(
+        run(
+            log,
+            "uvx background",
             uvx_command(
                 uvx,
                 source,
-                ["prepare-local", "--repo-root", str(checkout), "--incremental", "auto", "--json"],
+                [
+                    "background",
+                    "--input",
+                    str(background_input),
+                    "--output",
+                    str(background_output),
+                ],
             ),
             temp,
             environment,
         ).stdout
     )
-    if prepared.get("status") != "ok":
-        raise SmokeError(f"prepare-local did not complete: {json.dumps(prepared)}")
-    review = prepared["review"]
-    package = review["context_package"]
-    command = shlex.split(package["record_command"])
-    if not command or command[0] != "reviewmatic":
-        raise SmokeError("prepare-local returned an invalid continuation command")
-    template_path = Path(package["template_path"])
-    template = json.loads(template_path.read_text(encoding="utf-8"))
-    template["goal"] = {"status": "known", "text": "Verify the selected Git runtime."}
-    template["acceptance_criteria"] = {
-        "status": "known",
-        "items": ["The returned continuation runs from the selected Git ref."],
-    }
-    template_path.write_text(json.dumps(template, ensure_ascii=False, indent=2) + "\n")
-    continued = json.loads(
+    if assembled.get("status") != "ok" or not background_output.is_file():
+        raise SmokeError(f"background did not complete: {json.dumps(assembled)}")
+
+    draft_input = temp / "drafts.json"
+    draft_input.write_text(
+        json.dumps(
+            {
+                "hostname": "gitlab.example",
+                "project_id": 7,
+                "mr_iid": 1,
+                "head_sha": "a" * 40,
+                "general_notes": ["A smoke draft."],
+            }
+        ),
+        encoding="utf-8",
+    )
+    draft_output = temp / "drafts.sh"
+    drafted = json.loads(
         run(
             log,
-            "uvx returned continuation",
-            uvx_command(uvx, source, [*command[1:], "--json"]),
+            "uvx drafts",
+            uvx_command(
+                uvx,
+                source,
+                ["drafts", "--input", str(draft_input), "--output", str(draft_output)],
+            ),
             temp,
             environment,
         ).stdout
     )
-    if continued.get("status") != "ok":
-        raise SmokeError(f"returned continuation failed: {json.dumps(continued)}")
+    block = draft_output.read_text(encoding="utf-8")
+    if drafted.get("status") != "ok" or "reviewed_head=" not in block:
+        raise SmokeError(f"drafts did not complete: {json.dumps(drafted)}")
+    if "publish" in block.lower():
+        raise SmokeError("the draft block must not carry a publish command")
 
-    request_log = temp / "fake-glab.jsonl"
-    fake_glab = Path(environment["PATH"].split(os.pathsep, maxsplit=1)[0]) / "glab"
-    fake_glab.write_text(
-        "#!/usr/bin/env python3\n"
-        "import json, os, sys\n"
-        "args = sys.argv[1:]\n"
-        "host = args[args.index('--hostname') + 1]\n"
-        "method_index = args.index('--method')\n"
-        "method, endpoint = args[method_index + 1:method_index + 3]\n"
-        "with open(os.environ['FAKE_GLAB_LOG'], 'a', encoding='utf-8') as log:\n"
-        "    log.write(json.dumps({'hostname': host, 'method': method, 'endpoint': endpoint}) + '\\n')\n"
-        "print('{}')\n",
-        encoding="utf-8",
-    )
-    fake_glab.chmod(0o700)
-    marker_env = {**environment, "FAKE_GLAB_LOG": str(request_log)}
-    binding = "a" * 64
-    run(
-        log,
-        "uvx marker-run fake transport",
-        uvx_command(
-            uvx,
-            source,
-            [
-                "marker-run",
-                "--skill",
-                "code-review",
-                "--action",
-                "patch:install-smoke",
-                "--binding",
-                binding,
-                "--",
-                "glab",
-                "api",
-                "--hostname",
-                "gitlab.example",
-                "--method",
-                "POST",
-                "projects/7/merge_requests/1/discussions",
-            ],
-        ),
-        temp,
-        marker_env,
-    )
-    requests = [json.loads(line) for line in request_log.read_text(encoding="utf-8").splitlines()]
-    if requests != [
-        {
-            "hostname": "gitlab.example",
-            "method": "POST",
-            "endpoint": "projects/7/merge_requests/1/discussions",
-        }
-    ]:
-        raise SmokeError(f"fake transport target mismatch: {requests}")
-    marker_root = Path(environment["XDG_STATE_HOME"]) / "agent-skills" / "post-success" / "v1"
-    markers = list((marker_root / "markers").glob("*/*.json"))
-    if len(markers) != 1:
-        raise SmokeError(f"marker-run recorded {len(markers)} markers, expected one")
-    record(log, event="verified", label="Git continuation and marker block", markers=1)
+    for removed in ("run", "marker-run", "prepare-local", "record-critic"):
+        rejected = subprocess.run(
+            uvx_command(uvx, source, [removed]),
+            cwd=temp,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if rejected.returncode == 0:
+            raise SmokeError(f"the removed command still succeeds: {removed}")
+    record(log, event="verified", label="Git helper surface", commands=7)
 
 
 def check(log: list[dict[str, Any]]) -> None:

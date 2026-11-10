@@ -1,0 +1,15 @@
+{
+  "schema": "live-scenario/v1",
+  "skill": "mr-review",
+  "prompt": "prompt.txt",
+  "allowed_tools": ["Write", "Read"],
+  "variants": {
+    "default": {
+      "assertions": "assertions.json"
+    },
+    "no-guidance": {
+      "assertions": "assertions.json",
+      "install_skill": false
+    }
+  }
+}

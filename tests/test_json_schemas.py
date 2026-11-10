@@ -450,103 +450,12 @@ def artifact_instances() -> list[dict[str, Any]]:
             "head_sha": "c",
         },
     )
-    local_review = envelope(
-        "local_review_report",
-        {
-            "evidence_digest": DIGEST,
-            "previous_review_digest": None,
-            "mode": "full",
-            "context_package": {
-                "path": f"/tmp/portable-artifacts/artifacts/context_package/{DIGEST}.json",
-                "digest": DIGEST,
-            },
-            "question_answers": [
-                {
-                    "question_id": "q-renderer",
-                    "verdict": "confirmed",
-                    "evidence": "The staged diff only rewrites plain text values.",
-                    "run_id": "critic-run-1",
-                    "session_id": "critic-session-1",
-                    "context_digest": DIGEST,
-                }
-            ],
-            "question_verifications": [
-                {
-                    "question_id": "q-renderer",
-                    "original": {
-                        "run_id": "critic-run-1",
-                        "session_id": "critic-session-1",
-                        "verdict": "not_verified",
-                    },
-                    "verdict": "confirmed",
-                    "evidence": "The staged diff only rewrites plain text values.",
-                    "context_digest": DIGEST,
-                }
-            ],
-            "superseded_question_results": [
-                {
-                    "context_digest": DIGEST,
-                    "package_digest": DIGEST,
-                    "answers": [
-                        {
-                            "question_id": "q-renderer",
-                            "verdict": "not_verified",
-                            "reason": "The previous package asked a different subject.",
-                            "run_id": "critic-run-1",
-                            "session_id": "critic-session-1",
-                            "context_digest": DIGEST,
-                        }
-                    ],
-                    "verifications": [],
-                }
-            ],
-            "task": {
-                "goal": "Link plain text without modifying mixed Markdown.",
-                "acceptance_criteria": ["Plain references link."],
-                "constraints": [],
-                "accepted_risks": [],
-                "deferred": [],
-                "decision_evidence": "User chose plain-text linking.",
-            },
-            "task_change_reason": None,
-            "findings": [
-                {
-                    "id": "markdown-1",
-                    "severity": "low",
-                    "status": "open",
-                    "summary": "Mixed Markdown is modified.",
-                    "requirement": "Preserve mixed Markdown verbatim.",
-                    "scenario": "A user includes an issue reference in a Markdown table.",
-                    "evidence": "renderer('table #7') rewrites a protected value.",
-                    "consequence": "The generated table is corrupted.",
-                    "origin": "regression",
-                    "minimum_fix": "Keep non-plain-text values unchanged.",
-                    "blocking": True,
-                    "rationale": "A small correction restores the agreed behavior.",
-                    "decision_evidence": None,
-                    "reopen_reason": None,
-                }
-            ],
-            "checks": [
-                {
-                    "name": "Renderer acceptance cases",
-                    "status": "passed",
-                    "required": True,
-                    "evidence": "Plain text and protected input examples inspected.",
-                }
-            ],
-            "assessment": "A narrow renderer fix suffices.",
-            "verdict": "not_ready",
-            "external_mutations": False,
-        },
-    )
     return [
         evidence,
         inventory,
         publication,
         readiness,
         finalized,
-        local_review,
         context_package_mr,
         context_package_local,
     ]
@@ -584,7 +493,7 @@ def validate_shared_contract_instances() -> None:
         {
             "schema": "agent-skills/post-success-marker/v1",
             "marker_id": DIGEST,
-            "skill": "code-review",
+            "skill": "mr-prepare",
             "action_id": "finding:example:create",
             "binding_digest": DIGEST,
             "mutation_digest": DIGEST,
@@ -618,7 +527,6 @@ def validate_shared_contract_instances() -> None:
         "context_package",
         "evidence_snapshot",
         "finalize_report",
-        "local_review_report",
         "publication_plan",
         "release_inventory",
         "release_readiness",
@@ -626,69 +534,6 @@ def validate_shared_contract_instances() -> None:
     for instance in instances:
         artifact_validator.validate(instance)
         validate_v2_artifact(instance, instance["kind"])
-
-    # Code-review execution is owned by reviewmatic, not the retired Python profile.
-    critics: list[dict[str, Any]] = [
-        {
-            "schema": "portable-gitlab/critic-receipt/v2",
-            "evidence_digest": "a" * 64,
-            "run_id": f"critic-run-{index}",
-            "session_id": f"critic-session-{index}",
-            "findings": [],
-            "question_answers": [
-                {
-                    "question_id": "q-retry",
-                    "verdict": "confirmed" if index == 0 else "refuted",
-                    "evidence": "The exact head sets the idempotency key before write.",
-                    "context_digest": DIGEST,
-                }
-            ],
-            "external_mutations": False,
-        }
-        for index in range(2)
-    ]
-    critics.append(
-        {
-            "schema": "portable-gitlab/critic-receipt/v2",
-            "evidence_digest": "a" * 64,
-            "run_id": "ocr-run-1",
-            "session_id": "ocr-session-1",
-            "findings": [],
-            "question_answers": [],
-            "external_mutations": False,
-            "engine": "ocr",
-            "ocr": {
-                "provider": "openai",
-                "model": "gpt-x",
-                "terminal_state": "complete",
-                "comments": 2,
-            },
-        }
-    )
-    for receipt in [*critics, {**critics[2], "contributors": critics}]:
-        artifact_validator.validate(
-            {
-                "schema": "portable-gitlab/critic_receipt/v2",
-                "schema_version": 2,
-                "kind": "critic_receipt",
-                "created_at": "2026-10-01T00:00:00Z",
-                "payload": receipt,
-            }
-        )
-    # An aggregate contributor is a full receipt: an OCR contributor carries its
-    # engine metadata, and anything outside the receipt shape is rejected.
-    ocr_contributor = dict(critics[2])
-    ocr_contributor["engine"] = "model"
-    with pytest.raises(ValidationError):
-        artifact_validator.validate(
-            {
-                "schema": "portable-gitlab/critic_receipt/v2",
-                "schema_version": 2,
-                "kind": "critic_receipt",
-                "created_at": "2026-10-01T00:00:00Z",
-                "payload": {**critics[0], "contributors": [*critics[:2], ocr_contributor]},
-            }
-        )
 
     # The meaningful-context binding is optional in the canonical schema so
     # historical artifacts stay readable, but any present binding must be a
@@ -698,9 +543,6 @@ def validate_shared_contract_instances() -> None:
         for instance in instances
         if instance["kind"] == "context_package" and instance["payload"]["mode"] == "mr"
     )
-    local_review = next(
-        instance for instance in instances if instance["kind"] == "local_review_report"
-    )
     mr_package = dict(context_package_mr["payload"])
     bad_question = copy.deepcopy(mr_package["questions"][0])
     bad_question["context_digest"] = "not-a-digest"
@@ -708,10 +550,6 @@ def validate_shared_contract_instances() -> None:
     invalid_package["payload"] = {**mr_package, "questions": [bad_question]}
     with pytest.raises(ValidationError):
         artifact_validator.validate(invalid_package)
-    bad_answer = copy.deepcopy(local_review["payload"])
-    bad_answer["question_answers"][0]["context_digest"] = "not-a-digest"
-    with pytest.raises(ValidationError):
-        artifact_validator.validate({**local_review, "payload": bad_answer})
 
 
 def taskmatic_snapshot_instance() -> dict[str, Any]:

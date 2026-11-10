@@ -88,7 +88,7 @@ def run(stand: Stand, directory: Path) -> dict[str, Any]:
     )
     outcomes = {}
     common = {"labels", "mr_commits", "mr_discussions", "head_pipelines", "jobs", "bridges"}
-    for skill in ("code-review", "mr-prepare", "release-prepare", "release-review", "task-triage"):
+    for skill in ("mr-review", "mr-prepare", "release-prepare", "release-review", "task-triage"):
         # Reviewmatic and the other GitLab skills share a pager across MR
         # resources. Triage adds issue/milestone catalogs; release-review adds tags/releases.
         selected = {
@@ -114,7 +114,7 @@ def run(stand: Stand, directory: Path) -> dict[str, Any]:
                 name: endpoint
                 for name, endpoint in endpoints.items()
                 if name in common
-                or (skill in ("code-review", "release-review") and name in ("tags", "releases"))
+                or (skill in ("mr-review", "release-review") and name in ("tags", "releases"))
                 or (skill == "mr-prepare" and name in ("tree", "template_tree"))
                 or (
                     skill == "release-prepare"

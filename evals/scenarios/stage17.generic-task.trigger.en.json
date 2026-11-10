@@ -1,28 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "stage17.generic-task.trigger.en",
-  "revision": 1,
-  "kind": "trigger",
-  "locale": "en",
-  "pair_id": "stage17.generic-task.trigger",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Prepare a task from inline text, without GitLab.",
-    "fixture": { "selected": ["skill:task-prepare"] }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
   },
+  "digest": "b75163efeec4801c9a99a99719bdd2debfd0768175516ede5bb41d4401dda244",
   "expected": {
-    "selected": ["skill:task-prepare"],
-    "not_selected": ["skill:task-review", "skill:task-triage"]
+    "not_selected": ["skill:task-review", "skill:task-triage"],
+    "selected": ["skill:task-prepare"]
+  },
+  "host": "any",
+  "id": "stage17.generic-task.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:task-prepare"]
+    },
+    "prompt": "Prepare a task from inline text, without GitLab."
   },
   "invariants": [
     {
+      "contains": "inline",
       "id": "neutral-input",
-      "path": "skills/task-prepare/references/workflow.md",
-      "contains": "inline"
+      "path": "skills/task-prepare/references/workflow.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "b75163efeec4801c9a99a99719bdd2debfd0768175516ede5bb41d4401dda244"
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage17.generic-task.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

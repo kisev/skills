@@ -119,8 +119,8 @@ npx --yes skills@latest update --global
 путь ниже — глобальная область, второй — область проекта:
 
 ```shell
-python3 ~/.agents/skills/code-review/scripts/check_environment.py
-python3 .agents/skills/code-review/scripts/check_environment.py
+python3 ~/.agents/skills/mr-review/scripts/check_environment.py
+python3 .agents/skills/mr-review/scripts/check_environment.py
 ```
 
 Каждая строка — `OK` или `FAIL`; при неудаче печатается точная команда починки,

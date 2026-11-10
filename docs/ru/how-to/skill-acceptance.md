@@ -1,6 +1,6 @@
 ---
 audience: maintainer
-review: {"components": ["skill-acceptance"], "sources": ["tests/integration/acceptance.py", "tests/integration/acceptance_probes.py", "tests/integration/gitlab/scripts/skill_acceptance.py", "taskfile.yml"], "contracts": ["docs/reviewmatic-test-matrix.md"]}
+review: {"components": ["skill-acceptance"], "sources": ["tests/integration/acceptance.py", "tests/integration/acceptance_probes.py", "taskfile.yml"], "contracts": ["docs/reviewmatic-test-matrix.md"]}
 ---
 
 # Живая приёмка скиллов
@@ -10,9 +10,8 @@ review: {"components": ["skill-acceptance"], "sources": ["tests/integration/acce
 ## Что это
 
 `task acceptance` — единый пускатель всех живых семейств приёмки скиллов.
-Одна команда ведёт приёмку code-review на fake-glab fixture, живые прогоны
-GitLab и Mattermost и минимальный поведенческий проб для каждого скилла, не
-покрытого харнессами. Прогресс печатается построчно (скилл, семейство, этап,
+Одна команда ведёт живые прогоны GitLab и Mattermost и минимальный
+поведенческий проб для каждого скилла, не покрытого харнессами. Прогресс печатается построчно (скилл, семейство, этап,
 модель, секунды) и сопровождается машинным и человеческим отчётами.
 
 Зонтик запускается пользователем и явно опционален — того же класса, что
@@ -27,7 +26,7 @@ GitLab и Mattermost и минимальный поведенческий про
    (или API-ключ провайдера). Репозиторий никогда не копирует креды из
    глобального профиля OpenCode в изолированные хосты — их передаёте вы.
 3. Запустите `task acceptance` для всех 44 скиллов или
-   `task acceptance SKILL=code-review` для одной записи.
+   `task acceptance SKILL=eli5` для одной записи.
    `task acceptance:plan` печатает план покрытия без запуска.
 
 Модель по умолчанию — дешёвая flash-класса `zai-coding-plan/glm-5.3-flash`.
@@ -39,15 +38,18 @@ GitLab и Mattermost и минимальный поведенческий про
 
 ## Что выполняется
 
-- `code-review-acceptance` (`code-review`): одна настоящая агентская сессия
-  ведёт полный цикл ревью на fake-glab fixture. Полное wall-clock время
-  цикла должно укладываться в 30 минут на этом составе fixture; превышение —
-  красный вердикт с поэтапными таймингами в отчёте. Опрос панели отвечает
-  харнесс-контракт, человек не в контуре.
 - `mattermost-live` (`mattermost`, `mattermost-triage`) и `gitlab-live`
   (`mr-prepare`): существующие живые харнессы против dev-стеков. Если стек
   не поднят или fixtures не инициализированы, семейство пропускается с
   точной причиной, а не падает.
+- `gitlab-review-live` (`mr-review`): полное ревью на одноразовом локальном
+  стенде GitLab через хост opencode. Оно создаёт проект и merge request с
+  настоящим diff, выписывает навык на точных ревьюимых ревизиях, засевает
+  ответы стартового раунда в промпт, записывает runbook и блок черновиков,
+  двигает голову и проводит ревью снова, чтобы задействовать
+  `ocr session compare`, затем выполняет блок черновиков (только draft
+  notes, никогда не публикацию) и удаляет фикстуру. Семейство пропускается
+  с точной причиной, когда нет стенда, `ocr` или двух алиасов ревьюеров.
 - `behavior-probe` (34 скилла): минимальный живой прогон на скилл — проба
   ставит в изолированный sandbox хоста только этот скилл, подкладывает
   маленькие fixture-файлы и машинно проверяет артефакт (требуемые заголовки
@@ -57,6 +59,22 @@ GitLab и Mattermost и минимальный поведенческий про
   смысла (например, `taskmatic` требует свой сервис доски, `rtk` и
   `ast-grep` водят CLI, не запиненные в sandbox). Каждый пропуск печатает
   свою причину в отчёте; пропуск — это непрогон, а не зелёная галочка.
+
+## Предпосылки живого mr-review
+
+Семейству `gitlab-review-live` дополнительно к dev-стекам нужны:
+
+1. CLI `ocr` протестированного минимума (1.13.6) в `PATH`.
+2. Два алиаса ревьюеров: экспорт
+   `EVAL_OCR_REVIEWERS=alias=provider:model,alias=provider:model` или два
+   ревьюера в `~/.reviewmatic/reviewers.json`. Провайдеры должны быть в
+   `ocr llm providers` и настроены в конфигурации OCR.
+3. Креды провайдера для хоста opencode (`OPENCODE_CONFIG_CONTENT` или ключ
+   провайдера) и для OCR.
+
+Запустите `task acceptance SKILL=mr-review`. Меняется только fixture-проект
+локального стенда; сгенерированный блок создаёт черновики GitLab, а
+харнесс удаляет merge request и его ветки после прогона.
 
 ## Где отчёты
 
@@ -69,11 +87,11 @@ GitLab и Mattermost и минимальный поведенческий про
   причинами.
 - `.build/acceptance/latest.json` указывает на свежий прогон.
 
-Каждое семейство хранит свои улики: приёмка code-review в
-`.build/skill-acceptance/<timestamp>/` (`result.json`, `summary.md`, сырой
-вывод агента по попыткам), живые прогоны GitLab и Mattermost в своих деревьях
-`reports/latest.json`, каждая попытка пробы — свой sandbox,
-`agent-output.txt` и проверки.
+Каждое семейство хранит свои улики: живые прогоны GitLab и Mattermost в своих
+деревьях `reports/latest.json`, каждая попытка пробы — свой sandbox,
+`agent-output.txt` и проверки. Улики `gitlab-review-live` хранят оба runbook,
+оба транскрипта агента, выполненный блок черновиков и `live.json` с ревьюимой
+головой и алиасами ревьюеров; в Git они не попадают.
 
 ## Как передать отчёт master-сессии
 

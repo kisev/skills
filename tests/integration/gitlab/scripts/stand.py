@@ -339,7 +339,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
-        choices=("preflight", "smoke", "test", "browser", "live"),
+        choices=("preflight", "smoke", "test", "browser", "live", "review-live"),
     )
     parser.add_argument("--compose", default="docker-compose")
     args = parser.parse_args()
@@ -356,7 +356,7 @@ def main() -> int:
     with (stand.home / "lock").open("w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            if args.action == "live":
+            if args.action in ("live", "review-live"):
                 shared.load("gitlab_live", APP / "scripts/live_checks.py").settings()
             if args.action == "preflight":
                 report["preflight"] = shared.load(
@@ -367,7 +367,7 @@ def main() -> int:
                     "gitlab_preflight", APP / "scripts/preflight.py"
                 ).run(stand, destination, browser=args.action == "browser")
                 stand.connect()
-                if args.action in ("smoke", "test", "browser", "live"):
+                if args.action in ("smoke", "test", "browser", "live", "review-live"):
                     report["versions"] = {
                         "server": stand.request("GET", "/version"),
                         "runner": stand.docker(
@@ -402,7 +402,7 @@ def main() -> int:
                     report["resources"] = stand.docker(
                         "stats", "--no-stream", "--format", "{{json .}}"
                     )
-                    if args.action in ("smoke", "test", "browser", "live"):
+                    if args.action in ("smoke", "test", "browser", "live", "review-live"):
                         checks = shared.load("gitlab_checks", APP / "scripts/checks.py")
                         checks.run(stand, destination, report, args.action)
         except Exception as exc:

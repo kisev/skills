@@ -2,10 +2,8 @@
 
 Shared criteria for keeping code necessary. `code-simplify` applies them as a
 passive prevention ladder while coding and as the report-only audit contract on
-an explicit request. The `code-review` panel passes this file into every critic
-and arbitrator task; complexity candidates there follow the full finding
-contract. These criteria extend the necessity and completion doctrine and never
-override it.
+an explicit request. These criteria extend the necessity and completion doctrine
+and never override it.
 
 ## Prevention ladder
 

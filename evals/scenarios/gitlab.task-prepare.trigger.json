@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.task-prepare.trigger",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "389ec5ad815d98a06e80889885500c8f62bffd595df342c7b3e8cf05bb9348a4",
+  "expected": {
+    "not_selected": ["skill:mr-prepare"],
+    "selected": ["skill:task-prepare"]
+  },
   "host": "any",
+  "id": "gitlab.task-prepare.trigger",
   "input": {
-    "prompt": "Подготовь короткую задачу из текста пользователя.",
     "fixture": {
       "selected": ["skill:task-prepare"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:task-prepare"],
-    "not_selected": ["skill:mr-prepare"]
+    },
+    "prompt": "\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c \u043a\u043e\u0440\u043e\u0442\u043a\u0443\u044e \u0437\u0430\u0434\u0430\u0447\u0443 \u0438\u0437 \u0442\u0435\u043a\u0441\u0442\u0430 \u043f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u044f."
   },
   "invariants": [
     {
+      "contains": "external mutation.",
       "id": "no-mutation",
-      "path": "skills/task-prepare/references/workflow.md",
-      "contains": "external mutation."
+      "path": "skills/task-prepare/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "gitlab.task-prepare.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "389ec5ad815d98a06e80889885500c8f62bffd595df342c7b3e8cf05bb9348a4",
-  "locale": "ru",
-  "pair_id": "gitlab.task-prepare.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

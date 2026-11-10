@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "skill.goal.trigger.en",
-  "revision": 2,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "4263269674fda07d764287cd8a7bc738e12277b9b906ae6c617d35a18d983f84",
+  "expected": {
+    "not_selected": [],
+    "selected": ["skill:goal"]
+  },
   "host": "any",
+  "id": "skill.goal.trigger.en",
   "input": {
-    "prompt": "Formulate a bounded, read-only goal.",
     "fixture": {
       "selected": ["skill:goal"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:goal"],
-    "not_selected": []
+    },
+    "prompt": "Formulate a bounded, read-only goal."
   },
   "invariants": [
     {
+      "contains": "structured Markdown rather than JSON",
       "id": "goal-contract",
-      "path": "skills/goal/references/workflow.md",
-      "contains": "structured Markdown rather than JSON"
+      "path": "skills/goal/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "skill.goal.trigger",
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "4263269674fda07d764287cd8a7bc738e12277b9b906ae6c617d35a18d983f84",
-  "locale": "en",
-  "pair_id": "skill.goal.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

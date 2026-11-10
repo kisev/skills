@@ -1,0 +1,6 @@
+[
+  { "path": "a.py", "status": "new" },
+  { "path": "b.py", "status": "still_present" },
+  { "path": "c.py", "status": "fixed" },
+  { "path": "d.py", "status": "unreviewed" }
+]

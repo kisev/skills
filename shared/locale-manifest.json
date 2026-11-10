@@ -66,8 +66,8 @@
       "ru": "docs/ru/how-to/memomatic.md"
     },
     {
-      "en": "docs/how-to/ocr-critic.md",
-      "ru": "docs/ru/how-to/ocr-critic.md"
+      "en": "docs/how-to/ocr-engine.md",
+      "ru": "docs/ru/how-to/ocr-engine.md"
     },
     {
       "en": "docs/how-to/portable-skills.md",
@@ -90,8 +90,8 @@
       "ru": "docs/ru/reference/cli.md"
     },
     {
-      "en": "docs/reference/code-review.md",
-      "ru": "docs/ru/reference/code-review.md"
+      "en": "docs/reference/mr-review.md",
+      "ru": "docs/ru/reference/mr-review.md"
     },
     {
       "en": "docs/reference/humanize-patterns.md",

@@ -3,7 +3,7 @@
 
 ``task acceptance`` runs the explicitly configured live acceptance for all
 44 skills; ``task acceptance SKILL=<name>`` runs one skill's entry. Under the
-hood it drives the existing harnesses (the fake-glab code-review acceptance,
+hood it drives the existing harnesses (the fake-glab mr-review acceptance,
 the GitLab live run, the Mattermost live run) plus minimal behavioral probes
 for every skill the harnesses do not cover. Every run leaves machine
 (``result.json``) and human (``summary.md``) reports; the terminal shows
@@ -31,8 +31,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from tests.integration.acceptance_probes import PROBES, SKIPS
-from tests.integration.gitlab.scripts.skill_acceptance import (
+from tests.integration.acceptance_common import (
     CHEAP_MODEL,
     PROVIDER_KEYS,
     TransportError,
@@ -41,6 +40,7 @@ from tests.integration.gitlab.scripts.skill_acceptance import (
     read_json_file,
     spawn,
 )
+from tests.integration.acceptance_probes import PROBES, SKIPS
 from tests.integration.mattermost.scripts.stand import (
     ROOT,
     load,
@@ -52,25 +52,11 @@ LIVE_CHECKS = ROOT / "tests/integration/mattermost/scripts/live_checks.py"
 EVAL_RUNNER = ROOT / "scripts/eval_runner.py"
 BUILT_SKILLS = ROOT / ".build/skills"
 REPORT_ROOT = ROOT / ".build/acceptance"
-SKILL_ACCEPTANCE_REPORTS = ROOT / ".build/skill-acceptance"
 GITLAB_REPORTS = ROOT / ".build/gitlab-test/gitlab-workflows/reports"
 GITLAB_FIXTURES = ROOT / ".build/gitlab-test/gitlab-workflows/state/fixtures.json"
 MATTERMOST_REPORTS = ROOT / ".build/mattermost-test/mattermost-cards/reports"
 
 FAMILY_TASKS: dict[str, list[str]] = {
-    "code-review-acceptance": [
-        "mise",
-        "exec",
-        "--",
-        "uv",
-        "run",
-        "--project",
-        "apps/reviewmatic",
-        "--locked",
-        "python",
-        "-m",
-        "tests.integration.gitlab.scripts.skill_acceptance",
-    ],
     "gitlab-live": [
         "mise",
         "exec",
@@ -98,18 +84,34 @@ FAMILY_TASKS: dict[str, list[str]] = {
         "--compose",
         "docker-compose",
     ],
+    "gitlab-review-live": [
+        "mise",
+        "exec",
+        "--",
+        "uv",
+        "run",
+        "--project",
+        "apps/reviewmatic",
+        "--locked",
+        "python",
+        "-m",
+        "tests.integration.gitlab.scripts.stand",
+        "review-live",
+        "--compose",
+        "docker-compose",
+    ],
 }
 
 FAMILY_REPORTS: dict[str, Path] = {
-    "code-review-acceptance": SKILL_ACCEPTANCE_REPORTS / "latest.json",
     "gitlab-live": GITLAB_REPORTS / "latest.json",
+    "gitlab-review-live": GITLAB_REPORTS / "latest.json",
     "mattermost-live": MATTERMOST_REPORTS / "latest.json",
 }
 
 HARNESS_SKILLS: dict[str, tuple[str, ...]] = {
-    "code-review-acceptance": ("code-review",),
     "mattermost-live": ("mattermost", "mattermost-triage"),
     "gitlab-live": ("mr-prepare",),
+    "gitlab-review-live": ("mr-review",),
 }
 
 
@@ -130,7 +132,7 @@ def settings(accept_expensive: bool) -> dict[str, Any]:
             "API key)"
         )
     if os.environ["EVAL_HOST"] != "opencode":
-        # The probes and the code-review acceptance read opencode's stdout
+        # The probes and the mr-review acceptance read opencode's stdout
         # JSONL events, so the umbrella is defined for the opencode host only.
         raise UmbrellaError("the acceptance umbrella drives the opencode host only")
     model = os.environ["EVAL_MODEL"]
@@ -232,6 +234,20 @@ def container_status(name: str) -> str:
     return completed.stdout.strip()
 
 
+def review_aliases() -> int:
+    """Configured OCR reviewer aliases, from the explicit seed or the profile."""
+    raw = os.environ.get("EVAL_OCR_REVIEWERS", "")
+    if raw:
+        return len([chunk for chunk in raw.split(",") if chunk.strip()])
+    path = Path.home() / ".reviewmatic" / "reviewers.json"
+    try:
+        profile = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    reviewers = profile.get("reviewers") if isinstance(profile, dict) else None
+    return len(reviewers) if isinstance(reviewers, list) else 0
+
+
 def family_prereq(family: str) -> str | None:
     """None when the family can run; otherwise the honest skip reason."""
     if family == "mattermost-live":
@@ -251,6 +267,22 @@ def family_prereq(family: str) -> str | None:
             )
         if not GITLAB_FIXTURES.is_file():
             return "the GitLab fixtures are not initialized; run task env:gitlab:up"
+        return None
+    if family == "gitlab-review-live":
+        base = family_prereq("gitlab-live")
+        if base is not None:
+            return base
+        if shutil.which("ocr") is None:
+            return (
+                "the ocr CLI is not on PATH; install it with "
+                "npm install -g @alibaba-group/open-code-review@1.13.6"
+            )
+        if review_aliases() < 2:
+            return (
+                "two OCR reviewer aliases are not configured; set "
+                "EVAL_OCR_REVIEWERS=alias=provider:model,alias=provider:model or create "
+                "~/.reviewmatic/reviewers.json with two reviewers"
+            )
         return None
     return None
 

@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.mr-prepare.trigger.en",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "777b96911b29a24d7628673eb66021092d41edf999e94cfcb4f7275909a13248",
+  "expected": {
+    "not_selected": ["skill:release-prepare"],
+    "selected": ["skill:mr-prepare"]
+  },
   "host": "any",
+  "id": "gitlab.mr-prepare.trigger.en",
   "input": {
-    "prompt": "Prepare the title and description for a regular MR.",
     "fixture": {
       "selected": ["skill:mr-prepare"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:mr-prepare"],
-    "not_selected": ["skill:release-prepare"]
+    },
+    "prompt": "Prepare the title and description for a regular MR."
   },
   "invariants": [
     {
+      "contains": "Accept only one exact MR URL",
       "id": "exact-mr",
-      "path": "skills/mr-prepare/references/workflow.md",
-      "contains": "Accept only one exact MR URL"
+      "path": "skills/mr-prepare/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "gitlab.mr-prepare.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "777b96911b29a24d7628673eb66021092d41edf999e94cfcb4f7275909a13248",
-  "locale": "en",
-  "pair_id": "gitlab.mr-prepare.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

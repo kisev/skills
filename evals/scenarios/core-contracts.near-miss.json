@@ -1,30 +1,43 @@
 {
-  "schema": "eval-scenario/v1",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "bd7f9e2305f26b19320ebdf54dfbc74ffd2c2460d1e671af4b73821668d62b5b",
+  "expected": {
+    "not_selected": ["skill:docs-prepare", "skill:humanize"],
+    "selected": []
+  },
+  "host": "any",
   "id": "skill.core-contracts.near-miss",
-  "revision": 2,
+  "input": {
+    "fixture": {
+      "selected": []
+    },
+    "prompt": "\u041f\u0440\u043e\u0441\u0442\u043e \u043f\u0435\u0440\u0435\u0444\u0440\u0430\u0437\u0438\u0440\u0443\u0439 \u0442\u0435\u043a\u0441\u0442, \u043d\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u044f contracts \u0438 \u043d\u0435 \u043f\u043b\u0430\u043d\u0438\u0440\u0443\u044f \u0438\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u044f."
+  },
+  "invariants": [
+    {
+      "contains": "any human language",
+      "id": "humanize-language",
+      "path": "skills/humanize/references/workflow.md"
+    },
+    {
+      "contains": "write it directly with atomic replacement",
+      "id": "docs-plan",
+      "path": "skills/docs-prepare/references/workflow.md"
+    }
+  ],
   "kind": "near-miss",
   "locale": "ru",
   "pair_id": "skill.core-contracts.near-miss",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Просто перефразируй текст, не проверяя contracts и не планируя изменения.",
-    "fixture": { "selected": [] }
+  "revision": 2,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
   },
-  "expected": { "selected": [], "not_selected": ["skill:docs-prepare", "skill:humanize"] },
-  "invariants": [
-    {
-      "id": "humanize-language",
-      "path": "skills/humanize/references/workflow.md",
-      "contains": "any human language"
-    },
-    {
-      "id": "docs-plan",
-      "path": "skills/docs-prepare/references/workflow.md",
-      "contains": "write it directly with atomic replacement"
-    }
-  ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "bd7f9e2305f26b19320ebdf54dfbc74ffd2c2460d1e671af4b73821668d62b5b"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

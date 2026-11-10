@@ -47,7 +47,22 @@ SECRET_VALUE = re.compile(
 # credential can never ride along by being named something a filter would
 # not recognize. An engine needing another variable is a reviewed change to
 # this list, not a config knob.
-ENV_NAMES = frozenset({"PATH", "HOME", "USER", "LOGNAME", "SHELL", "TERM", "TMPDIR", "TZ", "LANG"})
+ENV_NAMES = frozenset(
+    {
+        "PATH",
+        "HOME",
+        "USER",
+        "LOGNAME",
+        "SHELL",
+        "TERM",
+        "TMPDIR",
+        "TZ",
+        "LANG",
+        # A host-side config root is a path, not a credential; codex loads its
+        # selected profile and auth state from here.
+        "CODEX_HOME",
+    }
+)
 ENV_PREFIXES = ("LC_", "XDG_")
 
 RUNNER = Callable[..., subprocess.CompletedProcess[str]]
@@ -84,11 +99,26 @@ def host_drift(before: dict[str, str], after: dict[str, str]) -> list[str]:
 
 
 def _host_watch(profile: dict[str, Any]) -> list[Path]:
-    # The engine's own home under ccr: where session artifacts land. Watching
-    # all of HOME would be unbounded; this is the bounded, honest scope.
-    name = str(profile.get("ccr_profile", ""))
-    home = Path.home() / ".claude-code-router" / "profiles" / name
-    return [home] if name and home.is_dir() else []
+    # The engine's own home: where session artifacts land. Watching all of
+    # HOME would be unbounded; this is the bounded, honest scope.
+    engine = str(profile.get("engine", ""))
+    name = str(profile.get("engine_profile") or profile.get("ccr_profile") or "")
+    if engine == "ccr":
+        candidates = [Path.home() / ".claude-code-router" / "profiles" / name] if name else []
+    elif engine == "opencode":
+        candidates = [
+            Path.home() / ".local" / "share" / "opencode",
+            Path.home() / ".config" / "opencode",
+        ]
+    elif engine == "codex":
+        candidates = [Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))]
+    else:
+        candidates = []
+    return [path for path in candidates if path.is_dir()]
+
+
+def profile_name(profile: dict[str, Any]) -> str:
+    return str(profile.get("engine_profile") or profile.get("ccr_profile") or "")
 
 
 # --- engine adapters ---------------------------------------------------------
@@ -120,6 +150,35 @@ def _claude_parse(raw: str) -> tuple[str, str | None]:
     return str(payload.get("result", "")), str(session) if session else None
 
 
+def _host_parse(raw: str) -> tuple[str, str | None]:
+    """Join the text events of a JSON-lines host transcript."""
+    texts: list[str] = []
+    session: str | None = None
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(payload, dict):
+            continue
+        session = (
+            session or str(payload.get("session_id") or payload.get("sessionId") or "") or None
+        )
+        for key in ("result", "text"):
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                texts.append(value)
+        part = payload.get("part")
+        if isinstance(part, dict) and isinstance(part.get("text"), str) and part["text"]:
+            texts.append(str(part["text"]))
+        item = payload.get("item")
+        if isinstance(item, dict) and isinstance(item.get("text"), str) and item["text"]:
+            texts.append(str(item["text"]))
+    return ("\n".join(texts) if texts else raw, session)
+
+
 def _ccr_start(profile: dict[str, str], prompt: str, allowed_tools: list[str]) -> list[str]:
     # The model is chosen inside the host-side ccr profile, never here.
     # Permissions stay scoped: file edits are auto-accepted inside the
@@ -127,7 +186,7 @@ def _ccr_start(profile: dict[str, str], prompt: str, allowed_tools: list[str]) -
     # scenario, not granted blanket by the engine adapter.
     argv = [
         "ccr",
-        profile["ccr_profile"],
+        _profile_name(profile),
         "--",
         "-p",
         prompt,
@@ -141,12 +200,37 @@ def _ccr_start(profile: dict[str, str], prompt: str, allowed_tools: list[str]) -
     return argv
 
 
+def _profile_name(profile: dict[str, str]) -> str:
+    return profile.get("engine_profile") or profile.get("ccr_profile") or ""
+
+
+def _opencode_start(profile: dict[str, str], prompt: str, allowed_tools: list[str]) -> list[str]:
+    # The host-side agent owns the model; the scenario only asks for edits.
+    argv = ["opencode", "run", "--format", "json", "--auto"]
+    name = _profile_name(profile)
+    if name:
+        argv += ["--agent", name]
+    argv.append(prompt)
+    return argv
+
+
+def _codex_start(profile: dict[str, str], prompt: str, allowed_tools: list[str]) -> list[str]:
+    # workspace-write keeps edits inside the staged fixture; the host-side
+    # codex profile owns the model and provider credentials.
+    argv = ["codex", "exec", "--json", "--sandbox", "workspace-write"]
+    name = _profile_name(profile)
+    if name:
+        argv += ["--profile", name]
+    argv.append(prompt)
+    return argv
+
+
 def _ccr_preflight(profile: dict[str, str]) -> list[str]:
     problems = EngineAdapter("ccr", _ccr_start, _claude_parse).preflight()
-    name = profile.get("ccr_profile", "")
+    name = _profile_name(profile)
     profiles_dir = Path.home() / ".claude-code-router" / "profiles"
     if not name:
-        problems.append("profile.json: 'ccr_profile' is not set")
+        problems.append("profile: 'engine_profile' (or its 'ccr_profile' alias) is not set")
     elif not (profiles_dir / name).is_dir():
         problems.append(
             f"ccr profile '{name}' does not exist ({profiles_dir / name}); "
@@ -155,10 +239,30 @@ def _ccr_preflight(profile: dict[str, str]) -> list[str]:
     return problems
 
 
+def _codex_preflight(profile: dict[str, str]) -> list[str]:
+    problems = EngineAdapter("codex", _codex_start, _host_parse).preflight()
+    name = _profile_name(profile)
+    home = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex"))
+    if not name:
+        problems.append("profile: 'engine_profile' is not set")
+    elif not (home / f"{name}.config.toml").is_file():
+        problems.append(
+            f"codex profile '{name}' does not exist ({home / f'{name}.config.toml'}); "
+            "create the host-side profile before running"
+        )
+    return problems
+
+
 ADAPTERS: dict[str, EngineAdapter] = {
     "ccr": EngineAdapter("ccr", _ccr_start, _claude_parse),
+    "opencode": EngineAdapter("opencode", _opencode_start, _host_parse),
+    "codex": EngineAdapter("codex", _codex_start, _host_parse),
 }
-PREFLIGHTS: dict[str, Callable[[dict[str, str]], list[str]]] = {"ccr": _ccr_preflight}
+PREFLIGHTS: dict[str, Callable[[dict[str, str]], list[str]]] = {
+    "ccr": _ccr_preflight,
+    "opencode": lambda profile: EngineAdapter("opencode", _opencode_start, _host_parse).preflight(),
+    "codex": _codex_preflight,
+}
 
 
 # --- profile and scenarios ---------------------------------------------------
@@ -168,28 +272,36 @@ class LiveRunError(Exception):
     """Loud, instructive failure: never a silent fallback."""
 
 
-def load_profile() -> dict[str, Any]:
-    if not PROFILE_PATH.is_file():
+def load_profile(path: Path | None = None) -> dict[str, Any]:
+    selected = PROFILE_PATH if path is None else path
+    if not selected.is_file():
         raise LiveRunError(
-            f"pinned profile is missing: {PROFILE_PATH}; "
+            f"selected profile is missing: {selected}; "
             "restore it from the repository or see docs/how-to/live-runs-ccr.md"
         )
-    profile: dict[str, Any] = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+    profile: dict[str, Any] = json.loads(selected.read_text(encoding="utf-8"))
     if not isinstance(profile, dict):
-        raise LiveRunError("profile.json must be a JSON object")
+        raise LiveRunError(f"{selected}: profile must be a JSON object")
     if SENSITIVE_KEY.search(json.dumps(profile.get("extra_keys_hint", ""))):
-        raise LiveRunError("profile.json must not contain credentials")
-    for key in ("engine", "ccr_profile"):
+        raise LiveRunError(f"{selected}: the profile must not contain credentials")
+    for key in ("engine",):
         if not isinstance(profile.get(key), str) or not profile[key]:
-            raise LiveRunError(f"profile.json: '{key}' must be a non-empty string")
+            raise LiveRunError(f"{selected}: '{key}' must be a non-empty string")
     if profile["engine"] not in ADAPTERS:
         raise LiveRunError(
-            f"profile.json: unknown engine '{profile['engine']}' "
+            f"{selected}: unknown engine '{profile['engine']}' "
             f"(available: {', '.join(sorted(ADAPTERS))})"
         )
+    name = profile.get("engine_profile") or profile.get("ccr_profile")
+    if not isinstance(name, str) or not name:
+        raise LiveRunError(
+            f"{selected}: 'engine_profile' must be a non-empty host-side profile name "
+            "('ccr_profile' is accepted as its legacy alias)"
+        )
+    profile["engine_profile"] = name
     budgets = profile.get("budgets", {})
     if not isinstance(budgets.get("timeout_seconds", 480), int):
-        raise LiveRunError("profile.json: budgets.timeout_seconds must be an integer")
+        raise LiveRunError(f"{selected}: budgets.timeout_seconds must be an integer")
     return profile
 
 
@@ -231,24 +343,46 @@ def snapshot(root: Path) -> dict[str, str]:
     return out
 
 
-def stage_fixture(scenario: dict[str, Any], name: str, workdir: Path) -> list[str]:
+def stage_fixture(
+    scenario: dict[str, Any], name: str, workdir: Path, engine: str | None = None
+) -> list[str]:
     """Copy fixture, git-init it, install the declared built skill; return blocked bins."""
     shutil.copytree(LIVE_DIR / name / "fixture", workdir, dirs_exist_ok=True)
+    if engine == "opencode":
+        # Non-interactive opencode needs --auto, so the staged project config
+        # carries the boundary itself: file edits and reads are allowed, while
+        # shell execution and network fetches are explicitly denied and --auto
+        # cannot override a deny.
+        (workdir / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://opencode.ai/config.json",
+                    "permission": {
+                        "bash": "deny",
+                        "webfetch": "deny",
+                        "edit": "allow",
+                        "read": "allow",
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     for args in (
         ["init", "-q"],
         ["config", "user.email", "live@example.invalid"],
         ["config", "user.name", "Live Run"],
     ):
         subprocess.run(["git", *args], cwd=workdir, check=True, capture_output=True)
+    variant = scenario["active_variant"]
     skill = scenario.get("skill")
-    if skill:
+    if skill and scenario["variants"][variant].get("install_skill", True) is not False:
         source = BUILD_SKILLS / skill
         if not source.is_dir():
             raise LiveRunError(
                 f"built skill '{skill}' is missing ({source}); run 'task generate' first"
             )
         shutil.copytree(source, workdir / ".agents" / "skills" / skill)
-    variant = scenario["active_variant"]
     blocked: list[str] = list(scenario["variants"][variant].get("block_commands", []))
     if blocked:
         bindir = workdir.parent / "blocked-bin"
@@ -297,13 +431,18 @@ def evaluate_assertions(
             status = "passed" if ok else "failed"
         elif kind == "hash_unchanged":
             status = "passed" if before.get(path) == after.get(path) else "failed"
-        elif kind == "output_mentions":
+        elif kind in {"output_mentions", "file_matches", "file_not_matches"}:
             flags = 0
             if "i" in str(check.get("flags", "")):
                 flags |= re.IGNORECASE
-            status = (
-                "passed" if re.search(str(check.get("pattern", "")), output, flags) else "failed"
-            )
+            subject = output
+            if kind != "output_mentions":
+                if not target.is_file() or target.is_symlink():
+                    results.append({"id": f"{kind}:{path or index}", "status": "failed"})
+                    continue
+                subject = target.read_text(encoding="utf-8")
+            found = re.search(str(check.get("pattern", "")), subject, flags) is not None
+            status = "passed" if found != (kind == "file_not_matches") else "failed"
         else:
             status = "failed"
         results.append({"id": f"{kind}:{path or index}", "status": status})
@@ -346,7 +485,7 @@ def run_scenario(
     with tempfile.TemporaryDirectory(prefix=f"live-run-{name}-") as temporary:
         workdir = Path(temporary) / "fixture"
         workdir.mkdir()
-        blocked = stage_fixture(scenario, name, workdir)
+        blocked = stage_fixture(scenario, name, workdir, profile["engine"])
         before = snapshot(workdir)
         prompt = (LIVE_DIR / name / scenario["prompt"]).read_text(encoding="utf-8").strip()
         argv = adapter.build_start(
@@ -398,7 +537,8 @@ def run_scenario(
             "scenario": name,
             "variant": variant,
             "engine": profile["engine"],
-            "engine_profile": profile.get("ccr_profile", ""),
+            "host": profile["engine"],
+            "engine_profile": profile_name(profile),
             "verdict": verdict,
             "error": error,
             "duration_seconds": round(time.monotonic() - started, 1),
@@ -409,10 +549,10 @@ def run_scenario(
     return {**report, "report_dir": str(run_dir)}
 
 
-def preflight() -> list[str]:
+def preflight(profile_path: Path | None = None) -> list[str]:
     problems: list[str] = []
     try:
-        profile = load_profile()
+        profile = load_profile(profile_path)
     except LiveRunError as error:
         return [str(error)]
     problems += PREFLIGHTS[profile["engine"]](
@@ -433,10 +573,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("command", choices=("preflight", "run"))
     parser.add_argument("--scenario")
     parser.add_argument("--variant", default="default")
+    parser.add_argument(
+        "--profile",
+        type=Path,
+        help="profile file (default: evals/live/profile.json, the ccr profile)",
+    )
     parser.add_argument("--all", action="store_true", dest="sweep")
     args = parser.parse_args(argv)
     if args.command == "preflight":
-        problems = preflight()
+        problems = preflight(args.profile)
         for line in problems:
             print(f"FAIL {line}")
         print("preflight: OK" if not problems else "preflight: FAILED")
@@ -448,7 +593,7 @@ def main(argv: list[str] | None = None) -> int:
         print("run requires --scenario or --all", file=sys.stderr)
         return 2
     try:
-        profile = load_profile()
+        profile = load_profile(args.profile)
     except LiveRunError as error:
         print(f"FAIL {error}", file=sys.stderr)
         return 2

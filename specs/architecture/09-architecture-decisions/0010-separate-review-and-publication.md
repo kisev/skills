@@ -73,7 +73,7 @@ preserved in the code-review test matrix.
 
 ## Links
 
-- [REQ-F-105](../../capabilities/skills/code-review.md#req-f-105---review-exact-changes)
+- [REQ-F-105](../../capabilities/skills/mr-review.md#req-f-105---review-exact-changes)
 - [REQ-F-301](../../capabilities/agents/manager.md#req-f-301---bind-manager-orchestration)
 - [REQ-F-305](../../capabilities/agents/review.md#req-f-305---produce-structured-review-reports)
 - [ADR-0007](0007-make-administration-cli-only.md)

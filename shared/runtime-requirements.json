@@ -36,11 +36,16 @@
       "install": "npm install --global @kisev/taskmatic@{version}",
       "version_ref": "apps/taskmatic/package.json#version",
       "source": "npm"
+    },
+    "ocr": {
+      "check": "ocr version",
+      "install": "npm install -g @alibaba-group/open-code-review@latest",
+      "version": ">=1.13.6",
+      "source": "npm"
     }
   },
   "skills": {
     "ast-grep": ["ast-grep"],
-    "code-review": ["git", "glab", "uv"],
     "commit-msg": ["git"],
     "mr-prepare": ["glab"],
     "release-prepare": ["glab"],
@@ -49,6 +54,7 @@
     "task-prepare": ["glab"],
     "task-triage": ["git", "glab"],
     "taskmatic": ["@kisev/taskmatic"],
-    "team-retro": ["glab"]
+    "team-retro": ["glab"],
+    "mr-review": ["git", "glab", "uv", "ocr"]
   }
 }

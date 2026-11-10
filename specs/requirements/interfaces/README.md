@@ -243,7 +243,7 @@ registry. Root and nested secret paths and allowed skills-state paths are covere
 
 ### REQ-I-428 - Run reviewmatic from a selected Git ref
 
-The code-review runtime shall be the Python application in `apps/reviewmatic`
+The mr-review runtime shall be the Python application in `apps/reviewmatic`
 and shall run through this Git-sourced CLI:
 
 ```shell

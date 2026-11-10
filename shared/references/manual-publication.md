@@ -1,8 +1,8 @@
 # Manual GitLab publication
 
 This contract governs every prepared GitLab publication in the task, MR, and
-release skills: the agent prepares, the user executes. It extends
-`references/gitlab-workflow.md` with the command-execution boundary.
+release skills: the agent prepares, the user executes. It defines the
+command-execution boundary those skills apply.
 
 ## Read-only preparation
 

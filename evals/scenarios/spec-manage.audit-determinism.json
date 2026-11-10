@@ -1,88 +1,88 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "spec-manage.audit-determinism",
-  "revision": 1,
-  "locale": "neutral",
-  "pair_id": null,
-  "kind": "deterministic",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 2000,
+    "timeout_seconds": 20
+  },
+  "digest": "7351ca5b11b9e0d836e9251455b355704dfc6f923dcfd1afb011d0b7d4717ff2",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:spec-manage"],
+    "structured_outcome": "deterministic-audit-contract"
+  },
   "host": "any",
+  "id": "spec-manage.audit-determinism",
   "input": {
-    "prompt": "Apply the deterministic spec-review classification and aggregate contract to every case without writing files.",
     "fixture": {
-      "selected": ["skill:spec-manage"],
       "cases": [
         {
-          "id": "direct-contradiction",
-          "evidence": "Reliable specification and implementation sources assert incompatible behavior.",
           "drift": "CONFLICT",
+          "evidence": "Reliable specification and implementation sources assert incompatible behavior.",
+          "id": "direct-contradiction",
           "overall": "findings"
         },
         {
-          "id": "missing-implementation",
-          "evidence": "Complete bounded implementation evidence does not implement the canonical claim and establishes no contrary behavior.",
           "drift": "SPEC_AHEAD",
+          "evidence": "Complete bounded implementation evidence does not implement the canonical claim and establishes no contrary behavior.",
+          "id": "missing-implementation",
           "overall": "findings"
         },
         {
-          "id": "undocumented-behavior",
-          "evidence": "Material implementation behavior is absent from the canonical specification and contradicts no canonical claim.",
           "drift": "IMPLEMENTATION_AHEAD",
+          "evidence": "Material implementation behavior is absent from the canonical specification and contradicts no canonical claim.",
+          "id": "undocumented-behavior",
           "overall": "findings"
         },
         {
-          "id": "insufficient-evidence",
-          "evidence": "Evidence necessary to compare the claim is unavailable.",
           "drift": "UNKNOWN",
+          "evidence": "Evidence necessary to compare the claim is unavailable.",
+          "id": "insufficient-evidence",
           "overall": "partial"
         },
         {
-          "id": "quality-without-drift",
-          "evidence": "One confirmed quality finding exists while every in-scope drift unit is OK.",
           "drift": "OK",
+          "evidence": "One confirmed quality finding exists while every in-scope drift unit is OK.",
+          "id": "quality-without-drift",
           "overall": "findings"
         },
         {
-          "id": "critic-unavailable",
-          "evidence": "A full audit completed primary review but no independent critic was available.",
           "critic": "not_checked",
+          "evidence": "A full audit completed primary review but no independent critic was available.",
+          "id": "critic-unavailable",
           "overall": "partial"
         }
-      ]
-    }
-  },
-  "expected": {
-    "selected": ["skill:spec-manage"],
-    "not_selected": [],
-    "mutation_boundary": "no-writes",
-    "structured_outcome": "deterministic-audit-contract"
+      ],
+      "selected": ["skill:spec-manage"]
+    },
+    "prompt": "Apply the deterministic spec-review classification and aggregate contract to every case without writing files."
   },
   "invariants": [
     {
+      "contains": "For each unit, apply the first matching row",
       "id": "audit-ordered-decision-table",
-      "path": "skills/spec-manage/references/auditing.md",
-      "contains": "For each unit, apply the first matching row"
+      "path": "skills/spec-manage/references/auditing.md"
     },
     {
+      "contains": "Overall: partial",
       "id": "audit-aggregate-precedence",
-      "path": "skills/spec-manage/references/auditing.md",
-      "contains": "Overall: partial"
+      "path": "skills/spec-manage/references/auditing.md"
     },
     {
+      "contains": "Critic: not_checked",
       "id": "audit-critic-fallback",
-      "path": "skills/spec-manage/references/auditing.md",
-      "contains": "Critic: not_checked"
+      "path": "skills/spec-manage/references/auditing.md"
     }
   ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 2000,
-    "max_cost": 1
-  },
-  "digest": "7351ca5b11b9e0d836e9251455b355704dfc6f923dcfd1afb011d0b7d4717ff2"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

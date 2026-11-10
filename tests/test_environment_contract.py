@@ -30,7 +30,7 @@ pytestmark = pytest.mark.xdist_group("distribution-state")
 # each skill's SKILL.source.md, references, and scripts.
 EXPECTED_SKILLS = {
     "ast-grep": ["ast-grep"],
-    "code-review": ["git", "glab", "uv"],
+    "mr-review": ["git", "glab", "uv", "ocr"],
     "commit-msg": ["git"],
     "mr-prepare": ["glab"],
     "release-prepare": ["glab"],

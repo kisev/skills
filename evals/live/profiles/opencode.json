@@ -1,0 +1,7 @@
+{
+  "engine": "opencode",
+  "engine_profile": "build",
+  "budgets": {
+    "timeout_seconds": 480
+  }
+}

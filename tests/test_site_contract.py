@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 SITE = ROOT / "apps" / "docs-site"
 EXAMPLES = SITE / "src" / "content" / "examples"
-PILOT_SKILLS = ("askme", "code-review", "commit-msg")
+PILOT_SKILLS = ("askme", "mr-review", "commit-msg")
 SITE_RESERVED = {"index.json", "skills-lock.json", "archives", ".well-known", "dev"}
 
 

@@ -1,0 +1,39 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "fe699bc3b72d8fbace0cdc210db1491c12fe85033a7119996bd50d0f42934a9e",
+  "expected": {
+    "mutation_boundary": "no-writes",
+    "not_selected": [],
+    "selected": ["skill:mr-review"],
+    "structured_outcome": "contract-passed"
+  },
+  "host": "any",
+  "id": "stage20.skill.mr-review.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": ["skill:mr-review"]
+    },
+    "prompt": "Select the mr-review skill for its exact contract scenario."
+  },
+  "invariants": [
+    {
+      "id": "stage20.skill.mr-review.trigger.source",
+      "path": ".build/skills/mr-review/SKILL.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage20.skill.mr-review.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

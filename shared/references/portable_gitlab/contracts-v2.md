@@ -1,43 +1,37 @@
 # Private GitLab Artifact Contracts v2
 
-New evidence snapshots, release inventories, review contexts, publication and
-review plans, analysis reports, critic receipts, review decisions, release
-readiness, and finalize reports are immutable content-addressed JSON envelopes
-`portable-gitlab/<kind>/v2`. Private state uses `0700` directories and `0600`
-files; SHA-256 stdout covers the full envelope.
+New evidence snapshots, release inventories, context packages, publication
+plans, analysis reports, release readiness reports, and finalize reports are
+immutable content-addressed JSON envelopes `portable-gitlab/<kind>/v2`.
+Private state uses `0700` directories and `0600` files; SHA-256 stdout covers
+the full envelope.
 
-Collection identity is `hostname`, resolved GitLab `project_id`, object kind, and
-IID. A profile is only a producer and does not create another collection.
+Collection identity is `hostname`, resolved GitLab `project_id`, object kind,
+and IID. A profile is only a producer and does not create another collection.
 
 The schema validates every kind/payload pair. Every payload records
 `external_mutations=false`. `evidence_snapshot` records `base_sha`, `start_sha`,
-and `head_sha`; `local_wip_snapshot` records ref plus committed, staged, unstaged,
-and untracked sections. `release_inventory` binds an exact evidence snapshot and
-tag-to-head commit range. `review_context` binds current-user role, complete
-threads and notes, trusted current-user publication markers, GitLab-only
-incremental selection, and read-only local Git verification to an evidence
-snapshot. Incremental metadata keeps exact baseline and delta refs private.
-Local WIP uses a separate `local_review_report` bound to its immutable snapshot.
-It retains the agreed task boundary, accepted risks, cumulative finding
-dispositions, checks, and explicit blocking decisions independent of severity.
-Incremental local preparation compares compatible finalized local snapshots;
-local finalization with a report validates freshness and continuity before
-atomically replacing `local-review.json`. Remote publication state is not involved.
-`publication_plan`, `review_plan`, `analysis_report`, and `critic_receipt` bind
-their evidence digest; the latter records `run_id` and `session_id`.
-Release and legacy MR publication plans may contain a semantic `label_review`. It maps
-closed semantic roles and values to unique labels from the complete project and
-inherited-group catalog, preserves unknown labels, and records only an add/remove
-delta. Concrete label names are catalog results, never policy constants.
+and `head_sha`. `release_inventory` binds an exact evidence snapshot and
+tag-to-head commit range. `context_package` binds a goal, acceptance criteria,
+claims, prior decisions, open questions, and a thread registry to one evidence
+digest. `publication_plan` binds its evidence digest. `analysis_report` records
+`run_id`, `session_id`, and findings bound to the selected evidence.
 
-New ordinary MR plans instead use the same exhaustive applicability assessment
-as code review, retaining unresolved labels and requiring evidence for removals.
-Their `mr_content` binds locale, template selection, preservation assessment,
+Release and legacy MR publication plans may contain a semantic `label_review`.
+It maps closed semantic roles and values to unique labels from the complete
+project and inherited-group catalog, preserves unknown labels, and records only
+an add/remove delta. Concrete label names are catalog results, never policy
+constants.
+
+New ordinary MR plans use the same exhaustive applicability assessment,
+retaining unresolved labels and requiring evidence for removals. Their
+`mr_content` binds locale, template selection, preservation assessment,
 metadata-edit summary and SemVer rationale. `requests` stores exact immutable
 JSON payloads and explicit-host manual `glab` commands. Title and description
 requests contain only changed fields; labels use add/remove delta. No command is
-executed by a runner. Legacy MR plans remain readable but require fresh preparation
-before finalize. Release preparation retains its existing content contract.
+executed by a runner. Legacy MR plans remain readable but require fresh
+preparation before finalize. Release preparation retains its existing content
+contract.
 
 Failed-job trace collection streams response headers and content under one
 absolute deadline and a hard byte bound. It terminates the child process group
@@ -47,7 +41,8 @@ streaming capabilities as a controlled workflow error.
 Issue-link listing is a whole-collection REST API, not a paged list. Collectors
 accept its complete single response even at CE's 100-link boundary, where
 `page` and `per_page` are ignored. Other resources still reject repeated pages
-and protective-limit exhaustion; this compatibility rule does not relax their completeness checks.
+and protective-limit exhaustion; this compatibility rule does not relax their
+completeness checks.
 
 MR evidence stores locale and template discovery in `project`. Discovery reads
 the project default description and bounded repository templates from an exact
@@ -59,89 +54,26 @@ the stable pointer or exact plan and checks the current pointer, Markdown and
 request bodies. Failed scaffolds do not return an old stable path as success.
 The displayed freshness command binds the expected evidence, draft and requests
 so an older open document cannot accidentally validate a replacement plan.
-New code-review findings record severity, risk, exact evidence, consequence,
-relation to the reviewed change, and a minimum fix. Legacy ID-only findings
-remain readable for existing v2 artifacts but cannot create a new review plan.
-Review contracts 2 through 4 also contain an evidence-derived MR metadata assessment,
-a closed SemVer impact with rationale, localized presentation labels, a compact
-disposition for every previous finding, stable finding revisions, non-blocking
-recommended issues, and an exhaustive applicability decision for every exact
-project or inherited-group label name and description. The runtime derives the
-add/remove delta and requires a unique matching compatibility label for a closed
-SemVer impact. Existing-thread outcomes are `no_reply`, `local_fix`,
-`reply`, `resolve`, or `reopen`. Contract 3 assigns each actionable finding and
-thread correction a closed `fix_mode`: an exact current-line fix uses one
-single-line or bounded multi-line `suggestion`; every other actionable fix uses
-one textual unified patch. `not_required` is limited to threads without a code
-correction. Patches are checked against the exact reviewed head in a temporary
-Git index, reject binary, symlink, rename, traversal, and oversized content, and
-are stored as immutable private `.patch` files without changing the checkout.
-Every new review invocation reassesses every open and resolved discussion and all
-of its non-system replies. The six-case thread matrix (decision 75.5) decides
-every outcome: a resolved thread without a problem takes `no_reply`; a resolved
-thread with the same or a related problem takes `reply` plus `reopen` (with a
-suggestion when the fix policy asks for one); an open fixed thread takes `reply`
-plus `resolve`; an open thread with an unattempted confirmed defect takes
-`no_reply`; an open thread with an attempted fix takes `reply` (with a
-suggestion when the fix policy asks for one); an open thread the review does not
-confirm takes `reply` plus `resolve`. Explicitly select `no_reply` when an
-existing explanation or applied suggestion is confirmed by current code,
-regardless of the resolver.
-Published patches use one copy-ready `sh` heredoc invoking
-`git apply`. A `resolve` or `reopen` action follows, but is separate from, the
-action that publishes its explanation.
-Contract 4 adds a semantic chat assessment and runner-owned presentation.
-Contract 5 binds thread decisions to the complete discussion, including system
-notes, retains explicit `unchanged` mode, and enforces assessment-to-state
-transitions plus a validated code fix for an accepted thread. A
-code-review-owned evidence pointer and target-scoped progress pointer expose
-prepared, context, critic, finalize, decision, content, plan, and stale stages
-without depending on another profile's shared collection pointer. Generated private drafts bind exact
-labels, threads, latest-note digests, critic scope, pipeline state, and prior
-artifacts. When the selected mode requires a critic, only a recorded
-content-addressed receipt can advance the workflow. Only a fresh contract-5 plan
-can render final chat.
-Each new plan carries a cumulative finding ledger. Closed findings remain
-addressable and cannot silently reuse an ID. Publication bodies are plain files
-and new code-review plans provide guarded one-action helper commands. Incremental
-review determines whether content is already published only by reading current
-GitLab discussions, notes, and issues authored by the authenticated user and
-comparing their meaning. A digest-bound post-success marker records only that a
-manual command exited zero locally; it can require remote revalidation but cannot
-serve as publication state, a receipt, an idempotency record, or a postcondition.
-For contract 5, the review-state activation lock protects only local review
-artifacts. A concurrent `prepare` cannot
-leave the superseded plan executable.
 
-The immutable review-plan envelope embeds the complete Markdown. A successful
-scaffold atomically replaces the target-scoped `review-publication.md` and a
-private pointer to that immutable plan. Contract 1 through 5 plans remain readable
-as historical baselines, but their old helper commands are not supported. Direct-command
-plans require regeneration for guarded publication. Older plans fall back to a full review
-rather than becoming a contract-6 incremental baseline. Exact refs live in
-private evidence; the user-facing plan does not display raw commit SHAs. Prepare
-and review never invoke publication commands. MR state is recorded but does not
-suppress actions for merged or closed MRs.
-
-Release preparation uses the same split between immutable evidence and a stable
-user-facing result. A complete scaffold atomically replaces the target-scoped
-`release-publication.md` and writes `release-publication.json` last as the pointer
-to the exact immutable plan. Finalization binds that pointer to the scaffold
-binding and rejects superseded or modified plans. Incomplete scaffolds do not
-replace the previous stable result. The release inventory also binds component-MR
-approvals and conversations, contributor and reviewer candidates, milestone
-candidates, and bounded work-item evidence. Release content records the approved
-people and milestone, illustration preset, and one rationale-backed decision for
-every candidate work item.
+Release preparation splits immutable evidence from a stable user-facing result.
+A complete scaffold atomically replaces the target-scoped
+`release-publication.md` and writes `release-publication.json` last as the
+pointer to the exact immutable plan. Finalization binds that pointer to the
+scaffold binding and rejects superseded or modified plans. Incomplete scaffolds
+do not replace the previous stable result. The release inventory also binds
+component-MR approvals and conversations, contributor and reviewer candidates,
+milestone candidates, and bounded work-item evidence. Release content records
+the approved people and milestone, illustration preset, and one
+rationale-backed decision for every candidate work item.
 
 The pre-merge release plan contains manual `glab` commands only. A read-only
 `post-merge` transition verifies the merged MR, refreshes evidence and inventory,
-then atomically replaces the same stable runbook with commands bound to the exact
-publication SHA. Request bodies and long content remain immutable and
-content-addressed. Neither phase executes a remote mutation.
-The announcement command retains its illustration attachment without `--unique`,
-which glab forbids with `--attach`. It does not promise remote deduplication;
-the runbook requires checking the target discussion before repetition.
+then atomically replaces the same stable runbook with commands bound to the
+exact publication SHA. Request bodies and long content remain immutable and
+content-addressed. Neither phase executes a remote mutation. The announcement
+command retains its illustration attachment without `--unique`, which glab
+forbids with `--attach`. It does not promise remote deduplication; the runbook
+requires checking the target discussion before repetition.
 
 Contract 6 adds required `semver_assessment` to the content and plan. Existing
 `semver_impact`/`semver_rationale` describe only the MR contribution and select
@@ -150,67 +82,20 @@ the selected catalog release/tag name and commit, current target branch/commit,
 and a distinct accumulated next-release impact/rationale. `target_fallback`
 requires a reason and null release fields. If current target lookup failed,
 `target_revision=mr_snapshot` explicitly identifies the MR start snapshot.
-Review context collects `release_evidence` without making absent publication
-information block review. Refreshing catalogs and the target commit protects
-finalization; a changed release basis forces full review on the next invocation.
 
 `finalize_report` contains exact evidence digest and fingerprint. MR preparation
-also binds it to the exact publication plan digest. A critic receipt for an
-incremental review additionally binds the incremental-delta digest.
-`review_decision` binds a fresh report and gives every finding `accept` or
-`reject` with a reason. When a critic is required, the decision also binds the
-exact recorded critic-receipt digest selected by progress state.
-`release_readiness` binds range/SHA, SemVer, compatibility, migration, rollback,
-and CI gates; `ready` needs complete evidence and closed gates.
+also binds it to the exact publication plan digest. `release_readiness` binds
+range/SHA, SemVer, compatibility, migration, rollback, and CI gates; `ready`
+needs complete evidence and closed gates.
 
 v1 artifacts may only be read and used to finalize the compatible old workflow.
 They cannot be migrated, overwritten, or used as new v2 artifacts.
 
-Earlier v2 review contexts, publication previews, and review plans remain
-schema-readable for their original finalized workflow, but they have no
-`review_contract_version` and can never become an incremental baseline.
-
-Contract 7 supersedes the code-review publication behavior described above.
-Its stable result is `runbook.md`; direct `glab` commands are the only publication
-interface. No remote-operation ledger, reservation, persistent
-lock, expiry, polling, or automatic freshness read is used for publication.
-The user verifies GitLab effects and chooses repetition. Old guarded actions are
-historical only, never automatically migrated or executed.
-
-One finding can own bounded `suggestions` records (`path`, `line`, `body`), with
-`split_rationale` for safe partial application. Individual and combined results
-are checked. A patch requires `patch_reason`; input prose excludes the diff and
-apply command, which the renderer adds exactly once using safe Markdown fences.
-New guided plans retain `review_source` for targeted `repair-review`; presentation
-changes preserve complete fix results, code-fix changes require targeted checks,
-and changed decisions require a new independent critic. The runtime cannot prove
-that prose preserved its meaning. Incomplete checks stop repair without replacing
-the current result. `refresh-review` preserves candidates and decisions, never
-rebinds existing receipts. CI-only refresh retains the original analysis evidence
-and receipts and records an immutable supplemental `ci_snapshot` in the source.
-Review quality checks remain separate from manual publication.
-
-The guided input package supplies its exact draft schema and valid field examples
-separately from final v2 envelopes. Primary `severity_override` dispositions record
-original/effective severity and a reason while preserving original critic receipts.
-`duplicate_of` refers to the accepted canonical defect. `existing_thread` finding
-publications bind `thread_id` and delegate the fix to its accepted thread, without
-dropping a defect from readiness or publishing it twice. Summary and verdict derive
-from the same effective findings; the runbook starts with their reason, blockers,
-architecture and SemVer.
-
-User-proposed fixes require the user's own confirmation even after another person
-resolved the thread. `user_confirmation.evidence_note_ids` binds later confirmation;
-another reply needs `new_circumstances`. Suitable suggestion parts stay in the
-original positioned thread, other parts link back. Patch reasons appear before
-every patch, and a provably equivalent safe bounded suggestion prohibits fallback.
-Replies and state changes share an annotated shell block guarded by successful POST.
-Plain comments use the real returned discussion ID and resolvability; only completed
-assessments may close the created discussion. Follow-ups are concise proposals,
-not issue templates or creation commands. Full preparation belongs to `task-prepare`.
-Legacy issue bodies remain readable but new runbooks do not publish them.
-Common scaffolding enforces readiness and patch fallback for both guided and
-low-level callers. Omitted legacy thread-blocker metadata is derived from validated
-thread decisions; it cannot exempt a contradictory verdict. Optional
-`routing_response` holds edited routing-only prose without changing the shared
-`proposed_response` or suggestion parts and survives presentation repair.
+The retired review and local-WIP artifacts (`review_context`, `review_plan`,
+`review_decision`, `critic_receipt`, `local_wip_snapshot`, and
+`local_review_report`), the `code-review` profile, the `local` target scope,
+`local_fix` outcomes, and the `code-review/publication-action/v1` publication
+action are not part of this contract. A supplied retired artifact or field is
+rejected as an unknown profile, kind, or field. There is no compatibility
+mode, alias, or migration; historical artifacts remain available only in Git
+history.

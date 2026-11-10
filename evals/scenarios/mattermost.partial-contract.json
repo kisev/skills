@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "mattermost.partial-contract",
-  "revision": 1,
-  "kind": "deterministic",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "f6d3da47dd27f73742c2e0280950deda789bccc7ada6053c28621a680b884160",
+  "expected": {
+    "not_selected": [],
+    "selected": ["skill:mattermost"]
+  },
   "host": "any",
+  "id": "mattermost.partial-contract",
   "input": {
-    "prompt": "Validate Mattermost repeated-page and partial thread/member results offline.",
     "fixture": {
       "selected": ["skill:mattermost"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:mattermost"],
-    "not_selected": []
+    },
+    "prompt": "Validate Mattermost repeated-page and partial thread/member results offline."
   },
   "invariants": [
     {
+      "contains": "repeated_member_page",
       "id": "partial-evidence",
-      "path": "skills/mattermost/scripts/mattermost.py",
-      "contains": "repeated_member_page"
+      "path": "skills/mattermost/scripts/mattermost.py"
     }
   ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 1000,
-    "max_cost": 1
-  },
-  "digest": "f6d3da47dd27f73742c2e0280950deda789bccc7ada6053c28621a680b884160",
-  "locale": "neutral",
-  "pair_id": null
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

@@ -84,12 +84,12 @@ rules apply: full pressure runs for askme and goal, `task generate` and
 
 ## Risks / Trade-offs
 
-- [Shared-canon edits ripple into every materializing archive] → content
+- \[Shared-canon edits ripple into every materializing archive] → content
   edits are additive (one premortem section, one conflict-order paragraph);
   `task generate:check` and the corpus checks pin the result.
-- [Two pressure runs instead of one] → goal's workflow is touched by the
+- \[Two pressure runs instead of one] → goal's workflow is touched by the
   premortem delegation; the rule is per edited skill, and the runs are
   independent.
-- [Mode clarification invites marker gaming] → the clarification asks the
+- \[Mode clarification invites marker gaming] → the clarification asks the
   user, not the document; untrusted markers keep losing to the actual
   request, and an unanswered clarification still stops.

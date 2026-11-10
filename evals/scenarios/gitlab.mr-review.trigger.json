@@ -1,0 +1,38 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "6e4d30a07237da35d84a2205d3778aaa97c41907eba14c557c24ca6f4005f1f8",
+  "expected": {
+    "not_selected": ["skill:task-review"],
+    "selected": ["skill:mr-review"]
+  },
+  "host": "any",
+  "id": "gitlab.mr-review.trigger",
+  "input": {
+    "fixture": {
+      "selected": ["skill:mr-review"]
+    },
+    "prompt": "\u041f\u0440\u043e\u0432\u0435\u0440\u044c merge request https://gitlab.example.com/group/project/-/merge_requests/7."
+  },
+  "invariants": [
+    {
+      "contains": "Every finding comes from",
+      "id": "ocr-engine",
+      "path": "skills/mr-review/references/review-panel.md"
+    }
+  ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "gitlab.mr-review.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
+}

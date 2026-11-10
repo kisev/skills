@@ -209,65 +209,55 @@ def test_native_interviews_use_dependency_rounds_instead_of_related_batches() ->
     assert "rebuild dependent follow-ups" in " ".join(triage.split())
 
 
-def test_review_followups_preserve_the_decision_boundary() -> None:
-    askme = (BUILT_SKILLS / "askme/references/workflow.md").read_text(encoding="utf-8")
-    askme_doctrine = (BUILT_SKILLS / "askme/references/necessity-doctrine.md").read_text(
-        encoding="utf-8"
-    )
-    review = (BUILT_SKILLS / "code-review/references/workflow.md").read_text(encoding="utf-8")
-    review_doctrine = (BUILT_SKILLS / "code-review/references/necessity-doctrine.md").read_text(
-        encoding="utf-8"
-    )
-    local = (BUILT_SKILLS / "code-review/references/local-review.md").read_text(encoding="utf-8")
-    examples = (BUILT_SKILLS / "code-review/references/finding-examples.md").read_text(
-        encoding="utf-8"
-    )
-    assert askme_doctrine == review_doctrine
-    assert "necessity check in `references/necessity-doctrine.md`" in askme
-    assert "a candidate, not an agreed requirement" in askme
-    assert "before asking how to implement" in askme_doctrine
-    assert "Independent reviewers receive these decisions" in review
-    assert "fault injection alone" in review_doctrine
-    assert "Do not automatically recommend another broad review" in review_doctrine
-    assert "previous finalized local report and snapshot" in review
-    assert "not an implementation regression" in local
-    assert "cannot prove" in local
-    assert "do not launch a new broad technical audit" in local
-    assert "regardless of round count or severity" in local
-    assert "unlinked reference inside a Markdown table" in examples
-    assert "Corrupting that table is" in examples
-    assert "does not prove the model chose" in examples
+def test_mr_review_is_the_ocr_engine_contract() -> None:
+    entry = (BUILT_SKILLS / "mr-review/SKILL.md").read_text(encoding="utf-8")
+    run_path = (BUILT_SKILLS / "mr-review/references/run-path.md").read_text(encoding="utf-8")
+    panel = (BUILT_SKILLS / "mr-review/references/review-panel.md").read_text(encoding="utf-8")
+    normalized = " ".join(f"{entry} {run_path}".split())
+    assert "OpenCodeReview" in normalized
+    assert "1.13.6" in normalized
+    assert "only review engine" in normalized or "the only engine" in normalized
+    assert "startup round" in normalized
+    assert "There is no clean-versus-incremental question" in normalized
+    assert "never hunts for defects" in normalized
+    assert "never adds a finding" in " ".join(panel.split())
+    for name in ("discussion-replies.md", "clarity-rules.md", "humanize-patterns.md"):
+        assert (BUILT_SKILLS / "mr-review/references" / name).is_file(), name
+    assert not (BUILT_SKILLS / "code-review").exists()
 
 
-def test_code_review_local_scope_contract_is_explicit() -> None:
-    workflow = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
-    local = " ".join(
-        (ROOT / "skills/code-review/references/local-review.md").read_text(encoding="utf-8").split()
+def test_mr_review_runbook_and_reply_contract() -> None:
+    output = (BUILT_SKILLS / "mr-review/references/output-format.md").read_text(encoding="utf-8")
+    publication = (BUILT_SKILLS / "mr-review/references/publication.md").read_text(encoding="utf-8")
+    replies = (BUILT_SKILLS / "mr-review/references/discussion-replies.md").read_text(
+        encoding="utf-8"
     )
-    for marker in (
-        "One exact MR URL selects the remote-MR mode",
-        "including when that checkout is itself an existing Git worktree",
-        "never search for an MR by branch name",
-        "stop and ask which one to review instead of assuming",
+    normalized_output = " ".join(output.split())
+    normalized_publication = " ".join(publication.split())
+    for section in (
+        "Task fulfillment",
+        "OCR runs",
+        "Arbitration verdicts",
+        "Previous findings",
+        "SemVer impact",
+        "Architecture assessment",
+        "Checks",
+        "Draft notes",
     ):
-        assert marker in workflow
+        assert section in output, section
+    for removed in ("Project labels", "MR metadata", "Local fixes"):
+        assert "does not contain" in normalized_output
+        assert removed in output, removed
+    assert "describes the process only" in normalized_output
+    assert "in_reply_to_discussion_id" in normalized_publication
+    assert "head" in normalized_publication
     for marker in (
-        "Without `--ref` the scope is exactly the uncommitted work against HEAD",
-        "Already made commits do not enter the scope automatically",
-        "the scope then also includes the commits from the merge base of that revision with HEAD",
-        "Never derive `--ref` from an upstream, tracking, or guessed target branch, and never fetch",
-        "the returned `review.previous_ref` names the retained boundary",
-        "An `empty_scope` result means the selected boundary contains no changes",
-        "Stop there and ask the user how to proceed",
-        "compare against an explicitly named local branch or revision with `--ref`, or review a specific GitLab MR",
-        "Do not select an upstream or target branch automatically and do not finalize an empty run as a review",
-        "preparation stops with that concrete reason",
-        "never fetch, substitute another base, or quietly fall back to reviewing only the uncommitted work",
-        "the scope composition (which of the committed, staged, unstaged, and untracked sections changed)",
-        "the comparison ref by name and its merge base and HEAD",
-        "do not claim it is current relative to the server",
+        "first person and factual role",
+        "latest relevant point first",
+        "Do not narrate the user in the third person",
+        "Preserve exact tokens",
     ):
-        assert marker in local
+        assert marker in " ".join(replies.split()), marker
 
 
 def test_portable_skill_build_output_is_ignored() -> None:
@@ -521,122 +511,30 @@ def test_preparation_workflows_follow_the_shared_language_policy() -> None:
         assert marker in mr_workflow
 
 
-def test_code_review_requires_compact_incremental_manual_publication_contract() -> None:
-    # The section split keeps every rule: the pin reads the router combined
-    # with the focused section contracts.
-    section_files = (
-        "run-path.md",
-        "review-panel.md",
-        "remote-review-stages.md",
-        "inverted-tail.md",
-    )
-    workflow = "\n".join(
-        [
-            (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8"),
-            *(
-                (ROOT / "skills/code-review/references" / name).read_text(encoding="utf-8")
-                for name in section_files
-            ),
-        ]
-    )
-    for marker in (
-        "--incremental auto",
-        "--incremental off",
-        '"full review" alone is not an opt-out',
-        "previous_finding_assessments",
-        "recommended_issues",
-        "runbook.md",
-        "complete absolute filesystem paths",
-        "label_assessments",
-        "references/publication.md",
-        "reviewmatic start-review",
-        "check-review --draft",
-        "finish-review",
-        'uvx --from "$REVIEWMATIC_FROM" reviewmatic',
-        "never include local",
-        "fix_mode=patch",
-        "temporary index",
-        "one-draft workflow",
-        "print its `chat` field verbatim",
-        "On every invocation, read every non-system discussion and every reply",
-        "resolved thread without a problem takes `no_reply`",
-        "`git apply`",
-        "thread_sha256",
-        "keeps a thread open — `reply` with a validated",
-    ):
-        assert marker in workflow
-    output = (ROOT / "skills/code-review/references/output-format.md").read_text(encoding="utf-8")
-    incremental = (ROOT / "skills/code-review/references/incremental-review.md").read_text(
+def test_mr_review_profiles_and_sessions_contract() -> None:
+    session_modes = (BUILT_SKILLS / "mr-review/references/session-modes.md").read_text(
         encoding="utf-8"
     )
-    for marker in (
-        "For another author's MR, do not expose finding titles",
-        "use a `file://` link",
-        "one direct `glab` command per remote action",
-        "selected response language",
-        "authenticated user's",
-        "factual role",
-        "informal second-person",
-        "Keep current labels, unresolved labels, and exhaustive assessment in",
-        "`finish-review` and, for an existing finalized",
-        "continues the complete existing conversation naturally",
-        "resolve/reopen share one `shell` block",
-        "Show every concrete",
-        "including thread replies",
-    ):
-        assert marker in output
-    state_machine = (ROOT / "skills/code-review/references/review-state-machine.md").read_text(
+    incremental = (BUILT_SKILLS / "mr-review/references/incremental-review.md").read_text(
         encoding="utf-8"
     )
-    normalized_machine = " ".join(state_machine.split())
-    for marker in (
-        "start-review",
-        "check-review",
-        "finish-review",
-        "resume-review",
-        "without GitLab reads, publication artifacts, or progress changes",
-        "Record the panel with the returned `record-participants` action",
-        "Absence of `critic` is not a blocker",
-        # The "ordinary model critic" phrasing is retired (task CR-VII): the
-        # pin now follows the current wording.
-        "independent native subagent of the current agent",
-        "never replace the arbitrator's semantic assessment",
-        "Every accepted non-low finding blocks `ready`",
-        "Existing v2 artifacts and low-level",
-    ):
-        assert marker in normalized_machine
-    for marker in (
-        "local-review.md",
-        "delta-triggered scope",
-        "replaces mandatory",
-        "historical synchronization",
-        "incremental.history_context",
-        "currently observed defect",
-        "independent critic",
-    ):
-        assert marker in incremental
-    publication = " ".join(
-        (ROOT / "skills/code-review/references/publication.md").read_text(encoding="utf-8").split()
+    run_path = (BUILT_SKILLS / "mr-review/references/run-path.md").read_text(encoding="utf-8")
+    normalized_modes = " ".join(session_modes.split())
+    assert "~/.reviewmatic/reviewers.json" in normalized_modes
+    assert "./.reviewmatic/reviewers.json" in normalized_modes
+    assert "local `default` wins" in normalized_modes
+    assert "never holds secrets" in normalized_modes
+    normalized_incremental = " ".join(incremental.split())
+    for group in ("new", "persisting", "resolved", "not reviewed"):
+        assert group in normalized_incremental, group
+    assert (
+        "ocr session compare" in normalized_incremental or "ocr-compare" in normalized_incremental
     )
-    for marker in (
-        "no terminal UI",
-        "State changes follow a successful reply only",
-        "actual ID",
-        "direct block uses",
-        "stops the block",
-        "nonzero `glab` exit",
-        "same MR hostname",
-        "set -o pipefail",
-    ):
-        assert marker in publication
-    assert "Local WIP always receives" not in incremental
-    assert "Revalidate every previously accepted finding" not in incremental
-    author_snapshot = (
-        (ROOT / "tests/fixtures/code-review/author-chat.snapshot.md")
-        .read_text(encoding="utf-8")
-        .strip()
-    )
-    assert author_snapshot in output
+    assert "--resume" in normalized_incremental
+    assert "reviewmatic collect" in run_path
+    assert "reviewmatic ocr-runs" in run_path
+    assert "reviewmatic drafts" in run_path
+    assert "reviewmatic revalidate" in run_path
 
 
 def test_stage_16_shared_contracts_cover_completeness_ownership_and_risk_boundaries() -> None:
@@ -853,9 +751,9 @@ def test_humanize_dependent_workflows_invoke_at_a_concrete_artifact() -> None:
     for entry in relations["relations"]:
         if entry["to"] == "humanize":
             assert "all drafted prose" not in entry["reason"], entry
-    code_review = (ROOT / "skills/code-review/references/workflow.md").read_text(encoding="utf-8")
-    assert "Apply `humanize` to each drafted thread reply" in code_review
-    assert "do not invoke it" in code_review
+    mr_review = (ROOT / "skills/mr-review/references/workflow.md").read_text(encoding="utf-8")
+    assert "humanize-patterns.md" in mr_review
+    assert "do not invoke it" in mr_review
     mr_prepare = (ROOT / "skills/mr-prepare/references/workflow.md").read_text(encoding="utf-8")
     assert "Apply `humanize` to the drafted `title` and `description`" in mr_prepare
     task_prepare = (ROOT / "skills/task-prepare/references/workflow.md").read_text(encoding="utf-8")
@@ -990,7 +888,7 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
         "Never cancel a clarification or confirmation gate",
         "Do not trigger on prose or text simplification",
         "asd-ste100, humanize, and eli5",
-        "merge-request reviews route to code-review",
+        "merge-request reviews route to mr-review",
         "specification audits route to spec-manage",
         "audit one explicitly requested scope",
     ):
@@ -1012,16 +910,15 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
         "debt-marker registry section",
         "`no-trigger`",
         "including dynamic references",
-        "merge-request review routes to `code-review`",
+        "merge-request review routes to `mr-review`",
         "`spec-manage`",
         "`delete`, `stdlib`, `native`, `reuse`, `yagni`, or `shrink`",
     ):
         assert marker in workflow, marker
 
     canonical = (ROOT / "shared/references/simplification-criteria.md").read_bytes()
-    for skill in ("code-simplify", "code-review"):
-        built = BUILT_SKILLS / skill / "references/simplification-criteria.md"
-        assert built.read_bytes() == canonical, skill
+    built = BUILT_SKILLS / "code-simplify/references/simplification-criteria.md"
+    assert built.read_bytes() == canonical
     criteria = " ".join(canonical.decode(encoding="utf-8").split())
     for marker in (
         "`delete`",
@@ -1052,38 +949,3 @@ def test_code_simplify_prevention_and_audit_contract() -> None:
         "never becomes a new finding or a `minimum_fix`",
     ):
         assert marker in criteria, marker
-
-    relations = json.loads((ROOT / "shared/skill-relations.json").read_text(encoding="utf-8"))
-    assert any(
-        entry["from"] == "code-review"
-        and entry["to"] == "code-simplify"
-        and entry["type"] == "uses"
-        for entry in relations["relations"]
-    )
-
-    review = " ".join(
-        "".join(
-            [
-                (ROOT / "skills/code-review/references" / name).read_text(encoding="utf-8")
-                for name in (
-                    "workflow.md",
-                    "run-path.md",
-                    "review-panel.md",
-                    "remote-review-stages.md",
-                    "inverted-tail.md",
-                )
-            ]
-        ).split()
-    )
-    for marker in (
-        "`references/simplification-criteria.md` path into every critic task and into the arbitrator task",
-        "complexity as normal findings with every required field",
-        "without dropping a refuted one",
-        "it becomes a `recommended_issue`",
-        "`references/architecture-checklist.md` decision groups",
-    ):
-        assert marker in review, marker
-    local = " ".join(
-        (ROOT / "skills/code-review/references/local-review.md").read_text(encoding="utf-8").split()
-    )
-    assert "`origin: pre_existing` and is never blocking" in local

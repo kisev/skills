@@ -56,10 +56,10 @@ workflow. Generated `glab api` mutation commands suppress successful response
 bodies while preserving exit status and error output. Partial collection does
 not replace a previously trusted complete summary as complete.
 
-A code-review plan is prepared without external writes. Publication starts only
+A mr-review plan is prepared without external writes. Publication starts only
 when the user invokes its separate one-action helper with the exact action digest.
 The authoritative guarantees and legacy transition are owned by
-[the code-review requirement](../../capabilities/skills/code-review.md).
+[the mr-review requirement](../../capabilities/skills/mr-review.md).
 
 An explicit `askme` invocation ends with manual continuation. Internal clarification
 returns to its already-authorized caller, preserving scope and pending mutation gates,

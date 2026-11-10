@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "mattermost.cache-contract",
-  "revision": 1,
-  "kind": "deterministic",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
+  },
+  "digest": "6b4476a361385f34a17318f1a67145fb367e15a773c9f1ec7496dd10f0aa1aae",
+  "expected": {
+    "not_selected": [],
+    "selected": ["skill:mattermost"]
+  },
   "host": "any",
+  "id": "mattermost.cache-contract",
   "input": {
-    "prompt": "Validate Mattermost cache user isolation, TTL and revalidation offline.",
     "fixture": {
       "selected": ["skill:mattermost"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:mattermost"],
-    "not_selected": []
+    },
+    "prompt": "Validate Mattermost cache user isolation, TTL and revalidation offline."
   },
   "invariants": [
     {
+      "contains": "CACHE_TTL_SECONDS = 300",
       "id": "identity-ttl-cache",
-      "path": "skills/mattermost/scripts/mattermost.py",
-      "contains": "CACHE_TTL_SECONDS = 300"
+      "path": "skills/mattermost/scripts/mattermost.py"
     }
   ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 1000,
-    "max_cost": 1
-  },
-  "digest": "6b4476a361385f34a17318f1a67145fb367e15a773c9f1ec7496dd10f0aa1aae",
-  "locale": "neutral",
-  "pair_id": null
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

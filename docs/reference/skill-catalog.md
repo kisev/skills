@@ -42,7 +42,7 @@ are not included.
 | `askme` | Clarify a task or design through a bounded interview; every call returns all current agreements, including those made before the first interview. |
 | `ast-grep` | Run structural search or a safe direct AST rewrite through ast-grep. |
 | `code-explain` | Build a read-only guided map of current WIP, a Git range, branch, or MR history. |
-| `code-review` | Review a GitLab MR or local WIP for defects and risks. |
+| `mr-review` | Review a GitLab MR or local WIP for defects and risks. |
 | `code-simplify` | Keep code necessary with a passive prevention ladder while coding, recording a SIMPLIFY debt marker on a conscious cut; on explicit request, audit a requested scope and report ranked, tagged, one-line simplification findings plus a debt-marker registry without changing files. |
 | `commit-msg` | Produce one concise English commit message from local changes. |
 | `debugging` | Debug with a feedback loop before hypotheses: one red-capable command, a minimized reproduction, ranked falsifiable hypotheses shown to the user, one fix, and a regression test. |
@@ -102,27 +102,23 @@ authorize a new contract.
 
 ## Review and Publication
 
-The OpenCode `review` agent can be selected directly or called by `manager`.
-It orchestrates the review panel and calls independent critics when the selected
-skill requires them: the critic composition and the arbitrator are recorded once
-per prepared snapshot, the selected critics run in parallel from one recorded
-context package — goal, claims with sources, constraints,
-prior decisions, and questions, stored privately outside the checkout and
-handed to critics as their primary context — and a separate arbitrator imports
-one receipt with a verdict for every critic finding. Fixing project sources requires an
-explicit request and a
-separate fixing phase. Portable `code-review` also works without this agent layer.
+`mr-review` reviews one GitLab merge request against the task it was made for.
+The main session is a manager: it collects the exact merge request context
+read-only, asks one startup round (the OCR reviewer aliases and effort, and the
+task baseline), then runs autonomously. Every finding comes from the external
+OpenCodeReview (`ocr`) CLI; the manager merges several runs, records every
+duplicate and downgrade reason, and synthesizes the fulfillment verdict, the
+SemVer assessment, one architecture paragraph, and simplified checks. Fixing
+project sources requires an explicit request and a separate phase.
 
-1. Request a code review and read the resulting `runbook.md`.
-2. Inspect each proposed action and its exact body before running its command.
-3. Copy and run the selected direct `glab` command. Replies and thread state are
-   separate actions in the runbook; reviewmatic has no in-app publication UI.
-4. Read the command result/error and check GitLab in your browser. You decide
-   whether to repeat; a timeout may have left an accepted request and a repeat
-   may duplicate it. No publication ledger, lock, or automatic retry blocks you.
-5. New plans support `repair-review` for targeted corrections and `refresh-review`
-   for changed evidence without losing findings. Old guarded plans remain readable
-   history, without migration or execution of their old actions.
+1. Request a review of one GitLab merge request URL and answer the single
+   startup round.
+2. Read the resulting `runbook.md`: the verdict, the OCR runs, the checks, and
+   each finding's essence and location.
+3. Run the generated draft-note block. It starts with a head check and creates
+   GitLab draft notes only; it never publishes.
+4. Edit the drafts in the GitLab UI and submit the review there. The skill
+   performs no GitLab mutation.
 
 Explicit `/askme` requests end with manual continuation. Internal clarification
 returns to the already-authorized workflow without expanding its scope.

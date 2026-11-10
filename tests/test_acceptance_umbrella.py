@@ -10,7 +10,7 @@ import pytest
 
 import tests.integration.acceptance_probes as probes
 from tests.integration import acceptance
-from tests.integration.gitlab.scripts import skill_acceptance
+from tests.integration.acceptance_common import CHEAP_MODEL, PROVIDER_KEYS
 
 INVENTORY = sorted(
     path.name
@@ -54,7 +54,7 @@ def test_probe_specs_are_formattable_and_minimal() -> None:
 def test_plan_only_prints_the_registry(capsys: pytest.CaptureFixture[str]) -> None:
     assert acceptance.main(["--plan-only"]) == 0
     output = capsys.readouterr().out
-    assert "code-review" in output and "behavior-probe" in output
+    assert "mr-review" in output and "behavior-probe" in output
     assert "total: 44 entries over 44 skills" in output
 
 
@@ -63,9 +63,9 @@ def test_plan_filter_and_unknown_skill() -> None:
     assert [(entry["family"], entry["skills"]) for entry in entries] == [
         ("behavior-probe", ["eli5"])
     ]
-    entries = acceptance.plan("code-review", INVENTORY)
+    entries = acceptance.plan("mr-review", INVENTORY)
     assert [(entry["family"], entry["skills"]) for entry in entries] == [
-        ("code-review-acceptance", ["code-review"])
+        ("gitlab-review-live", ["mr-review"])
     ]
     with pytest.raises(acceptance.UmbrellaError, match="unknown skill"):
         acceptance.plan("not-a-skill", INVENTORY)
@@ -94,11 +94,11 @@ def test_settings_default_to_the_cheap_flash_model(
     monkeypatch.setenv("OPENCODE_CONFIG_CONTENT", '{"provider":{}}')
     configured = acceptance.settings(accept_expensive=False)
     assert configured["model"] == "zai-coding-plan/glm-5.3-flash"
-    assert skill_acceptance.CHEAP_MODEL.search(configured["model"])
+    assert CHEAP_MODEL.search(configured["model"])
 
 
 def test_settings_require_explicit_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in (*skill_acceptance.PROVIDER_KEYS, "ACCEPT_EXPENSIVE"):
+    for name in (*PROVIDER_KEYS, "ACCEPT_EXPENSIVE"):
         monkeypatch.delenv(name, raising=False)
     with pytest.raises(acceptance.UmbrellaError, match="credentials"):
         acceptance.settings(accept_expensive=False)
@@ -112,7 +112,25 @@ def test_family_prereq_skips_with_reasons_when_stacks_are_down(
     assert mattermost and "Mattermost" in mattermost and "env:mattermost:up" in mattermost
     gitlab = acceptance.family_prereq("gitlab-live")
     assert gitlab and "GitLab" in gitlab
-    assert acceptance.family_prereq("code-review-acceptance") is None
+    review = acceptance.family_prereq("gitlab-review-live")
+    assert review and "GitLab" in review
+    assert acceptance.family_prereq("mr-review-acceptance") is None
+
+
+def test_review_prereq_requires_ocr_and_two_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(acceptance, "container_status", lambda name: "Up (healthy)")
+    monkeypatch.setattr(acceptance, "GITLAB_FIXTURES", Path(__file__))
+    monkeypatch.setattr("tests.integration.acceptance.shutil.which", lambda name: None)
+    review = acceptance.family_prereq("gitlab-review-live")
+    assert review and "ocr" in review
+    monkeypatch.setattr(
+        "tests.integration.acceptance.shutil.which", lambda name: "/usr/bin/" + name
+    )
+    monkeypatch.setenv("EVAL_OCR_REVIEWERS", "one=openai:gpt-5")
+    review = acceptance.family_prereq("gitlab-review-live")
+    assert review and "two OCR reviewer aliases" in review
+    monkeypatch.setenv("EVAL_OCR_REVIEWERS", "one=openai:gpt-5,two=anthropic:claude")
+    assert acceptance.family_prereq("gitlab-review-live") is None
 
 
 def test_gitlab_prereq_requires_initialized_fixtures(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -192,93 +210,10 @@ def test_evaluate_checks_rerun_must_exit_zero(tmp_path: Path) -> None:
     assert any(item["id"] == "artifact:rerun" and item["status"] == "failed" for item in checks)
 
 
-def test_stage_timeline_orders_and_gaps() -> None:
-    timeline = skill_acceptance.stage_timeline(
-        {"prepare": 2, "context": 30, "critic": 600, "finalize": 800}
-    )
-    observed = [item for item in timeline if item["at_seconds"] is not None]
-    assert [item["stage"] for item in observed] == ["prepare", "context", "critic", "finalize"]
-    assert observed[-1]["gap_seconds"] == 200
-    assert timeline[0]["stage"] == "prepare"
-
-
-def test_watch_stages_marks_first_sightings(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import threading
-
-    state = tmp_path / "xdg-state" / "agent-skills" / "gitlab" / "abc"
-    state.mkdir(parents=True)
-    monkeypatch.setattr(skill_acceptance, "WATCH_INTERVAL", 0.02)
-    stages: dict[str, int] = {}
-    stop = threading.Event()
-    watcher = threading.Thread(
-        target=skill_acceptance.watch_stages, args=(tmp_path, stop, stages), daemon=True
-    )
-    watcher.start()
-    (state / "review-current.json").write_text(
-        json.dumps({"context_path": None, "plan_path": None}), encoding="utf-8"
-    )
-    (state / "review-panel.json").write_text(
-        json.dumps(
-            {"participants": {"critics": [{"name": "critic-1", "receipt": {"run_id": "r"}}]}}
-        ),
-        encoding="utf-8",
-    )
-    (state / "run-authoring.json").write_text(json.dumps({"applied": True}), encoding="utf-8")
-    (state / "review-current.json").write_text(
-        json.dumps({"context_path": "c", "plan_path": "p"}), encoding="utf-8"
-    )
-    for _ in range(100):
-        if {"prepare", "poll-panel", "critic", "prose", "context", "finalize"} <= set(stages):
-            break
-        threading.Event().wait(0.02)
-    stop.set()
-    watcher.join(timeout=2)
-    assert {"prepare", "poll-panel", "critic", "prose", "context", "finalize"} <= set(stages)
-    assert stages["prepare"] <= stages["poll-panel"] <= stages["prose"]
-
-
-def test_harness_summary_and_budget_fields(tmp_path: Path) -> None:
-    report = {
-        "action": "skill-acceptance",
-        "started_at": "2026-10-11T00:00:00+00:00",
-        "status": "passed",
-        "acceptance_budget_seconds": 1800,
-        "fixture": {
-            "mr_url": "https://gitlab.example/group/project/-/merge_requests/7",
-            "changed_path": "review.txt",
-            "related_issue_iid": 5,
-        },
-        "attempts": [
-            {
-                "attempt": 1,
-                "status": "passed",
-                "model": "zai-coding-plan/glm-5.3-flash",
-                "duration_ms": 1_500_000,
-                "within_budget": True,
-                "timeline": skill_acceptance.stage_timeline({"prepare": 1, "finalize": 900}),
-                "checks": [{"name": "plan_ready", "status": "passed"}],
-                "usage": {"total_tokens": 90_000, "cost": 0.1},
-            }
-        ],
-    }
-    destination = tmp_path / "summary.md"
-    skill_acceptance.write_summary(destination, report)
-    text = destination.read_text(encoding="utf-8")
-    assert "verdict: **passed**" in text
-    assert "merge_requests/7" in text and "review.txt" in text
-    assert "| 1 | passed |" in text and "yes" in text
-    assert "master session" in text
-
-
 def test_cost_estimate_sums_measured_families(monkeypatch: pytest.MonkeyPatch) -> None:
     reports: dict[Path, dict[str, Any]] = {
-        acceptance.SKILL_ACCEPTANCE_REPORTS / "latest.json": {
-            "attempts": [{"usage": {"cost": 0.2}}, {"usage": {"cost": 0.1}}]
-        },
-        acceptance.GITLAB_REPORTS / "latest.json": {"usage": {"cost": 0.05}},
-        acceptance.MATTERMOST_REPORTS / "latest.json": {"usage": {"cost": 0.05}},
+        acceptance.GITLAB_REPORTS / "latest.json": {"usage": {"cost": 0.2}},
+        acceptance.MATTERMOST_REPORTS / "latest.json": {"usage": {"cost": 0.2}},
     }
 
     def lookup(pointer: Path) -> dict[str, Any] | None:
@@ -300,8 +235,8 @@ def test_umbrella_summary_lists_coverage_skips_and_failures(tmp_path: Path) -> N
         "duration_ms": 60_000,
         "entries": [
             {
-                "skills": ["code-review"],
-                "family": "code-review-acceptance",
+                "skills": ["mr-prepare"],
+                "family": "gitlab-live",
                 "result": {"status": "passed", "report": "/tmp/unused/latest.json"},
             },
             {
@@ -324,7 +259,7 @@ def test_umbrella_summary_lists_coverage_skips_and_failures(tmp_path: Path) -> N
     destination = tmp_path / "summary.md"
     acceptance.write_summary(destination, report)
     text = destination.read_text(encoding="utf-8")
-    assert "| code-review | code-review-acceptance | passed |" in text
+    assert "| mr-prepare | gitlab-live | passed |" in text
     assert "| eli5 | behavior-probe | passed |" in text
     assert "## Skips" in text and "no board service" in text
     assert "## Failures" in text and "answer:keys" in text

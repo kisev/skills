@@ -1,0 +1,4 @@
+Use the installed `mr-review` skill to assess the merge request text in
+merge-request.md. Read merge-request.md and write a short review result to
+review.md: the verdict, the evidence you used, and anything about the request
+that a reviewer must handle before merging. Keep it under 200 words.

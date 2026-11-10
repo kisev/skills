@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.task-triage.trigger.en",
-  "revision": 2,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "5a7ffbf8655c772699a6233610f502538fb791c8c7d91929eafe8ac6506767f7",
+  "expected": {
+    "not_selected": ["skill:task-prepare"],
+    "selected": ["skill:task-triage"]
+  },
   "host": "any",
+  "id": "gitlab.task-triage.trigger.en",
   "input": {
-    "prompt": "Triage every open GitLab issue in this project, find duplicates, and recommend the first five tasks.",
     "fixture": {
       "selected": ["skill:task-triage"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:task-triage"],
-    "not_selected": ["skill:task-prepare"]
+    },
+    "prompt": "Triage every open GitLab issue in this project, find duplicates, and recommend the first five tasks."
   },
   "invariants": [
     {
+      "contains": "Select at most five first tasks",
       "id": "triage-persistent-collection",
-      "path": "skills/task-triage/references/workflow.md",
-      "contains": "Select at most five first tasks"
+      "path": "skills/task-triage/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "gitlab.task-triage.trigger",
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "5a7ffbf8655c772699a6233610f502538fb791c8c7d91929eafe8ac6506767f7",
-  "locale": "en",
-  "pair_id": "gitlab.task-triage.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

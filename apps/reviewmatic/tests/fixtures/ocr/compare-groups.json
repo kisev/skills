@@ -1,0 +1,6 @@
+{
+  "new": [{ "path": "a.py", "content": "new" }],
+  "persisting": [{ "path": "b.py", "content": "persisting" }],
+  "resolved": [{ "path": "c.py", "content": "resolved" }],
+  "not_reviewed": [{ "path": "d.py", "content": "not reviewed" }]
+}

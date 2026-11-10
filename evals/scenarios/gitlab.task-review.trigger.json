@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.task-review.trigger",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "cb15f45f29de65cda7f493c9a54182cbe22c0efe7aa132f1e9aa898ccb5b016e",
+  "expected": {
+    "not_selected": ["skill:mr-review"],
+    "selected": ["skill:task-review"]
+  },
   "host": "any",
+  "id": "gitlab.task-review.trigger",
   "input": {
-    "prompt": "Проверь качество work-item из явного текста.",
     "fixture": {
       "selected": ["skill:task-review"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:task-review"],
-    "not_selected": ["skill:code-review"]
+    },
+    "prompt": "\u041f\u0440\u043e\u0432\u0435\u0440\u044c \u043a\u0430\u0447\u0435\u0441\u0442\u0432\u043e work-item \u0438\u0437 \u044f\u0432\u043d\u043e\u0433\u043e \u0442\u0435\u043a\u0441\u0442\u0430."
   },
   "invariants": [
     {
+      "contains": "quality verdict",
       "id": "metadata-verdict",
-      "path": "skills/task-review/references/workflow.md",
-      "contains": "quality verdict"
+      "path": "skills/task-review/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "gitlab.task-review.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "96f4c41e7f20b17b78fff5a6faa21c3dca0cafd9c9a3550b9dd4ffe5c5a6cd52",
-  "locale": "ru",
-  "pair_id": "gitlab.task-review.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

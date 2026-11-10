@@ -1,0 +1,43 @@
+{
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "da8accdfc006c5d6fb0935272e34b554fa844eaeac42f6d8b4fa4e0022e352cc",
+  "expected": {
+    "not_selected": ["skill:task-review"],
+    "selected": ["command:mr-review", "skill:mr-review"]
+  },
+  "host": "opencode",
+  "id": "gitlab.mr-review-routing",
+  "input": {
+    "fixture": {
+      "selected": ["command:mr-review", "skill:mr-review"]
+    },
+    "prompt": "Use /mr-review for one GitLab merge request URL."
+  },
+  "invariants": [
+    {
+      "contains": "Accept exactly one GitLab merge request URL",
+      "id": "one-target",
+      "path": "skills/mr-review/references/run-path.md"
+    },
+    {
+      "contains": "routes to `release-review`",
+      "id": "release-route",
+      "path": "skills/mr-review/references/run-path.md"
+    }
+  ],
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "command"
+}

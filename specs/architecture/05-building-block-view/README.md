@@ -36,5 +36,5 @@ in-application send interface. The shared GitLab contract supplies evidence,
 artifact validation, and transport primitives for the other GitLab skills; it
 does not import review implementation modules. `mutation_process.py` supplies
 bounded process execution to task triage. These mechanisms provide
-[the code-review contract](../../capabilities/skills/code-review.md) and
+[the mr-review contract](../../capabilities/skills/mr-review.md) and
 [REQ-Q-004](../../requirements/quality/README.md#req-q-004---evidence-completeness).

@@ -1,7 +1,7 @@
 [project]
   name = "reviewmatic"
   version = "12.0.1"
-  description = "GitLab review backend and manual runbooks with a portable Python contract core."
+  description = "Mechanical helper runtime for the mr-review skill: collection, OCR, profiles, and draft notes."
   readme = "README.md"
   requires-python = ">=3.12"
   license = "MIT"
@@ -101,39 +101,17 @@
       "src/reviewmatic/portable/portable_gitlab/mr_publication.py" = [
         "RUF001"
       ]                                                                          # User-visible Cyrillic evidence is intentional.
-      "src/reviewmatic/cli.py" = ["PLR0911"]                                     # Dispatch mirrors the explicit TypeScript return chain.
-      "src/reviewmatic/run_panel.py" = [
-        "RUF001",                                                                # The locale-keyed poll text is intentionally Russian.
-      ]
-      "src/reviewmatic/draft.py" = [
-        "C901",                                                                  # check_review mirrors the TypeScript validation sequence in one pass.
-        "PLR0911",                                                               # Section diagnostics intentionally model every outcome shape.
-      ]
-      "src/reviewmatic/context.py" = [
-        "C901",                                                                  # Review assembly keeps deterministic evidence ordering in one pass.
-        "PLR0911",                                                               # Explicit exits represent distinct review states.
-        "PLR0912",                                                               # Review scaffolding covers independent evidence branches.
-        "PLR0915",                                                               # Splitting would duplicate the publication context.
-        "RUF001",                                                                # User-visible Russian runbook text is intentional.
-        "S603",                                                                  # Git and GitLab commands use validated structured arguments.
-        "S607",                                                                  # Host CLIs are intentional PATH-resolved dependencies.
-      ]
-      "src/reviewmatic/scope.py" = [
-        "PLC0415",                                                               # The local follow-up plan loads lazily to avoid the draft import cycle.
-      ]
-      "src/reviewmatic/worktree.py" = [
-        "PLW1510",                                                               # The git runner inspects returncode and stderr itself, like the TS runner.
-        "S603",                                                                  # Git receives validated structured arguments only.
+      "src/reviewmatic/collect.py" = [
+        "S603",                                                                  # Git read-only checks use validated argument vectors.
         "S607",                                                                  # Git is an intentional PATH-resolved dependency.
       ]
-      "src/reviewmatic/run.py" = [
-        "S101",                                                                  # Assertions narrow state validated immediately before use.
-        "S603",                                                                  # Authoring callbacks run one user-supplied shell command through a fixed argument vector.
-        "S607",                                                                  # The callback shell is an intentional PATH-resolved dependency.
-      ]
-      "src/reviewmatic/ocr_critic.py" = [
-        "S603",                                                                  # The OCR critic runs the user-selected ocr CLI over a fixed argument vector.
+      "src/reviewmatic/ocr.py" = [
+        "S603",                                                                  # The OCR engine runs over a fixed argument vector.
         "S607",                                                                  # The ocr CLI is an intentional PATH-resolved dependency.
+      ]
+      "src/reviewmatic/profiles.py" = [
+        "S603",                                                                  # Read-only git and ocr probes use fixed argument vectors.
+        "S607",                                                                  # git and ocr are intentional PATH-resolved dependencies.
       ]
 
     [tool.ruff.lint.mccabe]

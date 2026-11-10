@@ -1,30 +1,42 @@
 {
-  "schema": "eval-scenario/v1",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "1f41e526fa730958f451c23a4463ecba1a97895f7187136cefd56f8db9bd78bc",
+  "expected": {
+    "selected": ["skill:mattermost"]
+  },
+  "host": "any",
   "id": "stage17.read-safety.trigger",
-  "revision": 1,
+  "input": {
+    "fixture": {
+      "selected": ["skill:mattermost"]
+    },
+    "prompt": "\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0439 Mattermost, reactions, \u0431\u0435\u0437 attachments."
+  },
+  "invariants": [
+    {
+      "contains": "GET-only",
+      "id": "get-only",
+      "path": "skills/mattermost/references/workflow.md"
+    },
+    {
+      "contains": "Attachment",
+      "id": "attachments",
+      "path": "skills/mattermost/references/workflow.md"
+    }
+  ],
   "kind": "trigger",
   "locale": "ru",
   "pair_id": "stage17.read-safety.trigger",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Прочитай Mattermost, reactions, без attachments.",
-    "fixture": { "selected": ["skill:mattermost"] }
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
   },
-  "expected": { "selected": ["skill:mattermost"] },
-  "invariants": [
-    {
-      "id": "get-only",
-      "path": "skills/mattermost/references/workflow.md",
-      "contains": "GET-only"
-    },
-    {
-      "id": "attachments",
-      "path": "skills/mattermost/references/workflow.md",
-      "contains": "Attachment"
-    }
-  ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "1f41e526fa730958f451c23a4463ecba1a97895f7187136cefd56f8db9bd78bc"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

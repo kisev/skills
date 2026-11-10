@@ -16,11 +16,9 @@ ROOT = BASE.parents[2]
 
 
 def pytest_sessionstart() -> None:
-    # Tests isolate XDG state per AGENTS.md; mise shims (jq, node, python)
-    # resolve their trust cache from that isolated state and refuse to run
-    # (mise 2026.10.8 checks trust on every shim execution). Re-trust the
-    # repository and global mise configs for the session instead of weakening
-    # the isolation; an explicitly exported value always wins.
+    # Tests isolate XDG state per AGENTS.md; mise shims resolve their trust
+    # cache from that isolated state, so re-trust the repository and global
+    # configs for the session instead of weakening the isolation.
     trusted = [
         str(ROOT),
         str(Path.home() / ".config" / "mise" / "config.toml"),

@@ -45,21 +45,21 @@
     },
     {
       "from": "task-triage",
-      "to": "code-review",
+      "to": "mr-review",
       "type": "uses",
       "reason": "release-aware SemVer assessment method"
     },
     {
-      "from": "code-review",
+      "from": "mr-review",
       "to": "humanize",
-      "type": "uses",
-      "reason": "applied to drafted thread replies before publication"
+      "type": "recommends",
+      "reason": "optional final editing pass for drafted replies"
     },
     {
-      "from": "code-review",
-      "to": "code-simplify",
-      "type": "uses",
-      "reason": "panel critics and the arbitrator apply its shared simplification criteria"
+      "from": "mr-review",
+      "to": "eli5",
+      "type": "recommends",
+      "reason": "optional plain-language explanation of the review context"
     },
     {
       "from": "mr-prepare",
@@ -146,20 +146,20 @@
       "reason": "applied to slide prompt prose"
     },
     {
-      "from": "code-review",
+      "from": "mr-review",
       "to": "release-review",
       "type": "recommends",
       "reason": "release MRs route to it for the release verdict"
     },
     {
-      "from": "code-review",
+      "from": "mr-review",
       "to": "task-prepare",
       "type": "recommends",
       "reason": "full preparation of out-of-MR follow-ups is a separate invocation"
     },
     {
       "from": "code-explain",
-      "to": "code-review",
+      "to": "mr-review",
       "type": "recommends",
       "reason": "quality evaluation after the walkthrough"
     },
@@ -381,7 +381,7 @@
     },
     {
       "from": "verification",
-      "to": "code-review",
+      "to": "mr-review",
       "type": "recommends",
       "reason": "a verified change is ready for review before publication"
     }

@@ -22,7 +22,7 @@ profiles shall remain usable without installed specialist agents or package
 report envelopes. A pending routed receipt shall still bind its next dispatch;
 ordinary subagents shall not bypass a routed operation.
 Independent routed review without an execution card shall accept the generic
-review report or the versioned code-review critic receipt transport; the skill
+review report or the versioned mr-review critic receipt transport; the skill
 runtime owns its complete evidence validation. Parallel routed calls shall have
 separate native call identities, and failed calls shall release their own
 active binding without cancelling unrelated calls. Receipt expiry shall gate
@@ -260,7 +260,7 @@ credentials and base project during `env:gitlab:up`, without manual registration
 Integration scenarios under `tests/integration/gitlab/` shall create their own
 fixture repositories and Git history against an already initialized service;
 ordinary tests shall never start, stop or recreate containers or initialize accounts.
-It shall verify `code-review`/reviewmatic, `mr-prepare`, `task-prepare`,
+It shall verify `mr-review`/reviewmatic, `mr-prepare`, `task-prepare`,
 `task-triage`, `release-prepare` and `release-review` against the pinned CE server
 and real glab, including pagination, author/reviewer roles, inline positions,
 single/grouped suggestions and partial application, manual publication commands

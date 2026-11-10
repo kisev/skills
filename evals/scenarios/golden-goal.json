@@ -1,43 +1,43 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "golden.goal.work-item",
-  "revision": 2,
-  "kind": "golden",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "0edf994e4cba4a3e916b82caeed2e8d51963e84978a952bd02a57a029a91911e",
+  "expected": {
+    "not_selected": [],
+    "selected": ["skill:goal"]
+  },
   "host": "any",
+  "id": "golden.goal.work-item",
   "input": {
-    "prompt": "/goal подготовь проверяемую read-only цель",
     "fixture": {
       "selected": ["skill:goal"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:goal"],
-    "not_selected": []
+    },
+    "prompt": "/goal \u043f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u043c\u0443\u044e read-only \u0446\u0435\u043b\u044c"
   },
   "invariants": [
     {
+      "contains": "at or below 4000 characters",
       "id": "goal-budget",
-      "path": "skills/goal/references/workflow.md",
-      "contains": "at or below 4000 characters"
+      "path": "skills/goal/references/workflow.md"
     },
     {
+      "contains": "structured Markdown rather than JSON",
       "id": "goal-work-item",
-      "path": "skills/goal/references/workflow.md",
-      "contains": "structured Markdown rather than JSON"
+      "path": "skills/goal/references/workflow.md"
     }
   ],
+  "kind": "golden",
+  "locale": "ru",
+  "pair_id": "golden.goal.work-item",
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "0edf994e4cba4a3e916b82caeed2e8d51963e84978a952bd02a57a029a91911e",
-  "locale": "ru",
-  "pair_id": "golden.goal.work-item"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

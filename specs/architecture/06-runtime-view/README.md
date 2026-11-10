@@ -70,4 +70,4 @@ low-level commands remain readable. Finalization renders `runbook.md` with
 direct copy-ready `glab` commands; neither the runner nor the skill archive
 publishes, and local patches remain a separate manual operation. The manual
 publication contract is owned by
-[the code-review requirement](../../capabilities/skills/code-review.md).
+[the mr-review requirement](../../capabilities/skills/mr-review.md).

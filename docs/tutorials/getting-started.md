@@ -68,7 +68,7 @@ prints one `OK`/`FAIL` line per tool and a copy-ready repair command for every
 failure:
 
 ```shell
-python3 ~/.agents/skills/code-review/scripts/check_environment.py
+python3 ~/.agents/skills/mr-review/scripts/check_environment.py
 ```
 
 The [portable skills how-to](../how-to/portable-skills.md#check-the-environment-contract)

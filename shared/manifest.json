@@ -103,10 +103,6 @@
       "destination": "spec-manage/references/documentation-review.md"
     },
     {
-      "source": "references/documentation-review.md",
-      "destination": "code-review/references/documentation-review.md"
-    },
-    {
       "source": "references/documentation_review.py",
       "destination": "docs-review/scripts/documentation_review.py"
     },
@@ -117,10 +113,6 @@
     {
       "source": "references/documentation_review.py",
       "destination": "spec-manage/scripts/documentation_review.py"
-    },
-    {
-      "source": "references/simplification-criteria.md",
-      "destination": "code-review/references/simplification-criteria.md"
     },
     {
       "source": "references/simplification-criteria.md",
@@ -144,10 +136,6 @@
     },
     {
       "source": "references/gitlab-workflow.md",
-      "destination": "code-review/references/gitlab-workflow.md"
-    },
-    {
-      "source": "references/gitlab-workflow.md",
       "destination": "mr-prepare/references/gitlab-workflow.md"
     },
     {
@@ -165,10 +153,6 @@
     {
       "source": "references/goal_authorization.py",
       "destination": "spec-manage/scripts/goal_authorization.py"
-    },
-    {
-      "source": "references/interaction-contract.md",
-      "destination": "code-review/references/interaction-contract.md"
     },
     {
       "source": "references/interaction-contract.md",
@@ -300,7 +284,7 @@
     },
     {
       "source": "references/language-policy.md",
-      "destination": "code-review/references/language-policy.md"
+      "destination": "mr-review/references/language-policy.md"
     },
     {
       "source": "references/language-policy.md",
@@ -532,7 +516,7 @@
     },
     {
       "source": "references/necessity-doctrine.md",
-      "destination": "code-review/references/necessity-doctrine.md"
+      "destination": "mr-review/references/necessity-doctrine.md"
     },
     {
       "source": "references/people_runtime/people-context.example.json",
@@ -571,6 +555,26 @@
       "destination": "team-report/references/people-context.example.json"
     },
     {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-retro/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-roadmap/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-sprint-close/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "team-sprint-start/references/people-context.example.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.example.json",
+      "destination": "slides-prompts-prepare/references/people-context.example.json"
+    },
+    {
       "source": "references/people_runtime/people-context.schema.json",
       "destination": "team-1on1/references/people-context.schema.json"
     },
@@ -605,6 +609,26 @@
     {
       "source": "references/people_runtime/people-context.schema.json",
       "destination": "team-report/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-retro/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-roadmap/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-sprint-close/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "team-sprint-start/references/people-context.schema.json"
+    },
+    {
+      "source": "references/people_runtime/people-context.schema.json",
+      "destination": "slides-prompts-prepare/references/people-context.schema.json"
     },
     {
       "source": "references/people_runtime/people-workflow.md",
@@ -692,10 +716,6 @@
     },
     {
       "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
-      "destination": "code-review/references/portable-gitlab-contracts-v2.schema.json"
-    },
-    {
-      "source": "references/portable_gitlab/artifact-contracts-v2.schema.json",
       "destination": "mr-prepare/references/portable-gitlab-contracts-v2.schema.json"
     },
     {
@@ -717,10 +737,6 @@
     {
       "source": "references/portable_gitlab/contract.py",
       "destination": "release-review/scripts/portable_runtime/contract.py"
-    },
-    {
-      "source": "references/portable_gitlab/contracts-v2.md",
-      "destination": "code-review/references/portable-gitlab-contracts-v2.md"
     },
     {
       "source": "references/portable_gitlab/contracts-v2.md",
@@ -828,7 +844,7 @@
     },
     {
       "source": "references/question-guidelines.md",
-      "destination": "code-review/references/question-guidelines.md"
+      "destination": "mr-review/references/question-guidelines.md"
     },
     {
       "source": "references/question-guidelines.md",
@@ -1136,6 +1152,10 @@
     },
     {
       "source": "references/team_runtime/team-context.example.json",
+      "destination": "team-people/references/team-context.example.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.example.json",
       "destination": "team-performance/references/team-context.example.json"
     },
     {
@@ -1173,6 +1193,10 @@
     {
       "source": "references/team_runtime/team-context.schema.json",
       "destination": "team-onboarding/references/team-context.schema.json"
+    },
+    {
+      "source": "references/team_runtime/team-context.schema.json",
+      "destination": "team-people/references/team-context.schema.json"
     },
     {
       "source": "references/team_runtime/team-context.schema.json",
@@ -1436,7 +1460,7 @@
     },
     {
       "source": "references/environment_check.py",
-      "destination": "code-review/scripts/check_environment.py"
+      "destination": "mr-review/scripts/check_environment.py"
     },
     {
       "source": "references/environment_check.py",
@@ -1473,6 +1497,18 @@
     {
       "source": "references/environment_check.py",
       "destination": "team-retro/scripts/check_environment.py"
+    },
+    {
+      "source": "references/discussion-replies.md",
+      "destination": "mr-review/references/discussion-replies.md"
+    },
+    {
+      "source": "references/humanize-patterns.md",
+      "destination": "mr-review/references/humanize-patterns.md"
+    },
+    {
+      "source": "references/clarity-rules.md",
+      "destination": "mr-review/references/clarity-rules.md"
     }
   ]
 }

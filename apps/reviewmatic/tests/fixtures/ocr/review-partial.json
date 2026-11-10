@@ -1,0 +1,12 @@
+{
+  "status": "completed",
+  "comments": [
+    { "path": "src/a.py", "content": "" },
+    {
+      "path": "src/c.py",
+      "start_line": "not-an-int",
+      "severity": "low",
+      "content": "Kept tolerantly."
+    }
+  ]
+}

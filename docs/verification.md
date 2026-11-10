@@ -40,21 +40,21 @@ removal.
 
 ## Reviewmatic Python Application
 
-`apps/reviewmatic` is the only reviewmatic runtime. It handles GitLab MRs,
-local WIP, panel/arbitration, incremental review, repair, refresh, private XDG
-state, managed worktrees, and direct manual runbooks. Run it ephemerally from a
-selected Git ref with `uvx`; there is no npm or PyPI runtime and no TUI. See the
+`apps/reviewmatic` is the only reviewmatic runtime. It is the mechanical helper
+for `mr-review`: read-only exact collection, the bounded OCR background,
+parallel `ocr` runs, session comparison, head revalidation, profile loading,
+and GitLab draft-note command generation. It performs no review and no GitLab
+mutation. Run it ephemerally from a selected Git ref with `uvx`; there is no
+npm or PyPI runtime and no TUI. See the
 [application guide](../apps/reviewmatic/README.md) for stable/dev ref selection,
-cache refresh, and runbook recovery.
+cache refresh, and the draft-block path.
 
 The portable contract core under `src/reviewmatic/portable/` is materialized
 byte-for-byte from `shared/references/` through `shared/manifest.json`
-(`pythonRuntime`). The 33 golden cases retain expectations generated from
-TypeScript revision `3e409c217e94d643f77eb543caab9a2ed4b7288d`; the old
-implementation and generator are removed. Python tests recompute and assert
-every expected digest, verdict, and state transition without regenerating
-expectations from Python. The historical TypeScript baseline and mapping are in
-the [test matrix](reviewmatic-test-matrix.md).
+(`pythonRuntime`). Its tests cover the collection primitives, the background
+boundary, draft-note generation, profile overlay, and OCR parsing; the runbook
+format fixtures are authored examples of the skill contract, not runtime
+output.
 
 ```shell
 task generate:check
@@ -62,13 +62,13 @@ task reviewmatic:check
 task reviewmatic:smoke
 ```
 
-`generate:check` checks materialized shared sources and retained golden
-assertions. The application gate runs pytest, mypy, the lock check, and builds
-the wheel and source distribution. The separate install smoke exercises a
-local Git ref and both built distributions outside the checkout, without Node,
-`PYTHONPATH`, or an installed `reviewmatic` tool. The smoke is a scoped gate
-layer: CI and the pre-push hook run it when the delta touches
-`apps/reviewmatic/**`, and `task check` includes it.
+`generate:check` validates the materialized shared sources and the retained
+fixtures. The application gate runs pytest, mypy, the lock check, and the wheel
+and source-distribution build. The separate install smoke verifies the local
+Git ref and both built distributions outside the checkout without Node,
+`PYTHONPATH`, or an installed `reviewmatic`. The smoke is a separate gate
+layer: CI and pre-push run it when `apps/reviewmatic/**` changes, and the full
+`task check` includes it.
 
 ## shopmatic
 

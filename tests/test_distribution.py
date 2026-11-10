@@ -6,6 +6,7 @@ import http.server
 import io
 import json
 import os
+import re
 import shutil
 import tarfile
 import threading
@@ -52,6 +53,58 @@ def test_skill_archive_excludes_python_cache(tmp_path: Path) -> None:
         fileobj=io.BytesIO(build_distribution.archive(skill)), mode="r:gz"
     ) as archive:
         assert archive.getnames() == ["SKILL.md"]
+
+
+REFERENCE_PATH = re.compile(r"`(references/[^`\n]+)`")
+LEGACY_OPTIONAL_REFERENCES = frozenset({"references/runtime-pin.json"})
+
+
+def dangling_references(members: dict[str, bytes]) -> list[tuple[str, str]]:
+    """Backticked `references/...` paths in a Markdown member that the archive lacks."""
+    dangling: list[tuple[str, str]] = []
+    for name, content in sorted(members.items()):
+        if not name.endswith(".md"):
+            continue
+        text = content.decode("utf-8", errors="replace")
+        for match in REFERENCE_PATH.finditer(text):
+            target = match.group(1)
+            if "<" in target or "*" in target or target in LEGACY_OPTIONAL_REFERENCES:
+                continue
+            if target not in members:
+                dangling.append((name, target))
+    return dangling
+
+
+def test_reference_scan_accepts_members_and_reports_dangling_paths() -> None:
+    members = {
+        "SKILL.md": (
+            b"Read `references/run-path.md`, `references/<name>.md`, and "
+            b"`references/runtime-pin.json`.\n"
+        ),
+        "references/run-path.md": b"# Run path\n",
+    }
+    assert dangling_references(members) == []
+    members["SKILL.md"] = b"Read `references/missing.md`.\n"
+    assert dangling_references(members) == [("SKILL.md", "references/missing.md")]
+
+
+def test_every_distributed_archive_is_self_contained() -> None:
+    assert build_distribution.build(OUTPUT, False) == 0
+    index = json.loads((OUTPUT / ".well-known/agent-skills/index.json").read_text(encoding="utf-8"))
+    dangling: list[tuple[str, str, str]] = []
+    for entry in index["skills"]:
+        archive = OUTPUT / entry["url"].removeprefix("../../")
+        with tarfile.open(archive, mode="r:gz") as document:
+            members = {}
+            for member in document.getmembers():
+                if member.isfile():
+                    extracted = document.extractfile(member)
+                    assert extracted is not None
+                    members[member.name] = extracted.read()
+        dangling += [(entry["name"], name, target) for name, target in dangling_references(members)]
+    assert not dangling, "\n".join(
+        f"{skill}: {name} names missing {target}" for skill, name, target in dangling
+    )
 
 
 def test_distribution_requires_materialized_skills(

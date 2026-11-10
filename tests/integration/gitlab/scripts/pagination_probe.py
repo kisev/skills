@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 source = json.loads(Path(sys.argv[1]).read_text())
-if source["skill"] == "code-review":
+if source["skill"] == "mr-review":
     from reviewmatic.portable.portable_gitlab import contract as module
 else:
     sys.path.insert(0, str(ROOT / ".build/skills" / source["skill"] / "scripts"))

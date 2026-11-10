@@ -11,7 +11,7 @@ refactors.
 Trigger for test-first feature or fix requests and "red-green-refactor"
 wording; near-misses: running or summarizing an existing suite without new
 behavior, debugging a live failure (routes to `debugging`), and behavior
-review (routes to `code-review`).
+review (routes to `mr-review`).
 
 ## Inputs and Outputs
 

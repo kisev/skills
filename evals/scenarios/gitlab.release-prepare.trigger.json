@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.release-prepare.trigger",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "c30a67b1977c6c02946a7eda7f768fecd5dd848a6fe6dc7ab7ba07143598a9df",
+  "expected": {
+    "not_selected": ["skill:release-review"],
+    "selected": ["skill:release-prepare"]
+  },
   "host": "any",
+  "id": "gitlab.release-prepare.trigger",
   "input": {
-    "prompt": "Подготовь release inventory и SemVer rationale.",
     "fixture": {
       "selected": ["skill:release-prepare"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:release-prepare"],
-    "not_selected": ["skill:release-review"]
+    },
+    "prompt": "\u041f\u043e\u0434\u0433\u043e\u0442\u043e\u0432\u044c release inventory \u0438 SemVer rationale."
   },
   "invariants": [
     {
+      "contains": "exact base/start/head SHA",
       "id": "release-range",
-      "path": "skills/release-prepare/references/workflow.md",
-      "contains": "exact base/start/head SHA"
+      "path": "skills/release-prepare/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "gitlab.release-prepare.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "c30a67b1977c6c02946a7eda7f768fecd5dd848a6fe6dc7ab7ba07143598a9df",
-  "locale": "ru",
-  "pair_id": "gitlab.release-prepare.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

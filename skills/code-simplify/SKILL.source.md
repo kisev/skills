@@ -7,7 +7,7 @@ description: >-
   the passive prevention ladder applies to the current change without
   scanning any repository. Never cancel a clarification or confirmation gate.
   Do not trigger on prose or text simplification, which belongs to
-  asd-ste100, humanize, and eli5; merge-request reviews route to code-review
+  asd-ste100, humanize, and eli5; merge-request reviews route to mr-review
   and specification audits route to spec-manage.
   Russian discovery terms: "упростить код", "упрощение кода", "аудит сложности кода".
 license: MIT

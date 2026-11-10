@@ -1,39 +1,49 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "spec-manage.audit-language-read-only",
-  "revision": 1,
-  "locale": "neutral",
-  "pair_id": null,
-  "kind": "deterministic",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Audit an English-declared specs tree, report in Russian, and do not modify language violations.",
-    "fixture": { "selected": ["skill:spec-manage"] }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 1000,
+    "timeout_seconds": 20
   },
+  "digest": "94f33d532e6d994e61930f3b94c99f572d1d5b24ca537ad1b1c20b8c5efdad41",
   "expected": {
-    "selected": ["skill:spec-manage"],
+    "mutation_boundary": "no-writes",
     "not_selected": [],
-    "mutation_boundary": "no-writes"
+    "selected": ["skill:spec-manage"]
+  },
+  "host": "any",
+  "id": "spec-manage.audit-language-read-only",
+  "input": {
+    "fixture": {
+      "selected": ["skill:spec-manage"]
+    },
+    "prompt": "Audit an English-declared specs tree, report in Russian, and do not modify language violations."
   },
   "invariants": [
     {
+      "contains": "This mode never edits the reviewed project",
       "id": "audit-read-only",
-      "path": "skills/spec-manage/references/workflow.md",
-      "contains": "This mode never edits the reviewed project"
+      "path": "skills/spec-manage/references/workflow.md"
     },
     {
+      "contains": "compliance with the language declared in `specs/README.md`",
       "id": "audit-checks-declared-language",
-      "path": "skills/spec-manage/references/auditing.md",
-      "contains": "compliance with the language declared in `specs/README.md`"
+      "path": "skills/spec-manage/references/auditing.md"
     },
     {
+      "contains": "report may use a different language from the canonical tree",
       "id": "audit-report-language-independent",
-      "path": "skills/spec-manage/references/auditing.md",
-      "contains": "report may use a different language from the canonical tree"
+      "path": "skills/spec-manage/references/auditing.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 1000, "max_cost": 1 },
-  "digest": "94f33d532e6d994e61930f3b94c99f572d1d5b24ca537ad1b1c20b8c5efdad41"
+  "kind": "deterministic",
+  "locale": "neutral",
+  "pair_id": null,
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

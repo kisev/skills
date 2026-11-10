@@ -76,6 +76,67 @@ def test_ccr_adapter_argv_and_claude_parse() -> None:
     assert live_runner._claude_parse("plain words") == ("plain words", None)
 
 
+def test_opencode_and_codex_adapter_argv() -> None:
+    assert live_runner._opencode_start({"engine_profile": "build"}, "do it", ["Write"]) == [
+        "opencode",
+        "run",
+        "--format",
+        "json",
+        "--auto",
+        "--agent",
+        "build",
+        "do it",
+    ]
+    assert live_runner._codex_start({"engine_profile": "live-runs"}, "do it", ["Write"]) == [
+        "codex",
+        "exec",
+        "--json",
+        "--sandbox",
+        "workspace-write",
+        "--profile",
+        "live-runs",
+        "do it",
+    ]
+
+
+def test_host_jsonl_parse_joins_text_events() -> None:
+    opencode = "\n".join(
+        [
+            json.dumps({"type": "step_start", "session_id": "ses_1"}),
+            json.dumps({"part": {"text": "the review is complete"}}),
+        ]
+    )
+    assert live_runner._host_parse(opencode) == ("the review is complete", "ses_1")
+    codex = json.dumps({"item": {"text": "codex answer"}, "sessionId": "ses_2"})
+    assert live_runner._host_parse(codex) == ("codex answer", "ses_2")
+    assert live_runner._host_parse("plain words") == ("plain words", None)
+
+
+def test_selected_profile_and_the_ccr_legacy_alias(tmp_path: Path) -> None:
+    selected = tmp_path / "opencode.json"
+    selected.write_text(
+        json.dumps({"engine": "opencode", "engine_profile": "build"}), encoding="utf-8"
+    )
+    assert live_runner.load_profile(selected)["engine_profile"] == "build"
+    legacy = tmp_path / "legacy.json"
+    legacy.write_text(json.dumps({"engine": "ccr", "ccr_profile": "x"}), encoding="utf-8")
+    assert live_runner.load_profile(legacy)["engine_profile"] == "x"
+    with pytest.raises(live_runner.LiveRunError, match="selected profile is missing"):
+        live_runner.load_profile(tmp_path / "absent.json")
+
+
+def test_default_profile_remains_the_ccr_path() -> None:
+    profile = live_runner.load_profile()
+    assert profile["engine"] == "ccr"
+    assert profile["engine_profile"] == "skills-tests-claude"
+
+
+def test_preflight_names_a_missing_host_cli(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("scripts.live_runner.shutil.which", lambda _name: None)
+    problems = live_runner.PREFLIGHTS["opencode"]({"engine": "opencode", "engine_profile": "build"})
+    assert "engine CLI 'opencode' is not on PATH" in problems
+
+
 def test_profile_validation_rejects_unknown_engine(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -109,6 +170,69 @@ def test_assertion_evaluation_over_staged_fixture(tmp_path: Path) -> None:
     assert by_id["hash_unchanged:packages/ts-widget/CLAUDE.md"] == "passed"
     assert by_id["is_regular_file:CLAUDE.md"] == "failed"
     assert by_id["output_mentions:4"] == "passed"
+
+
+def test_file_assertions_match_and_negate(tmp_path: Path) -> None:
+    workdir = tmp_path / "fixture"
+    workdir.mkdir()
+    (workdir / "reply.md").write_text("It reuses the same id.\n", encoding="utf-8")
+    before = live_runner.snapshot(workdir)
+    checks = [
+        {"type": "file_matches", "path": "reply.md", "pattern": "reuse", "flags": "i"},
+        {"type": "file_not_matches", "path": "reply.md", "pattern": "the user", "flags": "i"},
+        {"type": "file_matches", "path": "missing.md", "pattern": "x"},
+        {"type": "file_not_matches", "path": "reply.md", "pattern": "reuse", "flags": "i"},
+    ]
+    results = live_runner.evaluate_assertions(checks, workdir, before, before, "")
+    statuses = [item["status"] for item in results]
+    assert statuses == ["passed", "passed", "failed", "failed"]
+
+
+def test_a_variant_can_omit_the_skill_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live = tmp_path / "live"
+    manifest = live / "reply" / "fixture"
+    manifest.mkdir(parents=True)
+    build = tmp_path / "build" / "skills" / "mr-review"
+    build.mkdir(parents=True)
+    (build / "SKILL.md").write_text("skill\n", encoding="utf-8")
+    monkeypatch.setattr(live_runner, "LIVE_DIR", live)
+    monkeypatch.setattr(live_runner, "BUILD_SKILLS", tmp_path / "build" / "skills")
+    variants: dict[str, dict[str, object]] = {"no-guidance": {"install_skill": False}}
+    scenario = {
+        "skill": "mr-review",
+        "active_variant": "no-guidance",
+        "variants": variants,
+    }
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    live_runner.stage_fixture(scenario, "reply", workdir)
+    assert not (workdir / ".agents").exists()
+    scenario["active_variant"] = "default"
+    variants["default"] = {}
+    live_runner.stage_fixture(scenario, "reply", workdir)
+    assert (workdir / ".agents" / "skills" / "mr-review" / "SKILL.md").is_file()
+
+
+def test_opencode_staging_denies_shell_and_network(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    live = tmp_path / "live"
+    (live / "reply" / "fixture").mkdir(parents=True)
+    monkeypatch.setattr(live_runner, "LIVE_DIR", live)
+    (tmp_path / "build" / "skills").mkdir(parents=True)
+    monkeypatch.setattr(live_runner, "BUILD_SKILLS", tmp_path / "build" / "skills")
+    scenario = {"active_variant": "default", "variants": {"default": {}}}
+    workdir = tmp_path / "opencode"
+    workdir.mkdir()
+    live_runner.stage_fixture(scenario, "reply", workdir, "opencode")
+    permission = json.loads((workdir / "opencode.json").read_text(encoding="utf-8"))["permission"]
+    assert permission == {"bash": "deny", "webfetch": "deny", "edit": "allow", "read": "allow"}
+    ccr = tmp_path / "ccr"
+    ccr.mkdir()
+    live_runner.stage_fixture(scenario, "reply", ccr, "ccr")
+    assert not (ccr / "opencode.json").exists()
 
 
 def _stage_scenario_tree(base: Path) -> None:
@@ -257,7 +381,7 @@ def test_run_all_aggregates_verdicts_and_exit_code(
         "b": {"scenario": "b", "variant": "default", "verdict": "FAIL"},
     }
     monkeypatch.setattr(live_runner, "list_scenarios", lambda: ["a", "b"])
-    monkeypatch.setattr(live_runner, "load_profile", lambda: PROFILE)
+    monkeypatch.setattr(live_runner, "load_profile", lambda path=None: PROFILE)
     monkeypatch.setattr(
         live_runner, "run_scenario", lambda name, variant, profile, runner=None: reports[name]
     )

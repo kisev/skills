@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.release-review.trigger",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "eb3e809b32344ded3273c3a1ba68bfa83fe3a43900a2d5e558337887e0a2bddc",
+  "expected": {
+    "not_selected": ["skill:mr-review"],
+    "selected": ["skill:release-review"]
+  },
   "host": "any",
+  "id": "gitlab.release-review.trigger",
   "input": {
-    "prompt": "Проверь readiness release MR.",
     "fixture": {
       "selected": ["skill:release-review"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:release-review"],
-    "not_selected": ["skill:code-review"]
+    },
+    "prompt": "\u041f\u0440\u043e\u0432\u0435\u0440\u044c readiness release MR."
   },
   "invariants": [
     {
+      "contains": "`semver`, `compatibility`, `migration`, `rollback`, `ci`",
       "id": "release-gates",
-      "path": "skills/release-review/references/workflow.md",
-      "contains": "`semver`, `compatibility`, `migration`, `rollback`, `ci`"
+      "path": "skills/release-review/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "gitlab.release-review.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "e70a6123ee03fc705bff72ee743a0fe4f43afdedfa6eb941b58b211a5d64f2ca",
-  "locale": "ru",
-  "pair_id": "gitlab.release-review.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

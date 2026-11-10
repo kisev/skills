@@ -1,24 +1,10 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "stage17.team-actions.trigger.en",
-  "revision": 1,
-  "kind": "trigger",
-  "locale": "en",
-  "pair_id": "stage17.team-actions.trigger",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Run one fixed team workflow action.",
-    "fixture": {
-      "selected": [
-        "skill:team-sprint-start",
-        "skill:team-sprint-close",
-        "skill:team-retro",
-        "skill:team-roadmap",
-        "skill:slides-prompts-prepare"
-      ]
-    }
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
   },
+  "digest": "03f1d021c92573aae138be13bd3c2120cf861dedb758276ed3dd55f3be3ebb85",
   "expected": {
     "selected": [
       "skill:team-sprint-start",
@@ -28,19 +14,41 @@
       "skill:slides-prompts-prepare"
     ]
   },
+  "host": "any",
+  "id": "stage17.team-actions.trigger.en",
+  "input": {
+    "fixture": {
+      "selected": [
+        "skill:team-sprint-start",
+        "skill:team-sprint-close",
+        "skill:team-retro",
+        "skill:team-roadmap",
+        "skill:slides-prompts-prepare"
+      ]
+    },
+    "prompt": "Run one fixed team workflow action."
+  },
   "invariants": [
     {
+      "contains": "team_runtime/team_workflow.py",
       "id": "shared-runtime",
-      "path": "shared/manifest.json",
-      "contains": "team_runtime/team_workflow.py"
+      "path": "shared/manifest.json"
     },
     {
+      "contains": "context-save",
       "id": "confirmed-context",
-      "path": "skills/team-roadmap/references/workflow.md",
-      "contains": "context-save"
+      "path": "skills/team-roadmap/references/workflow.md"
     }
   ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "03f1d021c92573aae138be13bd3c2120cf861dedb758276ed3dd55f3be3ebb85"
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "stage17.team-actions.trigger",
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
+  },
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

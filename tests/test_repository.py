@@ -23,7 +23,7 @@ PORTABLE_SKILLS = (
     "askme",
     "ast-grep",
     "code-explain",
-    "code-review",
+    "mr-review",
     "code-simplify",
     "commit-msg",
     "docs-prepare",
@@ -67,7 +67,7 @@ INSPIRED_BY_LABELS = {
         "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f "
         "(MIT © Bohdan Triapitsyn, writing-for-agents by Matt Pocock)"
     ),
-    "code-review": (
+    "mr-review": (
         "openchamber/openchamber (MIT © Bohdan Triapitsyn); "
         "solution 37, blocks 1-2; blocks 3-4 pinned at "
         "openchamber/openchamber@d1fc27c86f258436e2ac748204e8db9bc9c2878f"
@@ -469,7 +469,6 @@ class PortableSkillValidationTests(unittest.TestCase):
             "docs-prepare",
             "team-sprint-start",
             "mr-prepare",
-            "code-review",
             "release-prepare",
             "release-review",
         )
@@ -498,6 +497,9 @@ class PortableSkillValidationTests(unittest.TestCase):
                 self.assertIn("references/workflow.md", text)
                 self.assertIn("references/language-policy.md", text)
         generic_source = ROOT / "shared/references/work_item_runtime/interaction-contract.md"
+        self.assertFalse(
+            (BUILT_SKILLS / "mr-review" / "references/interaction-contract.md").exists()
+        )
         for name in ("task-triage", "task-review", "task-prepare"):
             with self.subTest(skill=name, behavior="generic-interaction"):
                 self.assertEqual(
@@ -646,15 +648,11 @@ class PortableSkillValidationTests(unittest.TestCase):
                         ROOT / "shared/references/portable_gitlab/artifact-contracts-v2.schema.json"
                     ).read_bytes(),
                 )
-        thin = BUILT_SKILLS / "code-review"
+        thin = BUILT_SKILLS / "mr-review"
         self.assertFalse((thin / "scripts/portable_runtime").exists())
         self.assertEqual(
             (thin / "scripts/check_environment.py").read_bytes(),
             (ROOT / "shared/references/environment_check.py").read_bytes(),
-        )
-        self.assertEqual(
-            (thin / "references/portable-gitlab-contracts-v2.md").read_bytes(),
-            (ROOT / "shared/references/portable_gitlab/contracts-v2.md").read_bytes(),
         )
 
     def test_task_skills_materialize_their_declared_runtimes(self) -> None:

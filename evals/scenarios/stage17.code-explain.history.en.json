@@ -1,30 +1,43 @@
 {
-  "schema": "eval-scenario/v1",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "e6b5d31f2f189579d84605371ad8c7701cdf1e448424c1f1ee68ade812571904",
+  "expected": {
+    "not_selected": ["skill:mr-review"],
+    "selected": ["skill:code-explain"]
+  },
+  "host": "any",
   "id": "stage17.code-explain.history.en",
-  "revision": 1,
+  "input": {
+    "fixture": {
+      "selected": ["skill:code-explain"]
+    },
+    "prompt": "Show history and file evolution without a verdict."
+  },
+  "invariants": [
+    {
+      "contains": "chronology",
+      "id": "history",
+      "path": "skills/code-explain/references/workflow.md"
+    },
+    {
+      "contains": "no findings or verdict",
+      "id": "no-verdict",
+      "path": "skills/code-explain/references/workflow.md"
+    }
+  ],
   "kind": "trigger",
   "locale": "en",
   "pair_id": "stage17.code-explain.history",
-  "surface": "skill",
-  "host": "any",
-  "input": {
-    "prompt": "Show history and file evolution without a verdict.",
-    "fixture": { "selected": ["skill:code-explain"] }
+  "revision": 1,
+  "sandbox": {
+    "network": false,
+    "user_config": false,
+    "writes": "sandbox-only"
   },
-  "expected": { "selected": ["skill:code-explain"], "not_selected": ["skill:code-review"] },
-  "invariants": [
-    {
-      "id": "history",
-      "path": "skills/code-explain/references/workflow.md",
-      "contains": "chronology"
-    },
-    {
-      "id": "no-verdict",
-      "path": "skills/code-explain/references/workflow.md",
-      "contains": "no findings or verdict"
-    }
-  ],
-  "sandbox": { "network": false, "user_config": false, "writes": "sandbox-only" },
-  "budgets": { "timeout_seconds": 20, "max_tokens": 3000, "max_cost": 1 },
-  "digest": "fe5f0cdf6eb72c558d274f37ee9319174b2cc3b9fad0ef027d898d7f4a0c6b2b"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

@@ -1,0 +1,25 @@
+{
+  "status": "completed",
+  "session_id": "sess-123",
+  "llm": { "provider": "openai", "model": "gpt-5" },
+  "manifest": { "run_id": "run-9", "terminal_state": "completed" },
+  "comments": [
+    {
+      "path": "src/a.py",
+      "old_path": "src/a.py",
+      "new_path": "src/a.py",
+      "start_line": 10,
+      "end_line": 12,
+      "category": "correctness",
+      "severity": "high",
+      "content": "The retry is not idempotent.",
+      "suggestion_code": "reserve_operation(request.id)",
+      "existing_code": "provider.submit(request)"
+    },
+    {
+      "path": "src/b.py",
+      "severity": "unexpected",
+      "content": "A second finding."
+    }
+  ]
+}

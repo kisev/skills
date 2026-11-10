@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "skill.goal.near-miss",
-  "revision": 1,
-  "kind": "near-miss",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "e118e63e78f141e91de5dc5e8e025561970031cb130edd135d4a1baaf67ce74a",
+  "expected": {
+    "not_selected": ["skill:goal"],
+    "selected": []
+  },
   "host": "any",
+  "id": "skill.goal.near-miss",
   "input": {
-    "prompt": "Объясни цель, не вызывая навык.",
     "fixture": {
       "selected": []
-    }
-  },
-  "expected": {
-    "selected": [],
-    "not_selected": ["skill:goal"]
+    },
+    "prompt": "\u041e\u0431\u044a\u044f\u0441\u043d\u0438 \u0446\u0435\u043b\u044c, \u043d\u0435 \u0432\u044b\u0437\u044b\u0432\u0430\u044f \u043d\u0430\u0432\u044b\u043a."
   },
   "invariants": [
     {
+      "contains": "strictly read-only",
       "id": "goal-read-only",
-      "path": "skills/goal/references/workflow.md",
-      "contains": "strictly read-only"
+      "path": "skills/goal/references/workflow.md"
     }
   ],
+  "kind": "near-miss",
+  "locale": "ru",
+  "pair_id": "skill.goal.near-miss",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "e118e63e78f141e91de5dc5e8e025561970031cb130edd135d4a1baaf67ce74a",
-  "locale": "ru",
-  "pair_id": "skill.goal.near-miss"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

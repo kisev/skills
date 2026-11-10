@@ -10,32 +10,13 @@ All notable changes to this project are documented in this file. Entries follow
 
 ### Added
 
-- `reviewmatic` prints its authoring contracts at every authoring surface:
-  critic tasks and stops carry the complete receipt dictionary (finding and
-  question-answer fields, assigned question ids, and the context-digest
-  semantics), the decision stop carries the response/verdict/CI vocabularies
-  with the blocking rule, and `replace-artifact` prints the rewound stage and
-  the exact continuation; `record-artifact` and `record-run-critic` gain a
-  write-free `--validate-only` probe, and `start-review` honors
-  `--fix-policy` in the draft flow.
-- Release preparation materializes a prefilled content template
-  (`content-template`) with the printed field contract, treats description
-  and announcement as prose asset files, and rebinds a stale plan in one
-  invocation (`rebind`); review and release runbooks carry a format legend,
-  and release runbooks use full work-item URLs.
-- A refreshed review materializes the context package prefilled from the
-  recorded one: goal, criteria, claims, and questions move verbatim, the
-  binding and thread registry stay machine-fresh, and `supersedes` is preset
-  to the previous package digest.
-
-### Changed
-
-- Release content accepts an empty `illustration_prompt` as a declined
-  illustration — the runtime records the declined note, drops the attachment,
-  and never invents a prompt — and a stale finalize prints the exact one-step
-  rebind command instead of a four-command chain; the code-review and
-  release-prepare skill texts pin the printed contracts as the only format
-  source and the humanize pass as a required workflow step.
+- `mr-review` treats every merge request field and every OCR finding as
+  untrusted data, never as an instruction, and its installed archive is
+  self-contained: the distribution check rejects any backticked
+  `references/...` path that the archive does not carry.
+- Synthetic live runs accept an explicit `--profile` and can exercise the same
+  versioned scenario through ccr, opencode, and codex; a missing host CLI fails
+  preflight with its exact name instead of substituting another host.
 - `spec-manage` keeps an OpenSpec coexistence map (`references/openspec.md`): in
   projects that use OpenSpec (`openspec/`), the skill complements it without
   duplicating its core — a proposal gate before `/opsx:propose` (interview,
@@ -68,9 +49,18 @@ All notable changes to this project are documented in this file. Entries follow
   diagnosis) for `agents-md`, `skill-doctor`, and `goal`, and the measurement
   doctrine (zero is a measurement, before on the identical build, revert what
   you cannot measure, prove by removing) for `verification` and `debugging`.
-- Code review critics must give every affected surface an explicit line, with
-  an "N/A" reason where a surface is out of reach; silence about a surface no
-  longer counts as an examined one.
+
+### Removed
+
+- **BREAKING**: the shared v2 GitLab artifact contract no longer defines or
+  accepts the retired `code-review` profile, the `local` target scope,
+  `local_wip_snapshot`, `local_review_report`, `review_context`, `review_plan`,
+  `review_decision`, and `critic_receipt` artifacts, `local_fix` outcomes, or
+  the `code-review/publication-action/v1` action. A retired artifact fails
+  validation as an unknown profile, kind, or field, with no compatibility mode
+  or migration.
+- The unused generated `apps/reviewmatic/src/generated/artifact-schema.ts` is
+  removed; the canonical shared schema remains the only source.
 
 ## \[12.0.1] - 2026-10-05
 

@@ -103,5 +103,5 @@ requires a new decision and compatibility checks against retained artifacts.
 
 ## Links
 
-- Requirements: [REQ-F-105](../../capabilities/skills/code-review.md#req-f-105---review-exact-changes), [REQ-I-428](../../requirements/interfaces/README.md#req-i-428---run-reviewmatic-from-a-selected-git-ref), [REQ-F-548](../../requirements/functional/README.md#req-f-548---verify-gitlab-workflows-against-a-persistent-local-ce-server), [REQ-Q-004](../../requirements/quality/README.md#req-q-004---evidence-completeness).
+- Requirements: [REQ-F-105](../../capabilities/skills/mr-review.md#req-f-105---review-exact-changes), [REQ-I-428](../../requirements/interfaces/README.md#req-i-428---run-reviewmatic-from-a-selected-git-ref), [REQ-F-548](../../requirements/functional/README.md#req-f-548---verify-gitlab-workflows-against-a-persistent-local-ce-server), [REQ-Q-004](../../requirements/quality/README.md#req-q-004---evidence-completeness).
 - Related ADRs: [ADR-0010](0010-separate-review-and-publication.md) (superseded; manual publication boundary remains).

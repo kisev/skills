@@ -40,12 +40,12 @@ for (const channel of ["latest", "dev"]) {
 }
 
 test("single-skill installation projects the README commands to project scope", () => {
-  const [preview, install, verify] = skillInstallCommands("code-review").split("\n\n");
+  const [preview, install, verify] = skillInstallCommands("mr-review").split("\n\n");
   const latest = commands(readmeBlock("npx --yes skills@latest add"));
   const add = latest.find((line) => line.startsWith("npx --yes skills@latest add"));
   assert.ok(add !== undefined);
   const source = add.split(" ")[4];
-  assert.equal(commands(install)[0], `npx --yes skills@latest add ${source} --skill code-review`);
+  assert.equal(commands(install)[0], `npx --yes skills@latest add ${source} --skill mr-review`);
   assert.equal(
     commands(preview)[0],
     latest.find((line) => line.startsWith("npm view --prefer-online skills@latest")),

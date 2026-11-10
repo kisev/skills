@@ -70,7 +70,7 @@ npx --yes skills@latest list --global
 для каждой неудачи:
 
 ```shell
-python3 ~/.agents/skills/code-review/scripts/check_environment.py
+python3 ~/.agents/skills/mr-review/scripts/check_environment.py
 ```
 
 Манифест и сверка каналов описаны в [инструкции по переносимым

@@ -39,7 +39,7 @@ An intended effect already visible at the target completes as already applied
 without another write.
 It invokes `glab` with argv and no shell, inherits the caller environment without
 persisting it, and rejects batch, force, stale state, changed digests, and path
-escapes. A code-review action binds its validated suggestion or patch before
+escapes. A publication action binds its validated suggestion or patch before
 confirmation. The helper reports bounded redacted request diagnostics, treats a
 definitive non-mutating 4xx rejection as explicitly retryable after fresh
 revalidation, and treats timeout, 5xx, malformed response, and unknown outcomes
@@ -47,13 +47,13 @@ as uncertain. It never substitutes another fix or repeats an uncertain
 publication; an already posted reply may continue only its pending idempotent
 thread-state transition. An uncertain outcome suspends only its own action;
 unrelated confirmed actions from the same plan remain applicable.
-Direct code-review commands keep those same operations visibly separate: first
+Direct publication commands keep those same operations visibly separate: first
 publish the complete-context explanation, then run the `resolve` or `reopen`
 command. A prepared state command never stands alone without its explanation.
 `approve`, `merge`, and `push` remain outside this helper boundary.
 
-Code-review contract 7 uses direct manual `glab` commands instead of this helper
-lifecycle. Preparation still validates exact fixes and never publishes. The user
+The direct-command contract uses direct manual `glab` commands instead of this
+helper lifecycle. Preparation still validates exact fixes and never publishes. The user
 checks results in GitLab and chooses repetition; commands do not use
 reservations, persistent locks, receipts, expiry, polling, or automatic freshness
 checks. Errors and process exit codes remain visible. This exception does not

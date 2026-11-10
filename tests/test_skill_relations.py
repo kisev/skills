@@ -47,7 +47,6 @@ def test_curated_edges_are_present() -> None:
     for source in (
         "task-prepare",
         "task-triage",
-        "code-review",
         "mr-prepare",
         "commit-msg",
         "briefing",
@@ -68,12 +67,12 @@ def test_curated_edges_are_present() -> None:
         ("task-prepare", "task-triage", "uses"),
         ("task-prepare", "askme", "uses"),
         ("task-triage", "task-review", "uses"),
-        ("task-triage", "code-review", "uses"),
+        ("task-triage", "mr-review", "uses"),
         ("mr-prepare", "askme", "uses"),
         ("docs-prepare", "spec-manage", "uses"),
         ("docs-review", "spec-manage", "uses"),
-        ("code-review", "release-review", "recommends"),
-        ("code-explain", "code-review", "recommends"),
+        ("mr-review", "release-review", "recommends"),
+        ("code-explain", "mr-review", "recommends"),
         ("goal", "task-prepare", "recommends"),
         ("task-prepare", "goal", "recommends"),
         ("briefing", "team-retro", "recommends"),
@@ -81,6 +80,11 @@ def test_curated_edges_are_present() -> None:
         ("release-prepare", "release-review", "recommends"),
         ("release-review", "release-prepare", "recommends"),
         ("mattermost", "mattermost-triage", "recommends"),
+    ):
+        assert edge in edges
+    for edge in (
+        ("mr-review", "humanize", "recommends"),
+        ("mr-review", "eli5", "recommends"),
     ):
         assert edge in edges
     for source in ("team-retro", "team-roadmap", "team-sprint-start", "team-sprint-close"):

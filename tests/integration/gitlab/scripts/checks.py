@@ -18,7 +18,6 @@ from tests.integration.gitlab.scripts.stand import (
     Stand,
     command,
     load,
-    private_directory,
     write_json,
 )
 
@@ -184,6 +183,7 @@ child:
         "mr": current,
         "head": head["id"],
         "base": base["id"],
+        "repo_url": stand.manifest["fixtures"]["http_url_to_repo"],
     }
 
 
@@ -641,234 +641,6 @@ def review_environment(stand: Stand, actor: str = "reviewer") -> dict[str, str]:
     return environment
 
 
-def review_plan(stand: Stand, f: dict[str, Any], directory: Path, report: dict[str, Any]) -> None:
-    environment = review_environment(stand)
-    repo = stand.state / "repositories" / directory.name
-    private_directory(repo.parent)
-    if repo.is_symlink():
-        raise RuntimeError("Fixture checkout must not be a symlink")
-    command(
-        ["git", "clone", stand.manifest["fixtures"]["http_url_to_repo"], str(repo)], env=environment
-    )
-    command(["git", "-C", str(repo), "checkout", "--detach", f["head"]], env=environment)
-    # The author collector prepares its own review worktrees next to its clone;
-    # a shared clone would put them beside the reviewer's worktrees, whose
-    # registry is per actor and would reject the unmanaged paths.
-    author_repo = stand.state / "repositories" / (directory.name + "-author")
-    private_directory(author_repo.parent)
-    command(
-        ["git", "clone", stand.manifest["fixtures"]["http_url_to_repo"], str(author_repo)],
-        env=review_environment(stand, "author"),
-    )
-    command(
-        ["git", "-C", str(author_repo), "checkout", "--detach", f["head"]],
-        env=review_environment(stand, "author"),
-    )
-    author_input = directory / "author-collector-input.json"
-    write_json(
-        author_input, {"url": f["mr"]["web_url"], "repo": str(author_repo), "head": f["head"]}
-    )
-    author_before = stand.request(
-        "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"
-    )
-    author_collected = json.loads(
-        command(
-            [sys.executable, str(APP / "scripts/collector_roles.py"), str(author_input)],
-            env=review_environment(stand, "author"),
-            timeout=240,
-        ).stdout
-    )
-    verify(
-        author_before
-        == stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"),
-        "Author reviewmatic collection published discussions",
-    )
-    write_json(directory / "author-collector.json", author_collected)
-    record(report, "reviewmatic-author-collection", author_collected)
-    before = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions")
-    input_path = directory / "review-input.json"
-    write_json(
-        input_path,
-        {
-            "url": f["mr"]["web_url"],
-            "repo": str(repo),
-            "run": directory.name,
-            "output": str(directory / "review-plan.json"),
-            "phase": "draft",
-            "require_pagination": True,
-        },
-    )
-    drafted = json.loads(
-        command(
-            [sys.executable, str(APP / "scripts/review_plan.py"), str(input_path)],
-            env=environment,
-            timeout=240,
-        ).stdout
-    )
-    pipeline(stand, f, private_directory(directory / "ci-refresh"), report)
-    input_value = json.loads(input_path.read_text())
-    input_value.update(phase="ci-finish", started=drafted["started"])
-    write_json(input_path, input_value)
-    result = json.loads(
-        command(
-            [sys.executable, str(APP / "scripts/review_plan.py"), str(input_path)],
-            env=environment,
-            timeout=240,
-        ).stdout
-    )
-    verify(
-        before
-        == stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"),
-        "Review preparation published comments",
-    )
-    record(
-        report,
-        "reviewmatic-plan",
-        {
-            "artifact_root": result["started"]["artifact_root"],
-            "receipts": result["receipts"],
-            "receipt_origin": "deterministic fixture, not a real critic run",
-        },
-    )
-    record(report, "reviewmatic-presentation-repair", result["repair"])
-    record(report, "reviewmatic-ci-only-refresh", result["ci_refresh"])
-    publication = load("gitlab_review_publication", APP / "scripts/publication_checks.py")
-    runbook = Path(result["finished"]["markdown_path"]).read_text()
-    copied = []
-    for index, action in enumerate(result["actions"]):
-        if action["command"] not in runbook:
-            raise RuntimeError("Reviewmatic action is absent from the copied runbook")
-        state_before = {
-            thread["id"]: stand.request(
-                "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/" + thread["id"]
-            )
-            for thread in f["state_threads"]
-        }
-        publication.execute(stand, action["command"], directory, f"reviewmatic-copied-{index}")
-        for thread in f["state_threads"]:
-            after = stand.request(
-                "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/" + thread["id"]
-            )
-            if action["operation"] == "reply":
-                verify(
-                    after["notes"][0]["resolved"]
-                    == state_before[thread["id"]]["notes"][0]["resolved"],
-                    "Copied reply implicitly changed thread state",
-                )
-            elif action["operation"] in ("resolve", "reopen"):
-                verify(
-                    len(after["notes"]) == len(state_before[thread["id"]]["notes"]),
-                    "Separate state command unexpectedly published a reply",
-                )
-        copied.append(action["id"])
-    actual = stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions")
-    grouped = [
-        thread
-        for thread in actual
-        if any("Harness grouped" in note["body"] for note in thread["notes"])
-    ]
-    verify(
-        len(grouped) == 2 and all(thread["notes"][0].get("suggestions") for thread in grouped),
-        "Reviewmatic copied grouped suggestions missing on server",
-    )
-    f["grouped_threads"] = grouped
-    direct = {}
-    for side in ("old", "new", "context"):
-        matches = [
-            note
-            for thread in actual
-            for note in thread["notes"]
-            if note["body"].startswith("Harness direct " + side)
-        ]
-        verify(len(matches) == 1, "Copied direct " + side + " command missing or duplicated")
-        note = matches[0]
-        position = note["position"]
-        expected = (
-            {"old_line": 2, "new_line": None}
-            if side == "old"
-            else (
-                {"old_line": None, "new_line": 5}
-                if side == "new"
-                else {"old_line": 3, "new_line": 3}
-            )
-        )
-        verify(
-            position["head_sha"] == f["head"]
-            and position["old_path"] == position["new_path"] == "sample.txt"
-            and all(position.get(key) == value for key, value in expected.items()),
-            "Copied direct " + side + " position differs from the prepared exact-head command",
-        )
-        verify(
-            note["author"]["id"] == stand.manifest["users"]["reviewer"]["id"],
-            "Copied direct comment role mismatch",
-        )
-        if side == "new":
-            verify(
-                bool(note.get("suggestions")), "Copied single suggestion not recognized by GitLab"
-            )
-        direct[side] = {
-            "note": note["id"],
-            "position": position,
-            "suggestions": note.get("suggestions", []),
-        }
-    record(report, "reviewmatic-direct-positions-and-single-suggestion", direct)
-    states = [
-        stand.request(
-            "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions/" + thread["id"]
-        )
-        for thread in f["state_threads"]
-    ]
-    for original, actual_state in zip(f["state_threads"], states, strict=True):
-        verify(
-            actual_state["notes"][0]["resolved"] is not original["resolved"],
-            "Copied independent resolve/reopen state missing",
-        )
-        replies = [
-            note
-            for note in actual_state["notes"][1:]
-            if note["body"].startswith("Harness reviewmatic state")
-        ]
-        verify(
-            len(replies) == 1
-            and replies[0]["author"]["id"] == stand.manifest["users"]["reviewer"]["id"],
-            "Copied state-thread reply missing, duplicated or wrong role",
-        )
-    record(report, "reviewmatic-separate-replies-resolve-reopen", {"threads": states})
-    record(
-        report,
-        "reviewmatic-copied-commands",
-        {"actions": copied, "grouped_threads": [thread["id"] for thread in grouped]},
-    )
-    material_input = directory / "material-refresh-input.json"
-    write_json(
-        material_input,
-        {
-            "draft": result["started"]["draft_path"],
-            "artifact_root": result["started"]["artifact_root"],
-            "output": str(directory / "material-refresh.json"),
-        },
-    )
-    before_refresh = stand.request(
-        "GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"
-    )
-    refreshed = json.loads(
-        command(
-            [sys.executable, str(APP / "scripts/refresh_review.py"), str(material_input)],
-            env=environment,
-            timeout=240,
-        ).stdout
-    )
-    verify(
-        before_refresh
-        == stand.request("GET", f["prefix"] + f"/merge_requests/{f['mr']['iid']}/discussions"),
-        "Material review refresh published a discussion",
-    )
-    record(report, "reviewmatic-material-refresh", refreshed)
-
-
-# Dependency-closed smoke subset: it needs only the fixture project and the
-# stand itself - no reviewmatic install, no publication or triage chains - and
-# skips the coverage gate by design (the full run owns the gate).
 SMOKE_SCENARIOS = (
     "fixture",
     "pagination-fixture",
@@ -895,8 +667,6 @@ def scenario_names(action: str) -> tuple[str, ...]:
         "task-copied-publication",
         "task-triage-publication",
         "task-triage-lifecycle",
-        "reviewmatic",
-        "same-file-grouped-recovery",
         "release-workflows",
         "automation-scope",
     )
@@ -915,6 +685,18 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             stand, f, directory
         )
         return
+    if action == "review-live":
+        f = fixture(stand, directory)
+        write_json(directory / "fixture.json", f)
+        report["coverage"] = {
+            "status": "optional-live",
+            "workflows": ["mr-review"],
+            "mandatory_matrix_proven": False,
+        }
+        report["live"] = load("gitlab_review_acceptance", APP / "scripts/review_acceptance.py").run(
+            stand, f, directory
+        )
+        return
     if action == "browser":
         report["coverage"] = {"status": "deferred-browser", "mandatory_matrix_proven": False}
         f = fixture(stand, directory)
@@ -922,15 +704,7 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
         pipeline(stand, f, directory, report)
         review_comments(stand, f, directory, report)
         pagination_fixture(stand, directory, report)
-        review_plan(stand, f, directory, report)
         load("gitlab_browser", APP / "scripts/browser_checks.py").run(stand, f, directory, report)
-        record(
-            report,
-            "same-file-browser-recovery",
-            load("gitlab_same_file", APP / "scripts/same_file_checks.py").run(
-                stand, directory, report, browser=True
-            ),
-        )
         return
     if action == "smoke":
         report["coverage"] = {
@@ -938,7 +712,7 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             "scope": "dependency-closed API/backend subset; the full run owns the coverage gate",
             "deferred": [
                 "helper catalog pagination and the workflow matrix",
-                "reviewmatic, same-file, triage, and release scenarios",
+                "triage and release scenarios",
             ],
             "mandatory_matrix_proven": False,
         }
@@ -951,8 +725,6 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             ],
             "mandatory_remaining": [
                 "exhaustive six-workflow helper pagination and author/reviewer matrix",
-                "reviewmatic direct old/new/context, single-suggestion, reply and separate resolve/reopen commands",
-                "same-file grouped suggestion stale-state recovery and semantic complete-fix reassessment",
                 "task-triage information-request lifecycle, stale analysis and relationship recovery",
                 "complete release inventory/readiness/publication roles and negative-outcome matrix",
                 "CLI faults, timeout and ambiguous-publication reconciliation",
@@ -1032,15 +804,6 @@ def run(stand: Stand, directory: Path, report: dict[str, Any], action: str) -> N
             report,
             "task-triage-lifecycle",
             scenario("task-triage-lifecycle", lambda: triage_lifecycle.run(stand, f, directory)),
-        )
-    if "reviewmatic" in selected:
-        scenario("reviewmatic", lambda: review_plan(stand, f, directory, report))
-    if "same-file-grouped-recovery" in selected:
-        same_file = load("gitlab_same_file_checks", APP / "scripts/same_file_checks.py")
-        record(
-            report,
-            "same-file-grouped-recovery",
-            scenario("same-file-grouped-recovery", lambda: same_file.run(stand, directory, report)),
         )
     if "release-workflows" in selected:
         releases = load("gitlab_release_checks", APP / "scripts/release_checks.py")

@@ -10,7 +10,7 @@ findings plus a debt-marker registry.
 
 Trigger for code simplification and explicit complexity-audit requests;
 near-misses: text simplification belongs to `asd-ste100`, `humanize`, and
-`eli5`, a merge-request review routes to `code-review`, and a specification
+`eli5`, a merge-request review routes to `mr-review`, and a specification
 audit routes to `spec-manage`.
 
 ## Inputs and Outputs

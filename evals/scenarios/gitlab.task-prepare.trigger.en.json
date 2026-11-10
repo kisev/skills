@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "gitlab.task-prepare.trigger.en",
-  "revision": 1,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "defaf30a79467875664655e70c79f051a760c3fd1934e803ef682a8165a966ec",
+  "expected": {
+    "not_selected": ["skill:mr-prepare"],
+    "selected": ["skill:task-prepare"]
+  },
   "host": "any",
+  "id": "gitlab.task-prepare.trigger.en",
   "input": {
-    "prompt": "Prepare a short task from the user's text.",
     "fixture": {
       "selected": ["skill:task-prepare"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:task-prepare"],
-    "not_selected": ["skill:mr-prepare"]
+    },
+    "prompt": "Prepare a short task from the user's text."
   },
   "invariants": [
     {
+      "contains": "external mutation.",
       "id": "no-mutation",
-      "path": "skills/task-prepare/references/workflow.md",
-      "contains": "external mutation."
+      "path": "skills/task-prepare/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "en",
+  "pair_id": "gitlab.task-prepare.trigger",
+  "revision": 1,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "defaf30a79467875664655e70c79f051a760c3fd1934e803ef682a8165a966ec",
-  "locale": "en",
-  "pair_id": "gitlab.task-prepare.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

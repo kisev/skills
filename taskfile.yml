@@ -152,11 +152,6 @@ tasks:
     cmds:
       - task: skills:build
       - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.stand live --compose '{{.COMPOSE}}'
-  test:integration:skills:acceptance:
-    desc: Run the explicitly configured live code-review acceptance on the fake-glab fixture
-    cmds:
-      - task: skills:build
-      - mise exec -- uv run --project apps/reviewmatic --locked python -m tests.integration.gitlab.scripts.skill_acceptance
   acceptance:
     desc: Run the explicitly configured live acceptance umbrella over every skill (user-run; report goes to the master session)
     vars:
@@ -582,12 +577,12 @@ tasks:
 
 
   live:preflight:
-    desc: Check the pinned live-run profile (engine CLI, ccr profile, scenarios)
+    desc: Check the pinned live-run profile (engine CLI, host profile, scenarios)
     cmds:
-      - mise exec -- uv run --locked python scripts/live_runner.py preflight
+      - mise exec -- uv run --locked python scripts/live_runner.py preflight {{.CLI_ARGS}}
 
   live:run:
-    desc: Synthetic live run (speed 2); pass -- --scenario <name> [--variant <name>]
+    desc: Synthetic live run (speed 2); pass -- --scenario <name> [--variant <name>] [--profile <file>]
     cmds:
       - mise exec -- uv run --locked python scripts/live_runner.py run {{.CLI_ARGS}}
 
@@ -632,11 +627,11 @@ tasks:
     deps: [check]
 
   reviewmatic:fixtures:check:
-    desc: Check the retained reviewmatic goldens against the Python contract
+    desc: Check the runbook format fixtures against the skill reference
     internal: true
     dir: apps/reviewmatic
     cmds:
-      - mise exec -- uv run --locked pytest tests/test_golden_parity.py
+      - mise exec -- uv run --locked pytest tests/test_runbook_format.py
 
   reviewmatic:mypy:
     desc: Check types in the reviewmatic Python package

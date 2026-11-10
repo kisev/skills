@@ -34,7 +34,7 @@ work stops until it is made.
 
 Text simplification never activates this skill: prose belongs to `asd-ste100`,
 `humanize`, and `eli5`. A specification audit routes to `spec-manage`, and a
-merge-request review routes to `code-review`.
+merge-request review routes to `mr-review`.
 
 ## Explicit audit
 

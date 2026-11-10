@@ -116,8 +116,8 @@ the first session and show its output. The first path below is the global scope,
 the second the project scope:
 
 ```shell
-python3 ~/.agents/skills/code-review/scripts/check_environment.py
-python3 .agents/skills/code-review/scripts/check_environment.py
+python3 ~/.agents/skills/mr-review/scripts/check_environment.py
+python3 .agents/skills/mr-review/scripts/check_environment.py
 ```
 
 Each line is `OK` or `FAIL`, and a failure prints the exact repair command

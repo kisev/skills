@@ -21,7 +21,7 @@ separate contract below.
 | [ast-grep](skills/ast-grep.md) | [ast-grep](commands/ast-grep.md) |
 | [briefing](skills/briefing.md) | [briefing](commands/briefing.md) |
 | [code-explain](skills/code-explain.md) | [code-explain](commands/code-explain.md) |
-| [code-review](skills/code-review.md) | [code-review](commands/code-review.md) |
+| [mr-review](skills/mr-review.md) | [mr-review](commands/mr-review.md) |
 | [code-simplify](skills/code-simplify.md) | [code-simplify](commands/code-simplify.md) |
 | commit-msg (migrated: `openspec/specs/commit-msg/spec.md`) | same spec |
 | [debugging](skills/debugging.md) | — |

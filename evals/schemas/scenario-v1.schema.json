@@ -45,17 +45,7 @@
             "target": { "type": "string", "minLength": 1 }
           },
           "additionalProperties": false,
-          "oneOf": [
-            { "required": ["protocol", "skill", "script", "target"] },
-            {
-              "required": ["skill", "script", "target"],
-              "not": { "required": ["protocol"] },
-              "properties": {
-                "skill": { "const": "code-review" },
-                "script": { "const": "scripts/review_mr.py" }
-              }
-            }
-          ]
+          "oneOf": [{ "required": ["protocol", "skill", "script", "target"] }]
         },
         "project_files": {
           "type": "object",

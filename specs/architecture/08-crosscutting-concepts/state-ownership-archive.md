@@ -50,7 +50,7 @@ Code-review owns immutable review evidence, source drafts, decisions, and plans
 with a stable `runbook.md`. It does not persist publication locks, reservations,
 or receipts. Local command status is not remote publication proof. Historical
 guarded state is retained without migration or replay; see
-[the code-review contract](../../capabilities/skills/code-review.md).
+[the mr-review contract](../../capabilities/skills/mr-review.md).
 
 Mattermost triage owns its dedicated private XDG namespace for one-origin,
 one-identity incremental checkpoints, immutable evidence, stable current output,

@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "mattermost.read.trigger",
-  "revision": 2,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "2d43f6bdefee5fd5a57c8ea71909a6d56cb922bbdb87f9ef754041f724a2194b",
+  "expected": {
+    "not_selected": [],
+    "selected": ["skill:mattermost"]
+  },
   "host": "any",
+  "id": "mattermost.read.trigger",
   "input": {
-    "prompt": "Прочитай этот Mattermost post, thread или канал по точной ссылке.",
     "fixture": {
       "selected": ["skill:mattermost"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:mattermost"],
-    "not_selected": []
+    },
+    "prompt": "\u041f\u0440\u043e\u0447\u0438\u0442\u0430\u0439 \u044d\u0442\u043e\u0442 Mattermost post, thread \u0438\u043b\u0438 \u043a\u0430\u043d\u0430\u043b \u043f\u043e \u0442\u043e\u0447\u043d\u043e\u0439 \u0441\u0441\u044b\u043b\u043a\u0435."
   },
   "invariants": [
     {
+      "contains": "requests are GET-only",
       "id": "read-only-scope",
-      "path": "skills/mattermost/references/workflow.md",
-      "contains": "requests are GET-only"
+      "path": "skills/mattermost/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "mattermost.read.trigger",
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "2d43f6bdefee5fd5a57c8ea71909a6d56cb922bbdb87f9ef754041f724a2194b",
-  "locale": "ru",
-  "pair_id": "mattermost.read.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }

@@ -49,7 +49,7 @@ def run(stand: Any, f: dict[str, Any], directory: Path) -> dict[str, Any]:
         if key in os.environ:
             environment[key] = os.environ[key]
     for name in (
-        "code-review",
+        "mr-review",
         "mr-prepare",
         "task-prepare",
         "task-triage",

@@ -1,38 +1,38 @@
 {
-  "schema": "eval-scenario/v1",
-  "id": "skill.goal.trigger",
-  "revision": 2,
-  "kind": "trigger",
-  "surface": "skill",
+  "budgets": {
+    "max_cost": 1,
+    "max_tokens": 3000,
+    "timeout_seconds": 20
+  },
+  "digest": "3af595ac4c12e5f7d8e34f6339251aa395496803d79e674e471e636477d1b5be",
+  "expected": {
+    "not_selected": [],
+    "selected": ["skill:goal"]
+  },
   "host": "any",
+  "id": "skill.goal.trigger",
   "input": {
-    "prompt": "Сформулируй ограниченную read-only цель.",
     "fixture": {
       "selected": ["skill:goal"]
-    }
-  },
-  "expected": {
-    "selected": ["skill:goal"],
-    "not_selected": []
+    },
+    "prompt": "\u0421\u0444\u043e\u0440\u043c\u0443\u043b\u0438\u0440\u0443\u0439 \u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u043d\u0443\u044e read-only \u0446\u0435\u043b\u044c."
   },
   "invariants": [
     {
+      "contains": "structured Markdown rather than JSON",
       "id": "goal-contract",
-      "path": "skills/goal/references/workflow.md",
-      "contains": "structured Markdown rather than JSON"
+      "path": "skills/goal/references/workflow.md"
     }
   ],
+  "kind": "trigger",
+  "locale": "ru",
+  "pair_id": "skill.goal.trigger",
+  "revision": 2,
   "sandbox": {
     "network": false,
     "user_config": false,
     "writes": "sandbox-only"
   },
-  "budgets": {
-    "timeout_seconds": 20,
-    "max_tokens": 3000,
-    "max_cost": 1
-  },
-  "digest": "3af595ac4c12e5f7d8e34f6339251aa395496803d79e674e471e636477d1b5be",
-  "locale": "ru",
-  "pair_id": "skill.goal.trigger"
+  "schema": "eval-scenario/v1",
+  "surface": "skill"
 }
